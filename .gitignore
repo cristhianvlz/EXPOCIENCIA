@@ -1,0 +1,79 @@
+# ─── Python / Django ───────────────────────────────────────────────
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+db.sqlite3
+*.log
+
+# Django secrets
+backend/.env
+backend/local_settings.py
+backend/config/firebase-service-account.json
+
+# Media subida por usuarios (no versionar archivos del servidor)
+backend/media/
+
+# ─── Node / React / Frontend ──────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/build/
+.DS_Store
+*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Flutter ──────────────────────────────────────────────────────
+flutter_tribunal/.dart_tool/
+flutter_tribunal/.flutter-plugins
+flutter_tribunal/.flutter-plugins-dependencies
+flutter_tribunal/.packages
+flutter_tribunal/build/
+flutter_tribunal/.idea/
+flutter_tribunal/*.iml
+flutter_tribunal/android/.gradle/
+flutter_tribunal/android/local.properties
+flutter_tribunal/android/key.properties
+flutter_tribunal/android/app/google-services.json
+flutter_tribunal/ios/Flutter/flutter_export_environment.sh
+flutter_tribunal/ios/Flutter/Generated.xcconfig
+flutter_tribunal/ios/.symlinks/
+flutter_tribunal/coverage/
+
+# ─── IDE / Sistema ────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+Thumbs.db
+desktop.ini
+
+# ─── Distribución (APK compilado — compartir por Drive/USB) ──────
+distribucion/
+
+# ─── Claude Code (agentes) ────────────────────────────────────────
+.agents/
+skills-lock.json

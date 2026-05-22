@@ -1,0 +1,33 @@
+name: flutter_tribunal
+description: App móvil para tribunales/jurados — calificación de proyectos.
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^9.0.0
+  graphql_flutter: ^5.2.0
+  cached_network_image: ^3.3.1
+  flutter_pdfview: ^1.3.2
+  dio: ^5.4.0
+  intl: ^0.19.0
+  open_file: ^3.3.2
+  path_provider: ^2.1.0
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
+  flutter_local_notifications: ^17.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo.png
