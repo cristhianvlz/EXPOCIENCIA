@@ -223,7 +223,7 @@ export default function UsuariosPage() {
             Administra los accesos y roles del sistema Expociencia.
           </Typography>
         </Box>
-        <Button
+        {/*<Button
           variant="contained"
           startIcon={<PlusOutlined />}
           onClick={() => handleOpenDialog()}
@@ -242,7 +242,7 @@ export default function UsuariosPage() {
           }}
         >
           Nuevo Usuario
-        </Button>
+        </Button>*/}
       </Box>
 
       {loading ? (
@@ -344,12 +344,35 @@ export default function UsuariosPage() {
               <Table sx={{ minWidth: 650 }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'background.default' : 'grey.50' }}>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Usuario</TableCell>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Email</TableCell>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Rol del Sistema</TableCell>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Estado</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>
+                    <TableCell
+                      sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}
+                    >
+                      ID
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}
+                    >
+                      Usuario
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}
+                    >
+                      Email
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}
+                    >
+                      Rol del Sistema
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}
+                    >
+                      Estado
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{ fontWeight: 700, py: 2.5, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}
+                    >
                       Acciones
                     </TableCell>
                   </TableRow>
@@ -374,7 +397,9 @@ export default function UsuariosPage() {
                               height: 40,
                               fontSize: '1rem',
                               fontWeight: 700,
-                              background: row.estado ? 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)' : 'linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%)',
+                              background: row.estado
+                                ? 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)'
+                                : 'linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%)',
                               boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                             }}
                           >
@@ -392,7 +417,9 @@ export default function UsuariosPage() {
                           <Box sx={{ p: 0.8, borderRadius: 2, bgcolor: 'grey.100', display: 'flex' }}>
                             <MailOutlined style={{ fontSize: 14 }} />
                           </Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>{row.email}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {row.email}
+                          </Typography>
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -430,10 +457,14 @@ export default function UsuariosPage() {
                           color={row.estado ? 'success' : 'error'}
                           size="small"
                           variant={row.estado ? 'filled' : 'outlined'}
-                          sx={{ fontWeight: 600, borderRadius: '8px', px: 1, py: 1.5,
+                          sx={{
+                            fontWeight: 600,
+                            borderRadius: '8px',
+                            px: 1,
+                            py: 1.5,
                             bgcolor: row.estado ? 'success.main' : 'transparent',
                             color: row.estado ? 'white' : 'error.main'
-                           }}
+                          }}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -443,11 +474,11 @@ export default function UsuariosPage() {
                               color="primary"
                               onClick={() => handleOpenDialog(row)}
                               size="medium"
-                              sx={{ 
-                                bgcolor: 'primary.lighter', 
+                              sx={{
+                                bgcolor: 'primary.lighter',
                                 borderRadius: 2,
                                 transition: 'all 0.2s',
-                                '&:hover': { bgcolor: 'primary.main', color: 'white', transform: 'scale(1.05)' } 
+                                '&:hover': { bgcolor: 'primary.main', color: 'white', transform: 'scale(1.05)' }
                               }}
                             >
                               <EditOutlined style={{ fontSize: '1.1rem' }} />
@@ -458,11 +489,11 @@ export default function UsuariosPage() {
                               color="error"
                               onClick={() => handleDelete(row.idUsuario)}
                               size="medium"
-                              sx={{ 
-                                bgcolor: 'error.lighter', 
+                              sx={{
+                                bgcolor: 'error.lighter',
                                 borderRadius: 2,
                                 transition: 'all 0.2s',
-                                '&:hover': { bgcolor: 'error.main', color: 'white', transform: 'scale(1.05)' } 
+                                '&:hover': { bgcolor: 'error.main', color: 'white', transform: 'scale(1.05)' }
                               }}
                             >
                               <DeleteOutlined style={{ fontSize: '1.1rem' }} />
@@ -500,7 +531,7 @@ export default function UsuariosPage() {
                 justifyContent: 'space-between',
                 bgcolor: 'background.paper',
                 borderTop: '1px solid',
-                borderColor: 'divider',
+                borderColor: 'divider'
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -562,10 +593,10 @@ export default function UsuariosPage() {
         </>
       )}
 
-      <Dialog 
-        open={openDialog} 
-        onClose={handleCloseDialog} 
-        fullWidth 
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        fullWidth
         maxWidth="sm"
         PaperProps={{
           sx: {
@@ -586,39 +617,39 @@ export default function UsuariosPage() {
         </DialogTitle>
         <DialogContent sx={{ p: 3, pt: 4, pb: 4 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <TextField 
-              label="Nombre de Usuario" 
-              name="username" 
-              value={formData.username} 
-              onChange={handleChange} 
-              fullWidth 
-              required 
-              InputProps={{ 
-                sx: { 
-                  borderRadius: '8px', 
-                  bgcolor: '#F8FAFC', 
+            <TextField
+              label="Nombre de Usuario"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              fullWidth
+              required
+              InputProps={{
+                sx: {
+                  borderRadius: '8px',
+                  bgcolor: '#F8FAFC',
                   transition: 'all 0.15s ease',
                   '&:hover': { bgcolor: '#F1F5F9' },
                   '&.Mui-focused': { bgcolor: '#FFF' }
-                } 
+                }
               }}
             />
-            <TextField 
-              label="Correo Electrónico" 
-              name="email" 
-              type="email" 
-              value={formData.email} 
-              onChange={handleChange} 
-              fullWidth 
-              required 
-              InputProps={{ 
-                sx: { 
-                  borderRadius: '8px', 
-                  bgcolor: '#F8FAFC', 
+            <TextField
+              label="Correo Electrónico"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              fullWidth
+              required
+              InputProps={{
+                sx: {
+                  borderRadius: '8px',
+                  bgcolor: '#F8FAFC',
                   transition: 'all 0.15s ease',
                   '&:hover': { bgcolor: '#F1F5F9' },
                   '&.Mui-focused': { bgcolor: '#FFF' }
-                } 
+                }
               }}
             />
             <TextField
@@ -629,36 +660,40 @@ export default function UsuariosPage() {
               onChange={handleChange}
               fullWidth
               required={!editingUser}
-              InputProps={{ 
-                sx: { 
-                  borderRadius: '8px', 
-                  bgcolor: '#F8FAFC', 
+              InputProps={{
+                sx: {
+                  borderRadius: '8px',
+                  bgcolor: '#F8FAFC',
                   transition: 'all 0.15s ease',
                   '&:hover': { bgcolor: '#F1F5F9' },
                   '&.Mui-focused': { bgcolor: '#FFF' }
-                } 
+                }
               }}
             />
             {editingUser && (
-              <Box sx={{ 
-                p: 2, 
-                borderRadius: '8px', 
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                transition: 'all 0.2s'
-              }}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: '8px',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  bgcolor: 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s'
+                }}
+              >
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                    <Box sx={{ 
-                      width: '8px', 
-                      height: '8px', 
-                      borderRadius: '50%', 
-                      bgcolor: formData.estado ? 'success.main' : 'error.main' 
-                    }} />
+                    <Box
+                      sx={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        bgcolor: formData.estado ? 'success.main' : 'error.main'
+                      }}
+                    />
                     <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       Estado de la Cuenta
                     </Typography>
@@ -667,24 +702,19 @@ export default function UsuariosPage() {
                     {formData.estado ? 'El usuario tiene acceso activo al sistema' : 'El acceso de este usuario está suspendido'}
                   </Typography>
                 </Box>
-                <Switch 
-                  checked={formData.estado} 
-                  onChange={handleChange} 
-                  name="estado" 
-                  color="primary"
-                />
+                <Switch checked={formData.estado} onChange={handleChange} name="estado" color="primary" />
               </Box>
             )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2, borderTop: '1px solid', borderColor: 'grey.100' }}>
-          <Button 
-            onClick={handleCloseDialog} 
+          <Button
+            onClick={handleCloseDialog}
             color="inherit"
-            sx={{ 
-              fontWeight: 500, 
-              borderRadius: '6px', 
-              px: 3, 
+            sx={{
+              fontWeight: 500,
+              borderRadius: '6px',
+              px: 3,
               py: 0.8,
               textTransform: 'none',
               color: 'text.secondary',
@@ -697,10 +727,10 @@ export default function UsuariosPage() {
             onClick={handleSubmit}
             variant="contained"
             disabled={!formData.username || !formData.email || (!editingUser && !formData.password) || saving}
-            sx={{ 
-              fontWeight: 500, 
-              borderRadius: '6px', 
-              px: 4, 
+            sx={{
+              fontWeight: 500,
+              borderRadius: '6px',
+              px: 4,
               py: 0.8,
               textTransform: 'none',
               bgcolor: '#0F172A',
@@ -716,7 +746,7 @@ export default function UsuariosPage() {
               }
             }}
           >
-            {saving ? <CircularProgress size={24} color="inherit" /> : (editingUser ? 'Guardar Cambios' : 'Crear Usuario')}
+            {saving ? <CircularProgress size={24} color="inherit" /> : editingUser ? 'Guardar Cambios' : 'Crear Usuario'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -727,11 +757,7 @@ export default function UsuariosPage() {
         onClose={() => setNotification({ ...notification, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert 
-          severity={notification.severity} 
-          variant="filled"
-          sx={{ borderRadius: 2, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
-        >
+        <Alert severity={notification.severity} variant="filled" sx={{ borderRadius: 2, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
           {notification.message}
         </Alert>
       </Snackbar>

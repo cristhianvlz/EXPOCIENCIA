@@ -110,7 +110,9 @@ const OBTENER_TRIBUNALES = gql`
 const CREAR_USUARIO = gql`
   mutation CrearUsuario($username: String!, $email: String!, $password: String!) {
     crearUsuario(username: $username, email: $email, password: $password) {
-      usuario { idUsuario }
+      usuario {
+        idUsuario
+      }
       ok
       error
     }
@@ -118,9 +120,35 @@ const CREAR_USUARIO = gql`
 `;
 
 const CREAR_PARTICIPANTE = gql`
-  mutation CrearParticipante($idUsuario: ID!, $codigoEspecifico: String!, $nombre: String!, $apellido: String!, $celular: String!, $ci: String!, $expedicion: String!, $direccion: String, $institucion: String, $idProyecto: ID, $idTutor: ID) {
-    crearParticipante(idUsuario: $idUsuario, codigoEspecifico: $codigoEspecifico, nombre: $nombre, apellido: $apellido, celular: $celular, ci: $ci, expedicion: $expedicion, direccion: $direccion, institucion: $institucion, idProyecto: $idProyecto, idTutor: $idTutor) {
-      participante { idParticipante }
+  mutation CrearParticipante(
+    $idUsuario: ID!
+    $codigoEspecifico: String!
+    $nombre: String!
+    $apellido: String!
+    $celular: String!
+    $ci: String!
+    $expedicion: String!
+    $direccion: String
+    $institucion: String
+    $idProyecto: ID
+    $idTutor: ID
+  ) {
+    crearParticipante(
+      idUsuario: $idUsuario
+      codigoEspecifico: $codigoEspecifico
+      nombre: $nombre
+      apellido: $apellido
+      celular: $celular
+      ci: $ci
+      expedicion: $expedicion
+      direccion: $direccion
+      institucion: $institucion
+      idProyecto: $idProyecto
+      idTutor: $idTutor
+    ) {
+      participante {
+        idParticipante
+      }
       ok
       error
     }
@@ -128,8 +156,32 @@ const CREAR_PARTICIPANTE = gql`
 `;
 
 const EDITAR_PARTICIPANTE = gql`
-  mutation EditarParticipante($idParticipante: ID!, $codigoEspecifico: String, $nombre: String, $apellido: String, $celular: String, $ci: String, $expedicion: String, $direccion: String, $institucion: String, $idProyecto: ID, $idTutor: ID) {
-    editarParticipante(idParticipante: $idParticipante, codigoEspecifico: $codigoEspecifico, nombre: $nombre, apellido: $apellido, celular: $celular, ci: $ci, expedicion: $expedicion, direccion: $direccion, institucion: $institucion, idProyecto: $idProyecto, idTutor: $idTutor) {
+  mutation EditarParticipante(
+    $idParticipante: ID!
+    $codigoEspecifico: String
+    $nombre: String
+    $apellido: String
+    $celular: String
+    $ci: String
+    $expedicion: String
+    $direccion: String
+    $institucion: String
+    $idProyecto: ID
+    $idTutor: ID
+  ) {
+    editarParticipante(
+      idParticipante: $idParticipante
+      codigoEspecifico: $codigoEspecifico
+      nombre: $nombre
+      apellido: $apellido
+      celular: $celular
+      ci: $ci
+      expedicion: $expedicion
+      direccion: $direccion
+      institucion: $institucion
+      idProyecto: $idProyecto
+      idTutor: $idTutor
+    ) {
       ok
       error
     }
@@ -146,9 +198,31 @@ const ELIMINAR_PARTICIPANTE = gql`
 `;
 
 const CREAR_TUTOR = gql`
-  mutation CrearTutor($idUsuario: ID!, $codEmpleado: String!, $nombre: String!, $apellido: String!, $celular: String!, $direccion: String!, $ci: String!, $expedicion: String!, $idProyecto: ID) {
-    crearTutor(idUsuario: $idUsuario, codEmpleado: $codEmpleado, nombre: $nombre, apellido: $apellido, celular: $celular, direccion: $direccion, ci: $ci, expedicion: $expedicion, idProyecto: $idProyecto) {
-      tutor { idTutor }
+  mutation CrearTutor(
+    $idUsuario: ID!
+    $codEmpleado: String!
+    $nombre: String!
+    $apellido: String!
+    $celular: String!
+    $direccion: String!
+    $ci: String!
+    $expedicion: String!
+    $idProyecto: ID
+  ) {
+    crearTutor(
+      idUsuario: $idUsuario
+      codEmpleado: $codEmpleado
+      nombre: $nombre
+      apellido: $apellido
+      celular: $celular
+      direccion: $direccion
+      ci: $ci
+      expedicion: $expedicion
+      idProyecto: $idProyecto
+    ) {
+      tutor {
+        idTutor
+      }
       ok
       error
     }
@@ -156,8 +230,28 @@ const CREAR_TUTOR = gql`
 `;
 
 const EDITAR_TUTOR = gql`
-  mutation EditarTutor($idTutor: ID!, $codEmpleado: String, $nombre: String, $apellido: String, $celular: String, $direccion: String, $ci: String, $expedicion: String, $idProyecto: ID) {
-    editarTutor(idTutor: $idTutor, codEmpleado: $codEmpleado, nombre: $nombre, apellido: $apellido, celular: $celular, direccion: $direccion, ci: $ci, expedicion: $expedicion, idProyecto: $idProyecto) {
+  mutation EditarTutor(
+    $idTutor: ID!
+    $codEmpleado: String
+    $nombre: String
+    $apellido: String
+    $celular: String
+    $direccion: String
+    $ci: String
+    $expedicion: String
+    $idProyecto: ID
+  ) {
+    editarTutor(
+      idTutor: $idTutor
+      codEmpleado: $codEmpleado
+      nombre: $nombre
+      apellido: $apellido
+      celular: $celular
+      direccion: $direccion
+      ci: $ci
+      expedicion: $expedicion
+      idProyecto: $idProyecto
+    ) {
       ok
       error
     }
@@ -174,9 +268,29 @@ const ELIMINAR_TUTOR = gql`
 `;
 
 const CREAR_TRIBUNAL = gql`
-  mutation CrearTribunal($idUsuario: ID!, $especialidad: String!, $nombre: String!, $apellido: String!, $celular: String!, $ci: String!, $expedicion: String!, $direccion: String!) {
-    crearTribunal(idUsuario: $idUsuario, especialidad: $especialidad, nombre: $nombre, apellido: $apellido, celular: $celular, ci: $ci, expedicion: $expedicion, direccion: $direccion) {
-      tribunal { idTribunal }
+  mutation CrearTribunal(
+    $idUsuario: ID!
+    $especialidad: String!
+    $nombre: String!
+    $apellido: String!
+    $celular: String!
+    $ci: String!
+    $expedicion: String!
+    $direccion: String!
+  ) {
+    crearTribunal(
+      idUsuario: $idUsuario
+      especialidad: $especialidad
+      nombre: $nombre
+      apellido: $apellido
+      celular: $celular
+      ci: $ci
+      expedicion: $expedicion
+      direccion: $direccion
+    ) {
+      tribunal {
+        idTribunal
+      }
       ok
       error
     }
@@ -184,8 +298,26 @@ const CREAR_TRIBUNAL = gql`
 `;
 
 const EDITAR_TRIBUNAL = gql`
-  mutation EditarTribunal($idTribunal: ID!, $especialidad: String, $nombre: String, $apellido: String, $celular: String, $ci: String, $expedicion: String, $direccion: String) {
-    editarTribunal(idTribunal: $idTribunal, especialidad: $especialidad, nombre: $nombre, apellido: $apellido, celular: $celular, ci: $ci, expedicion: $expedicion, direccion: $direccion) {
+  mutation EditarTribunal(
+    $idTribunal: ID!
+    $especialidad: String
+    $nombre: String
+    $apellido: String
+    $celular: String
+    $ci: String
+    $expedicion: String
+    $direccion: String
+  ) {
+    editarTribunal(
+      idTribunal: $idTribunal
+      especialidad: $especialidad
+      nombre: $nombre
+      apellido: $apellido
+      celular: $celular
+      ci: $ci
+      expedicion: $expedicion
+      direccion: $direccion
+    ) {
       ok
       error
     }
@@ -221,9 +353,29 @@ const OBTENER_PERSONAL = gql`
 `;
 
 const CREAR_PERSONAL = gql`
-  mutation CrearPersonal($idUsuario: ID!, $nombre: String!, $apellido: String!, $ci: String!, $expedicion: String!, $cargo: String!, $direccion: String!, $celular: String!) {
-    crearPersonal(idUsuario: $idUsuario, nombre: $nombre, apellido: $apellido, ci: $ci, expedicion: $expedicion, cargo: $cargo, direccion: $direccion, celular: $celular) {
-      personal { idPersonal }
+  mutation CrearPersonal(
+    $idUsuario: ID!
+    $nombre: String!
+    $apellido: String!
+    $ci: String!
+    $expedicion: String!
+    $cargo: String!
+    $direccion: String!
+    $celular: String!
+  ) {
+    crearPersonal(
+      idUsuario: $idUsuario
+      nombre: $nombre
+      apellido: $apellido
+      ci: $ci
+      expedicion: $expedicion
+      cargo: $cargo
+      direccion: $direccion
+      celular: $celular
+    ) {
+      personal {
+        idPersonal
+      }
       ok
       error
     }
@@ -231,8 +383,26 @@ const CREAR_PERSONAL = gql`
 `;
 
 const EDITAR_PERSONAL = gql`
-  mutation EditarPersonal($idPersonal: ID!, $nombre: String, $apellido: String, $ci: String, $expedicion: String, $cargo: String, $direccion: String, $celular: String) {
-    editarPersonal(idPersonal: $idPersonal, nombre: $nombre, apellido: $apellido, ci: $ci, expedicion: $expedicion, cargo: $cargo, direccion: $direccion, celular: $celular) {
+  mutation EditarPersonal(
+    $idPersonal: ID!
+    $nombre: String
+    $apellido: String
+    $ci: String
+    $expedicion: String
+    $cargo: String
+    $direccion: String
+    $celular: String
+  ) {
+    editarPersonal(
+      idPersonal: $idPersonal
+      nombre: $nombre
+      apellido: $apellido
+      ci: $ci
+      expedicion: $expedicion
+      cargo: $cargo
+      direccion: $direccion
+      celular: $celular
+    ) {
       ok
       error
     }
@@ -248,6 +418,24 @@ const ELIMINAR_PERSONAL = gql`
   }
 `;
 
+const OBTENER_ROLES = gql`
+  query ObtenerRoles {
+    todosLosRoles {
+      idRol
+      nombre
+    }
+  }
+`;
+
+const ASIGNAR_ROL_A_USUARIO = gql`
+  mutation AsignarRolAUsuario($idUsuario: ID!, $idRol: ID) {
+    asignarRolAUsuario(idUsuario: $idUsuario, idRol: $idRol) {
+      ok
+      error
+    }
+  }
+`;
+
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -257,13 +445,7 @@ interface TabPanelProps {
 function CustomTabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`perfiles-tabpanel-${index}`}
-      aria-labelledby={`perfiles-tab-${index}`}
-      {...other}
-    >
+    <div role="tabpanel" hidden={value !== index} id={`perfiles-tabpanel-${index}`} aria-labelledby={`perfiles-tab-${index}`} {...other}>
       {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
     </div>
   );
@@ -293,25 +475,33 @@ const CARGO_CHOICES = [
   { value: 'DECANO', label: 'Decano' },
   { value: 'VICEDECANO', label: 'Vicedecano' },
   { value: 'RECTOR', label: 'Rector' },
-  { value: 'VICERECTOR', label: 'Vicerector' },
+  { value: 'VICERECTOR', label: 'Vicerector' }
 ];
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5, mt: 3.5, '&:first-of-type': { mt: 1.5 } }}>
-      <Typography sx={{
-        fontSize: '0.72rem', fontWeight: 600, color: '#475569',
-        textTransform: 'uppercase', letterSpacing: 0.8, whiteSpace: 'nowrap',
-        display: 'flex', alignItems: 'center', gap: 1,
-        '&::before': {
-          content: '""',
-          display: 'inline-block',
-          width: '3px',
-          height: '11px',
-          bgcolor: '#0F172A',
-          borderRadius: '2px'
-        }
-      }}>
+      <Typography
+        sx={{
+          fontSize: '0.72rem',
+          fontWeight: 600,
+          color: '#475569',
+          textTransform: 'uppercase',
+          letterSpacing: 0.8,
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          '&::before': {
+            content: '""',
+            display: 'inline-block',
+            width: '3px',
+            height: '11px',
+            bgcolor: '#0F172A',
+            borderRadius: '2px'
+          }
+        }}
+      >
         {children}
       </Typography>
       <Box sx={{ flex: 1, height: '1px', bgcolor: '#F1F5F9' }} />
@@ -349,28 +539,31 @@ const PerfilesPage: React.FC = () => {
   // Modal state for Personal
   const [openPersonal, setOpenPersonal] = useState(false);
 
+  // Role selector for Personal
+  const [selectedRolPersonal, setSelectedRolPersonal] = useState<string>('');
+
   // External Participant toggle
   const [isExterno, setIsExterno] = useState(false);
 
   // Inline form errors + field highlight
   const [errorParticipante, setErrorParticipante] = useState('');
-  const [errorTutor, setErrorTutor]               = useState('');
-  const [errorTribunal, setErrorTribunal]         = useState('');
-  const [errorPersonal, setErrorPersonal]         = useState('');
+  const [errorTutor, setErrorTutor] = useState('');
+  const [errorTribunal, setErrorTribunal] = useState('');
+  const [errorPersonal, setErrorPersonal] = useState('');
 
   const [errorFieldParticipante, setErrorFieldParticipante] = useState('');
-  const [errorFieldTutor, setErrorFieldTutor]               = useState('');
-  const [errorFieldTribunal, setErrorFieldTribunal]         = useState('');
-  const [errorFieldPersonal, setErrorFieldPersonal]         = useState('');
+  const [errorFieldTutor, setErrorFieldTutor] = useState('');
+  const [errorFieldTribunal, setErrorFieldTribunal] = useState('');
+  const [errorFieldPersonal, setErrorFieldPersonal] = useState('');
 
   // Floating snackbar for errors
   const [snackErr, setSnackErr] = useState({ open: false, msg: '' });
 
   // Usuario ya creado pero perfil falló — reutilizar en siguiente intento
   const [pendingUserParticipante, setPendingUserParticipante] = useState<string | null>(null);
-  const [pendingUserTutor, setPendingUserTutor]               = useState<string | null>(null);
-  const [pendingUserTribunal, setPendingUserTribunal]         = useState<string | null>(null);
-  const [pendingUserPersonal, setPendingUserPersonal]         = useState<string | null>(null);
+  const [pendingUserTutor, setPendingUserTutor] = useState<string | null>(null);
+  const [pendingUserTribunal, setPendingUserTribunal] = useState<string | null>(null);
+  const [pendingUserPersonal, setPendingUserPersonal] = useState<string | null>(null);
 
   // Queries
   const { data: dataParticipantes, refetch: refetchParticipantes } = useQuery(OBTENER_PARTICIPANTES);
@@ -378,10 +571,12 @@ const PerfilesPage: React.FC = () => {
   const { data: dataTribunales, refetch: refetchTribunales } = useQuery(OBTENER_TRIBUNALES);
   const { data: dataProyectos } = useQuery(OBTENER_PROYECTOS);
   const { data: dataPersonal, refetch: refetchPersonal } = useQuery(OBTENER_PERSONAL);
+  const { data: dataRoles } = useQuery(OBTENER_ROLES);
 
   // Mutations
   const [crearUsuario] = useMutation(CREAR_USUARIO);
-  
+  const [asignarRolAUsuario] = useMutation(ASIGNAR_ROL_A_USUARIO);
+
   const [crearParticipante] = useMutation(CREAR_PARTICIPANTE);
   const [editarParticipante] = useMutation(EDITAR_PARTICIPANTE);
   const [eliminarParticipante] = useMutation(ELIMINAR_PARTICIPANTE);
@@ -402,11 +597,7 @@ const PerfilesPage: React.FC = () => {
     setTabValue(newValue);
   };
 
-  const showErr = (
-    setMsg: (s: string) => void,
-    setField: (s: string) => void,
-    msg: string
-  ) => {
+  const showErr = (setMsg: (s: string) => void, setField: (s: string) => void, msg: string) => {
     setMsg(msg);
     setField(detectField(msg));
     setSnackErr({ open: true, msg });
@@ -421,7 +612,8 @@ const PerfilesPage: React.FC = () => {
       setActiveParticipante(null);
       setIsExterno(false);
     }
-    setErrorParticipante(''); setErrorFieldParticipante('');
+    setErrorParticipante('');
+    setErrorFieldParticipante('');
     setPendingUserParticipante(null);
     setOpenParticipante(true);
   };
@@ -429,7 +621,7 @@ const PerfilesPage: React.FC = () => {
   const handleDeleteParticipante = (id: string) => {
     MySwal.fire({
       title: '¿Eliminar Participante?',
-      text: "Esta acción no se puede deshacer.",
+      text: 'Esta acción no se puede deshacer.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: theme.palette.error.main,
@@ -455,7 +647,8 @@ const PerfilesPage: React.FC = () => {
 
   const handleSubmitParticipante = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorParticipante(''); setErrorFieldParticipante('');
+    setErrorParticipante('');
+    setErrorFieldParticipante('');
     const formData = new FormData(e.currentTarget);
 
     try {
@@ -472,11 +665,15 @@ const PerfilesPage: React.FC = () => {
             direccion: isExterno ? (formData.get('direccion') as string) : null,
             institucion: isExterno ? (formData.get('institucion') as string) : null,
             idProyecto: formData.get('id_proyecto') || null,
-            idTutor: formData.get('id_tutor') || null,
+            idTutor: formData.get('id_tutor') || null
           }
         });
         if (!resPart.data.editarParticipante.ok) {
-          showErr(setErrorParticipante, setErrorFieldParticipante, resPart.data.editarParticipante.error || 'Error al actualizar el participante.');
+          showErr(
+            setErrorParticipante,
+            setErrorFieldParticipante,
+            resPart.data.editarParticipante.error || 'Error al actualizar el participante.'
+          );
         } else {
           MySwal.fire('¡Éxito!', 'Participante actualizado exitosamente.', 'success');
           setOpenParticipante(false);
@@ -511,13 +708,23 @@ const PerfilesPage: React.FC = () => {
             direccion: isExterno ? (formData.get('direccion') as string) : null,
             institucion: isExterno ? (formData.get('institucion') as string) : null,
             idProyecto: formData.get('id_proyecto') || null,
-            idTutor: formData.get('id_tutor') || null,
+            idTutor: formData.get('id_tutor') || null
           }
         });
 
         if (!resPart.data.crearParticipante.ok) {
-          showErr(setErrorParticipante, setErrorFieldParticipante, resPart.data.crearParticipante.error || 'Error al registrar el participante.');
+          showErr(
+            setErrorParticipante,
+            setErrorFieldParticipante,
+            resPart.data.crearParticipante.error || 'Error al registrar el participante.'
+          );
         } else {
+          const rolParticipante = dataRoles?.todosLosRoles?.find((r: any) => r.nombre === 'Participante');
+          if (rolParticipante) {
+            try {
+              await asignarRolAUsuario({ variables: { idUsuario, idRol: rolParticipante.idRol } });
+            } catch (_) {}
+          }
           MySwal.fire('¡Éxito!', 'Participante registrado exitosamente.', 'success');
           setOpenParticipante(false);
           refetchParticipantes();
@@ -532,7 +739,8 @@ const PerfilesPage: React.FC = () => {
   // --- HANDLERS TUTOR ---
   const handleOpenTutor = (row: any = null) => {
     setActiveTutor(row);
-    setErrorTutor(''); setErrorFieldTutor('');
+    setErrorTutor('');
+    setErrorFieldTutor('');
     setPendingUserTutor(null);
     setOpenTutor(true);
   };
@@ -540,7 +748,7 @@ const PerfilesPage: React.FC = () => {
   const handleDeleteTutor = (id: string) => {
     MySwal.fire({
       title: '¿Eliminar Tutor?',
-      text: "Esta acción no se puede deshacer.",
+      text: 'Esta acción no se puede deshacer.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: theme.palette.error.main,
@@ -566,7 +774,8 @@ const PerfilesPage: React.FC = () => {
 
   const handleSubmitTutor = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorTutor(''); setErrorFieldTutor('');
+    setErrorTutor('');
+    setErrorFieldTutor('');
     const formData = new FormData(e.currentTarget);
 
     try {
@@ -581,7 +790,7 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
             direccion: (formData.get('direccion') as string) || '',
-            idProyecto: formData.get('id_proyecto') || null,
+            idProyecto: formData.get('id_proyecto') || null
           }
         });
         if (!resTutor.data.editarTutor.ok) {
@@ -618,13 +827,19 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
             direccion: (formData.get('direccion') as string) || '',
-            idProyecto: formData.get('id_proyecto') || null,
+            idProyecto: formData.get('id_proyecto') || null
           }
         });
 
         if (!resTutor.data.crearTutor.ok) {
           showErr(setErrorTutor, setErrorFieldTutor, resTutor.data.crearTutor.error || 'Error al registrar el tutor.');
         } else {
+          const rolTutor = dataRoles?.todosLosRoles?.find((r: any) => r.nombre === 'Tutor');
+          if (rolTutor) {
+            try {
+              await asignarRolAUsuario({ variables: { idUsuario, idRol: rolTutor.idRol } });
+            } catch (_) {}
+          }
           MySwal.fire('¡Éxito!', 'Tutor registrado exitosamente.', 'success');
           setOpenTutor(false);
           refetchTutores();
@@ -639,7 +854,8 @@ const PerfilesPage: React.FC = () => {
   // --- HANDLERS TRIBUNAL ---
   const handleOpenTribunal = (row: any = null) => {
     setActiveTribunal(row);
-    setErrorTribunal(''); setErrorFieldTribunal('');
+    setErrorTribunal('');
+    setErrorFieldTribunal('');
     setPendingUserTribunal(null);
     setOpenTribunal(true);
   };
@@ -647,7 +863,7 @@ const PerfilesPage: React.FC = () => {
   const handleDeleteTribunal = (id: string) => {
     MySwal.fire({
       title: '¿Eliminar Tribunal?',
-      text: "Esta acción no se puede deshacer.",
+      text: 'Esta acción no se puede deshacer.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: theme.palette.error.main,
@@ -687,7 +903,7 @@ const PerfilesPage: React.FC = () => {
             ci: formData.get('ci') as string,
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
-            direccion: (formData.get('direccion') as string) || '',
+            direccion: (formData.get('direccion') as string) || ''
           }
         });
         if (!resTribunal.data.editarTribunal.ok) {
@@ -723,13 +939,19 @@ const PerfilesPage: React.FC = () => {
             ci: formData.get('ci') as string,
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
-            direccion: (formData.get('direccion') as string) || '',
+            direccion: (formData.get('direccion') as string) || ''
           }
         });
 
         if (!resTribunal.data.crearTribunal.ok) {
           showErr(setErrorTribunal, setErrorFieldTribunal, resTribunal.data.crearTribunal.error || 'Error al registrar el tribunal.');
         } else {
+          const rolTribunal = dataRoles?.todosLosRoles?.find((r: any) => r.nombre === 'Tribunal');
+          if (rolTribunal) {
+            try {
+              await asignarRolAUsuario({ variables: { idUsuario, idRol: rolTribunal.idRol } });
+            } catch (_) {}
+          }
           MySwal.fire('¡Éxito!', 'Tribunal registrado exitosamente.', 'success');
           setOpenTribunal(false);
           refetchTribunales();
@@ -744,15 +966,17 @@ const PerfilesPage: React.FC = () => {
   // --- HANDLERS PERSONAL ---
   const handleOpenPersonal = (row: any = null) => {
     setActivePersonal(row);
-    setErrorPersonal(''); setErrorFieldPersonal('');
+    setErrorPersonal('');
+    setErrorFieldPersonal('');
     setPendingUserPersonal(null);
+    setSelectedRolPersonal('');
     setOpenPersonal(true);
   };
 
   const handleDeletePersonal = (id: string) => {
     MySwal.fire({
       title: '¿Eliminar Personal?',
-      text: "Esta acción no se puede deshacer.",
+      text: 'Esta acción no se puede deshacer.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: theme.palette.error.main,
@@ -792,7 +1016,7 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             cargo: formData.get('cargo') as string,
             direccion: formData.get('direccion') as string,
-            celular: formData.get('celular') as string,
+            celular: formData.get('celular') as string
           }
         });
         if (!res.data.editarPersonal.ok) {
@@ -828,13 +1052,18 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             cargo: formData.get('cargo') as string,
             direccion: formData.get('direccion') as string,
-            celular: formData.get('celular') as string,
+            celular: formData.get('celular') as string
           }
         });
 
         if (!res.data.crearPersonal.ok) {
           showErr(setErrorPersonal, setErrorFieldPersonal, res.data.crearPersonal.error || 'Error al registrar el personal.');
         } else {
+          if (selectedRolPersonal) {
+            try {
+              await asignarRolAUsuario({ variables: { idUsuario, idRol: selectedRolPersonal } });
+            } catch (_) {}
+          }
           MySwal.fire('¡Éxito!', 'Personal registrado exitosamente.', 'success');
           setOpenPersonal(false);
           refetchPersonal();
@@ -847,13 +1076,7 @@ const PerfilesPage: React.FC = () => {
   };
 
   const renderChip = (label: string, color: 'success' | 'error' | 'warning' | 'info') => (
-    <Chip 
-      label={label} 
-      color={color} 
-      size="small" 
-      variant="outlined" 
-      sx={{ borderWidth: 1, opacity: 0.85, fontWeight: 500 }} 
-    />
+    <Chip label={label} color={color} size="small" variant="outlined" sx={{ borderWidth: 1, opacity: 0.85, fontWeight: 500 }} />
   );
 
   return (
@@ -894,18 +1117,24 @@ const PerfilesPage: React.FC = () => {
                   dataParticipantes.todosLosParticipantes.map((row: any) => (
                     <TableRow key={row.idParticipante}>
                       <TableCell>{row.idParticipante}</TableCell>
-                      <TableCell>{row.nombre} {row.apellido}</TableCell>
-                      <TableCell>{row.ci} {row.expedicion}</TableCell>
+                      <TableCell>
+                        {row.nombre} {row.apellido}
+                      </TableCell>
+                      <TableCell>
+                        {row.ci} {row.expedicion}
+                      </TableCell>
                       <TableCell>{row.celular}</TableCell>
                       <TableCell>
                         {renderChip(row.participanteExt ? 'Externo' : 'Interno', row.participanteExt ? 'warning' : 'info')}
                       </TableCell>
-                      <TableCell>
-                        {renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}
-                      </TableCell>
+                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenParticipante(row)}><EditOutlined /></IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteParticipante(row.idParticipante)}><DeleteOutlined /></IconButton>
+                        <IconButton color="primary" onClick={() => handleOpenParticipante(row)}>
+                          <EditOutlined />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => handleDeleteParticipante(row.idParticipante)}>
+                          <DeleteOutlined />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
@@ -948,15 +1177,21 @@ const PerfilesPage: React.FC = () => {
                     <TableRow key={row.idTutor}>
                       <TableCell>{row.idTutor}</TableCell>
                       <TableCell>{row.codEmpleado}</TableCell>
-                      <TableCell>{row.nombre} {row.apellido}</TableCell>
-                      <TableCell>{row.ci} {row.expedicion}</TableCell>
-                      <TableCell>{row.celular}</TableCell>
                       <TableCell>
-                        {renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}
+                        {row.nombre} {row.apellido}
                       </TableCell>
+                      <TableCell>
+                        {row.ci} {row.expedicion}
+                      </TableCell>
+                      <TableCell>{row.celular}</TableCell>
+                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenTutor(row)}><EditOutlined /></IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteTutor(row.idTutor)}><DeleteOutlined /></IconButton>
+                        <IconButton color="primary" onClick={() => handleOpenTutor(row)}>
+                          <EditOutlined />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => handleDeleteTutor(row.idTutor)}>
+                          <DeleteOutlined />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
@@ -998,16 +1233,22 @@ const PerfilesPage: React.FC = () => {
                   dataTribunales.todosLosTribunales.map((row: any) => (
                     <TableRow key={row.idTribunal}>
                       <TableCell>{row.idTribunal}</TableCell>
-                      <TableCell>{row.nombre} {row.apellido}</TableCell>
-                      <TableCell>{row.especialidad}</TableCell>
-                      <TableCell>{row.ci} {row.expedicion}</TableCell>
-                      <TableCell>{row.celular}</TableCell>
                       <TableCell>
-                        {renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}
+                        {row.nombre} {row.apellido}
                       </TableCell>
+                      <TableCell>{row.especialidad}</TableCell>
+                      <TableCell>
+                        {row.ci} {row.expedicion}
+                      </TableCell>
+                      <TableCell>{row.celular}</TableCell>
+                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenTribunal(row)}><EditOutlined /></IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteTribunal(row.idTribunal)}><DeleteOutlined /></IconButton>
+                        <IconButton color="primary" onClick={() => handleOpenTribunal(row)}>
+                          <EditOutlined />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => handleDeleteTribunal(row.idTribunal)}>
+                          <DeleteOutlined />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
@@ -1048,16 +1289,22 @@ const PerfilesPage: React.FC = () => {
                   dataPersonal.todoElPersonal.map((row: any) => (
                     <TableRow key={row.idPersonal}>
                       <TableCell>{row.idPersonal}</TableCell>
-                      <TableCell>{row.nombre} {row.apellido}</TableCell>
-                      <TableCell>{row.ci} {row.expedicion}</TableCell>
+                      <TableCell>
+                        {row.nombre} {row.apellido}
+                      </TableCell>
+                      <TableCell>
+                        {row.ci} {row.expedicion}
+                      </TableCell>
                       <TableCell>{row.cargo}</TableCell>
                       <TableCell>{row.celular}</TableCell>
-                      <TableCell>
-                        {renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}
-                      </TableCell>
+                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenPersonal(row)}><EditOutlined /></IconButton>
-                        <IconButton color="error" onClick={() => handleDeletePersonal(row.idPersonal)}><DeleteOutlined /></IconButton>
+                        <IconButton color="primary" onClick={() => handleOpenPersonal(row)}>
+                          <EditOutlined />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => handleDeletePersonal(row.idPersonal)}>
+                          <DeleteOutlined />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
@@ -1072,7 +1319,6 @@ const PerfilesPage: React.FC = () => {
             </Table>
           </TableContainer>
         </CustomTabPanel>
-
       </Box>
 
       {/* ======================= MODAL PARTICIPANTE ======================= */}
@@ -1082,62 +1328,175 @@ const PerfilesPage: React.FC = () => {
             {activeParticipante ? 'Editar Participante' : 'Registrar Participante'}
           </DialogTitle>
           <DialogContent dividers sx={{ bgcolor: 'background.default', p: { xs: 2, md: 3 } }}>
-
             {!activeParticipante && (
-              <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}>
+              <Paper
+                elevation={0}
+                sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}
+              >
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos de Usuario</Typography>
-                  <Typography variant="body2" color="text.secondary">Credenciales de acceso al sistema</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                    Datos de Usuario
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Credenciales de acceso al sistema
+                  </Typography>
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}><TextField name="username" fullWidth label="Username" required size="small" error={errorFieldParticipante === 'username'} helperText={errorFieldParticipante === 'username' ? errorParticipante : undefined} /></Grid>
-                  <Grid item xs={12} sm={4}><TextField name="email" fullWidth label="Email" type="email" required size="small" error={errorFieldParticipante === 'email'} helperText={errorFieldParticipante === 'email' ? errorParticipante : undefined} /></Grid>
-                  <Grid item xs={12} sm={4}><TextField name="password" fullWidth label="Password" type="password" required size="small" error={errorFieldParticipante === 'password'} helperText={errorFieldParticipante === 'password' ? errorParticipante : undefined} /></Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="username"
+                      fullWidth
+                      label="Username"
+                      required
+                      size="small"
+                      error={errorFieldParticipante === 'username'}
+                      helperText={errorFieldParticipante === 'username' ? errorParticipante : undefined}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="email"
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      required
+                      size="small"
+                      error={errorFieldParticipante === 'email'}
+                      helperText={errorFieldParticipante === 'email' ? errorParticipante : undefined}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="password"
+                      fullWidth
+                      label="Password"
+                      type="password"
+                      required
+                      size="small"
+                      error={errorFieldParticipante === 'password'}
+                      helperText={errorFieldParticipante === 'password' ? errorParticipante : undefined}
+                    />
+                  </Grid>
                 </Grid>
               </Paper>
             )}
 
-            <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}>
+            <Paper
+              elevation={0}
+              sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}
+            >
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos Personales</Typography>
-                <Typography variant="body2" color="text.secondary">Información básica del participante</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                  Datos Personales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Información básica del participante
+                </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}><TextField name="nombre" defaultValue={activeParticipante?.nombre} fullWidth label="Nombres" required size="small" /></Grid>
-                <Grid item xs={12} sm={6}><TextField name="apellido" defaultValue={activeParticipante?.apellido} fullWidth label="Apellidos" required size="small" /></Grid>
-                <Grid item xs={12} sm={4}><TextField name="ci" defaultValue={activeParticipante?.ci} fullWidth label="C.I." required size="small" error={errorFieldParticipante === 'ci'} helperText={errorFieldParticipante === 'ci' ? errorParticipante : undefined} /></Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="nombre" defaultValue={activeParticipante?.nombre} fullWidth label="Nombres" required size="small" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    name="apellido"
+                    defaultValue={activeParticipante?.apellido}
+                    fullWidth
+                    label="Apellidos"
+                    required
+                    size="small"
+                  />
+                </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField name="expedicion" defaultValue={activeParticipante?.expedicion || 'LP'} fullWidth select label="Expedición" size="small">
+                  <TextField
+                    name="ci"
+                    defaultValue={activeParticipante?.ci}
+                    fullWidth
+                    label="C.I."
+                    required
+                    size="small"
+                    error={errorFieldParticipante === 'ci'}
+                    helperText={errorFieldParticipante === 'ci' ? errorParticipante : undefined}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    name="expedicion"
+                    defaultValue={activeParticipante?.expedicion || 'LP'}
+                    fullWidth
+                    select
+                    label="Expedición"
+                    size="small"
+                  >
                     {EXPEDICION_CHOICES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={4}><TextField name="celular" defaultValue={activeParticipante?.celular} fullWidth label="Celular" required size="small" /></Grid>
-                <Grid item xs={12} sm={6}><TextField name="codigo_especifico" defaultValue={activeParticipante?.codigoEspecifico} fullWidth label="Código Específico (Matrícula/Registro)" required size="small" /></Grid>
-                <Grid item xs={12}>
-                  <TextField name="id_proyecto" defaultValue={activeParticipante?.proyecto?.idProyecto || ''} fullWidth select label="Proyecto" size="small">
-                    <MenuItem value=""><em>Ninguno</em></MenuItem>
+                <Grid item xs={12} sm={4}>
+                  <TextField name="celular" defaultValue={activeParticipante?.celular} fullWidth label="Celular" required size="small" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    name="codigo_especifico"
+                    defaultValue={activeParticipante?.codigoEspecifico}
+                    fullWidth
+                    label="Código Específico (Matrícula/Registro)"
+                    required
+                    size="small"
+                  />
+                </Grid>
+                {/*<Grid item xs={12}>
+                  <TextField
+                    name="id_proyecto"
+                    defaultValue={activeParticipante?.proyecto?.idProyecto || ''}
+                    fullWidth
+                    select
+                    label="Proyecto"
+                    size="small"
+                  >
+                    <MenuItem value="">
+                      <em>Ninguno</em>
+                    </MenuItem>
                     {dataProyectos?.todosLosProyectos?.map((p: any) => (
-                      <MenuItem key={p.idProyecto} value={p.idProyecto}>{p.titulo}</MenuItem>
+                      <MenuItem key={p.idProyecto} value={p.idProyecto}>
+                        {p.titulo}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
                 <Grid item xs={12}>
-                  <TextField name="id_tutor" defaultValue={activeParticipante?.tutor?.idTutor || ''} fullWidth select label="Tutor" size="small">
-                    <MenuItem value=""><em>Ninguno</em></MenuItem>
+                  <TextField
+                    name="id_tutor"
+                    defaultValue={activeParticipante?.tutor?.idTutor || ''}
+                    fullWidth
+                    select
+                    label="Tutor"
+                    size="small"
+                  >
+                    <MenuItem value="">
+                      <em>Ninguno</em>
+                    </MenuItem>
                     {dataTutores?.todosLosTutores?.map((t: any) => (
-                      <MenuItem key={t.idTutor} value={t.idTutor}>{t.nombre} {t.apellido}</MenuItem>
+                      <MenuItem key={t.idTutor} value={t.idTutor}>
+                        {t.nombre} {t.apellido}
+                      </MenuItem>
                     ))}
                   </TextField>
-                </Grid>
+                </Grid>*/}
               </Grid>
             </Paper>
 
             <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3 }}>
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos Adicionales</Typography>
-                <Typography variant="body2" color="text.secondary">Información complementaria e institucional</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                  Datos Adicionales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Información complementaria e institucional
+                </Typography>
               </Box>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={isExterno ? 4 : 12}>
@@ -1148,16 +1507,35 @@ const PerfilesPage: React.FC = () => {
                 </Grid>
                 {isExterno && (
                   <>
-                    <Grid item xs={12} sm={4}><TextField name="institucion" defaultValue={activeParticipante?.participanteExt?.institucion} fullWidth label="Institución de Origen" required size="small" /></Grid>
-                    <Grid item xs={12} sm={4}><TextField name="direccion" defaultValue={activeParticipante?.participanteExt?.direccion} fullWidth label="Dirección" required size="small" /></Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        name="institucion"
+                        defaultValue={activeParticipante?.participanteExt?.institucion}
+                        fullWidth
+                        label="Institución de Origen"
+                        required
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        name="direccion"
+                        defaultValue={activeParticipante?.participanteExt?.direccion}
+                        fullWidth
+                        label="Dirección"
+                        required
+                        size="small"
+                      />
+                    </Grid>
                   </>
                 )}
               </Grid>
             </Paper>
-
           </DialogContent>
           <DialogActions sx={{ p: 2, px: 3, bgcolor: 'background.paper' }}>
-            <Button onClick={() => setOpenParticipante(false)} color="secondary" variant="outlined">Cancelar</Button>
+            <Button onClick={() => setOpenParticipante(false)} color="secondary" variant="outlined">
+              Cancelar
+            </Button>
             <Button type="submit" variant="contained" sx={{ px: 4 }}>
               {activeParticipante ? 'Actualizar Participante' : 'Guardar Participante'}
             </Button>
@@ -1168,66 +1546,165 @@ const PerfilesPage: React.FC = () => {
       {/* ======================= MODAL TUTOR ======================= */}
       <Dialog open={openTutor} onClose={() => setOpenTutor(false)} maxWidth="md" fullWidth>
         <form onSubmit={handleSubmitTutor}>
-          <DialogTitle sx={{ pb: 2, fontSize: '1.25rem', fontWeight: 600 }}>
-            {activeTutor ? 'Editar Tutor' : 'Registrar Tutor'}
-          </DialogTitle>
+          <DialogTitle sx={{ pb: 2, fontSize: '1.25rem', fontWeight: 600 }}>{activeTutor ? 'Editar Tutor' : 'Registrar Tutor'}</DialogTitle>
           <DialogContent dividers sx={{ bgcolor: 'background.default', p: { xs: 2, md: 3 } }}>
-
             {!activeTutor && (
-              <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}>
+              <Paper
+                elevation={0}
+                sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}
+              >
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos de Usuario</Typography>
-                  <Typography variant="body2" color="text.secondary">Credenciales de acceso al sistema</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                    Datos de Usuario
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Credenciales de acceso al sistema
+                  </Typography>
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}><TextField name="username" fullWidth label="Username" required size="small" error={errorFieldTutor === 'username'} helperText={errorFieldTutor === 'username' ? errorTutor : undefined} /></Grid>
-                  <Grid item xs={12} sm={4}><TextField name="email" fullWidth label="Email" type="email" required size="small" error={errorFieldTutor === 'email'} helperText={errorFieldTutor === 'email' ? errorTutor : undefined} /></Grid>
-                  <Grid item xs={12} sm={4}><TextField name="password" fullWidth label="Password" type="password" required size="small" error={errorFieldTutor === 'password'} helperText={errorFieldTutor === 'password' ? errorTutor : undefined} /></Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="username"
+                      fullWidth
+                      label="Username"
+                      required
+                      size="small"
+                      error={errorFieldTutor === 'username'}
+                      helperText={errorFieldTutor === 'username' ? errorTutor : undefined}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="email"
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      required
+                      size="small"
+                      error={errorFieldTutor === 'email'}
+                      helperText={errorFieldTutor === 'email' ? errorTutor : undefined}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="password"
+                      fullWidth
+                      label="Password"
+                      type="password"
+                      required
+                      size="small"
+                      error={errorFieldTutor === 'password'}
+                      helperText={errorFieldTutor === 'password' ? errorTutor : undefined}
+                    />
+                  </Grid>
                 </Grid>
               </Paper>
             )}
 
-            <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}>
+            <Paper
+              elevation={0}
+              sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}
+            >
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos Personales</Typography>
-                <Typography variant="body2" color="text.secondary">Información básica del tutor</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                  Datos Personales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Información básica del tutor
+                </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}><TextField name="nombre" defaultValue={activeTutor?.nombre} fullWidth label="Nombres" required size="small" /></Grid>
-                <Grid item xs={12} sm={6}><TextField name="apellido" defaultValue={activeTutor?.apellido} fullWidth label="Apellidos" required size="small" /></Grid>
-                <Grid item xs={12} sm={4}><TextField name="ci" defaultValue={activeTutor?.ci} fullWidth label="C.I." required size="small" error={errorFieldTutor === 'ci'} helperText={errorFieldTutor === 'ci' ? errorTutor : undefined} /></Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="nombre" defaultValue={activeTutor?.nombre} fullWidth label="Nombres" required size="small" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="apellido" defaultValue={activeTutor?.apellido} fullWidth label="Apellidos" required size="small" />
+                </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField name="expedicion" defaultValue={activeTutor?.expedicion || 'LP'} fullWidth select label="Expedición" size="small">
+                  <TextField
+                    name="ci"
+                    defaultValue={activeTutor?.ci}
+                    fullWidth
+                    label="C.I."
+                    required
+                    size="small"
+                    error={errorFieldTutor === 'ci'}
+                    helperText={errorFieldTutor === 'ci' ? errorTutor : undefined}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    name="expedicion"
+                    defaultValue={activeTutor?.expedicion || 'LP'}
+                    fullWidth
+                    select
+                    label="Expedición"
+                    size="small"
+                  >
                     {EXPEDICION_CHOICES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={4}><TextField name="celular" defaultValue={activeTutor?.celular} fullWidth label="Celular" required size="small" /></Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField name="celular" defaultValue={activeTutor?.celular} fullWidth label="Celular" required size="small" />
+                </Grid>
               </Grid>
             </Paper>
-            
+
             <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3 }}>
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos Institucionales</Typography>
-                <Typography variant="body2" color="text.secondary">Información laboral del tutor</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                  Datos Institucionales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Información laboral del tutor
+                </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}><TextField name="cod_empleado" defaultValue={activeTutor?.codEmpleado} fullWidth label="Código de Empleado" required size="small" error={errorFieldTutor === 'cod_empleado'} helperText={errorFieldTutor === 'cod_empleado' ? errorTutor : undefined} /></Grid>
-                <Grid item xs={12} sm={6}><TextField name="direccion" defaultValue={activeTutor?.direccion} fullWidth label="Dirección Particular" size="small" /></Grid>
-                <Grid item xs={12}>
-                  <TextField name="id_proyecto" defaultValue={activeTutor?.proyecto?.idProyecto || ''} fullWidth select label="Proyecto" size="small">
-                    <MenuItem value=""><em>Ninguno</em></MenuItem>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    name="cod_empleado"
+                    defaultValue={activeTutor?.codEmpleado}
+                    fullWidth
+                    label="Código de Empleado"
+                    required
+                    size="small"
+                    error={errorFieldTutor === 'cod_empleado'}
+                    helperText={errorFieldTutor === 'cod_empleado' ? errorTutor : undefined}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="direccion" defaultValue={activeTutor?.direccion} fullWidth label="Dirección Particular" size="small" />
+                </Grid>
+                {/*<Grid item xs={12}>
+                  <TextField
+                    name="id_proyecto"
+                    defaultValue={activeTutor?.proyecto?.idProyecto || ''}
+                    fullWidth
+                    select
+                    label="Proyecto"
+                    size="small"
+                  >
+                    <MenuItem value="">
+                      <em>Ninguno</em>
+                    </MenuItem>
                     {dataProyectos?.todosLosProyectos?.map((p: any) => (
-                      <MenuItem key={p.idProyecto} value={p.idProyecto}>{p.titulo}</MenuItem>
+                      <MenuItem key={p.idProyecto} value={p.idProyecto}>
+                        {p.titulo}
+                      </MenuItem>
                     ))}
                   </TextField>
-                </Grid>
+                </Grid>*/}
               </Grid>
             </Paper>
           </DialogContent>
           <DialogActions sx={{ p: 2, px: 3, bgcolor: 'background.paper' }}>
-            <Button onClick={() => setOpenTutor(false)} color="secondary" variant="outlined">Cancelar</Button>
+            <Button onClick={() => setOpenTutor(false)} color="secondary" variant="outlined">
+              Cancelar
+            </Button>
             <Button type="submit" variant="contained" sx={{ px: 4 }}>
               {activeTutor ? 'Actualizar Tutor' : 'Guardar Tutor'}
             </Button>
@@ -1241,99 +1718,131 @@ const PerfilesPage: React.FC = () => {
         onClose={() => setOpenTribunal(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{ 
-          sx: { 
-            borderRadius: '12px', 
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
             border: '1px solid',
             borderColor: 'divider',
             boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02)',
-            overflow: 'hidden' 
-          } 
+            overflow: 'hidden'
+          }
         }}
       >
         <form onSubmit={handleSubmitTribunal}>
           {/* Header minimalista y formal */}
-          <Box sx={{ bgcolor: '#ffffff', px: 3, py: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: '#F1F5F9' }}>
+          <Box
+            sx={{
+              bgcolor: '#ffffff',
+              px: 3,
+              py: 2.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid',
+              borderColor: '#F1F5F9'
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box sx={{
-                width: 32, height: 32, borderRadius: '6px',
-                bgcolor: '#F1F5F9',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-              }}>
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '6px',
+                  bgcolor: '#F1F5F9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
                 <UserOutlined style={{ color: '#475569', fontSize: 15 }} />
               </Box>
               <Box>
                 <Typography sx={{ color: '#0F172A', fontWeight: 600, fontSize: '1.05rem', lineHeight: 1.2 }}>
                   {activeTribunal ? 'Editar Miembro del Tribunal' : 'Registrar Miembro del Tribunal'}
                 </Typography>
-                <Typography sx={{ color: '#64748B', fontSize: '0.72rem', mt: 0.2 }}>
-                  Directorio Académico
-                </Typography>
+                <Typography sx={{ color: '#64748B', fontSize: '0.72rem', mt: 0.2 }}>Directorio Académico</Typography>
               </Box>
             </Box>
-            <Chip 
-              label="Tribunal" 
-              size="small" 
-              variant="outlined" 
-              sx={{ 
-                borderRadius: '6px', 
-                fontWeight: 500, 
-                fontSize: '0.72rem', 
-                color: '#475569', 
+            <Chip
+              label="Tribunal"
+              size="small"
+              variant="outlined"
+              sx={{
+                borderRadius: '6px',
+                fontWeight: 500,
+                fontSize: '0.72rem',
+                color: '#475569',
                 borderColor: '#E2E8F0',
                 bgcolor: '#F8FAFC'
-              }} 
+              }}
             />
           </Box>
 
           <DialogContent sx={{ bgcolor: '#fff', px: 3, pt: 2, pb: 2 }}>
-
             {!activeTribunal && (
               <>
                 <SectionLabel>Credenciales de acceso</SectionLabel>
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                   <Grid item xs={12} sm={4}>
-                    <TextField name="username" fullWidth label="Usuario" required size="small"
+                    <TextField
+                      name="username"
+                      fullWidth
+                      label="Usuario"
+                      required
+                      size="small"
                       error={errorFieldTribunal === 'username'}
                       helperText={errorFieldTribunal === 'username' ? errorTribunal : undefined}
-                      InputProps={{ 
-                        sx: { 
-                          borderRadius: '6px', 
-                          bgcolor: '#F8FAFC', 
+                      InputProps={{
+                        sx: {
+                          borderRadius: '6px',
+                          bgcolor: '#F8FAFC',
                           transition: 'all 0.15s ease',
                           '&:hover': { bgcolor: '#F1F5F9' },
                           '&.Mui-focused': { bgcolor: '#FFF' }
-                        } 
+                        }
                       }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField name="email" fullWidth label="Correo electrónico" type="email" required size="small"
+                    <TextField
+                      name="email"
+                      fullWidth
+                      label="Correo electrónico"
+                      type="email"
+                      required
+                      size="small"
                       error={errorFieldTribunal === 'email'}
                       helperText={errorFieldTribunal === 'email' ? errorTribunal : undefined}
-                      InputProps={{ 
-                        sx: { 
-                          borderRadius: '6px', 
-                          bgcolor: '#F8FAFC', 
+                      InputProps={{
+                        sx: {
+                          borderRadius: '6px',
+                          bgcolor: '#F8FAFC',
                           transition: 'all 0.15s ease',
                           '&:hover': { bgcolor: '#F1F5F9' },
                           '&.Mui-focused': { bgcolor: '#FFF' }
-                        } 
+                        }
                       }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField name="password" fullWidth label="Contraseña" type="password" required size="small"
+                    <TextField
+                      name="password"
+                      fullWidth
+                      label="Contraseña"
+                      type="password"
+                      required
+                      size="small"
                       error={errorFieldTribunal === 'password'}
                       helperText={errorFieldTribunal === 'password' ? errorTribunal : undefined}
-                      InputProps={{ 
-                        sx: { 
-                          borderRadius: '6px', 
-                          bgcolor: '#F8FAFC', 
+                      InputProps={{
+                        sx: {
+                          borderRadius: '6px',
+                          bgcolor: '#F8FAFC',
                           transition: 'all 0.15s ease',
                           '&:hover': { bgcolor: '#F1F5F9' },
                           '&.Mui-focused': { bgcolor: '#FFF' }
-                        } 
+                        }
                       }}
                     />
                   </Grid>
@@ -1344,75 +1853,107 @@ const PerfilesPage: React.FC = () => {
             <SectionLabel>Datos personales</SectionLabel>
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={12} sm={6}>
-                <TextField name="nombre" defaultValue={activeTribunal?.nombre} fullWidth label="Nombres" required size="small"
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                <TextField
+                  name="nombre"
+                  defaultValue={activeTribunal?.nombre}
+                  fullWidth
+                  label="Nombres"
+                  required
+                  size="small"
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField name="apellido" defaultValue={activeTribunal?.apellido} fullWidth label="Apellidos" required size="small"
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                <TextField
+                  name="apellido"
+                  defaultValue={activeTribunal?.apellido}
+                  fullWidth
+                  label="Apellidos"
+                  required
+                  size="small"
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <TextField name="ci" defaultValue={activeTribunal?.ci} fullWidth label="Cédula de Identidad" required size="small"
+                <TextField
+                  name="ci"
+                  defaultValue={activeTribunal?.ci}
+                  fullWidth
+                  label="Cédula de Identidad"
+                  required
+                  size="small"
                   error={errorFieldTribunal === 'ci'}
                   helperText={errorFieldTribunal === 'ci' ? errorTribunal : undefined}
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <TextField name="expedicion" defaultValue={activeTribunal?.expedicion || 'LP'} fullWidth select label="Expedición" size="small"
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                <TextField
+                  name="expedicion"
+                  defaultValue={activeTribunal?.expedicion || 'LP'}
+                  fullWidth
+                  select
+                  label="Expedición"
+                  size="small"
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 >
                   {EXPEDICION_CHOICES.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
                   ))}
                 </TextField>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <TextField name="celular" defaultValue={activeTribunal?.celular} fullWidth label="Teléfono / Celular" required size="small"
+                <TextField
+                  name="celular"
+                  defaultValue={activeTribunal?.celular}
+                  fullWidth
+                  label="Teléfono / Celular"
+                  required
+                  size="small"
                   error={errorFieldTribunal === 'celular'}
                   helperText={errorFieldTribunal === 'celular' ? errorTribunal : undefined}
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 />
               </Grid>
@@ -1421,44 +1962,54 @@ const PerfilesPage: React.FC = () => {
             <SectionLabel>Perfil académico</SectionLabel>
             <Grid container spacing={2} sx={{ mb: 1 }}>
               <Grid item xs={12} sm={6}>
-                <TextField name="especialidad" defaultValue={activeTribunal?.especialidad} fullWidth label="Área de especialidad" required size="small"
+                <TextField
+                  name="especialidad"
+                  defaultValue={activeTribunal?.especialidad}
+                  fullWidth
+                  label="Área de especialidad"
+                  required
+                  size="small"
                   error={errorFieldTribunal === 'especialidad'}
                   helperText={errorFieldTribunal === 'especialidad' ? errorTribunal : undefined}
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField name="direccion" defaultValue={activeTribunal?.direccion} fullWidth label="Dirección particular" size="small"
-                  InputProps={{ 
-                    sx: { 
-                      borderRadius: '6px', 
-                      bgcolor: '#F8FAFC', 
+                <TextField
+                  name="direccion"
+                  defaultValue={activeTribunal?.direccion}
+                  fullWidth
+                  label="Dirección particular"
+                  size="small"
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: '#F8FAFC',
                       transition: 'all 0.15s ease',
                       '&:hover': { bgcolor: '#F1F5F9' },
                       '&.Mui-focused': { bgcolor: '#FFF' }
-                    } 
+                    }
                   }}
                 />
               </Grid>
             </Grid>
-
           </DialogContent>
 
           <DialogActions sx={{ px: 3, py: 2.5, bgcolor: '#FCFCFD', borderTop: '1px solid', borderColor: '#F1F5F9' }}>
-            <Button 
-              onClick={() => setOpenTribunal(false)} 
-              variant="text" 
-              sx={{ 
-                color: '#475569', 
-                textTransform: 'none', 
+            <Button
+              onClick={() => setOpenTribunal(false)}
+              variant="text"
+              sx={{
+                color: '#475569',
+                textTransform: 'none',
                 fontWeight: 500,
                 fontSize: '0.85rem',
                 mr: 1,
@@ -1467,20 +2018,20 @@ const PerfilesPage: React.FC = () => {
             >
               Cancelar
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               variant="contained"
-              sx={{ 
-                px: 3.5, 
+              sx={{
+                px: 3.5,
                 py: 0.8,
-                bgcolor: '#0F172A', 
+                bgcolor: '#0F172A',
                 color: '#FFF',
                 textTransform: 'none',
                 fontWeight: 500,
                 fontSize: '0.85rem',
                 borderRadius: '6px',
                 boxShadow: 'none',
-                '&:hover': { bgcolor: '#1E293B', boxShadow: 'none' } 
+                '&:hover': { bgcolor: '#1E293B', boxShadow: 'none' }
               }}
             >
               {activeTribunal ? 'Guardar Cambios' : 'Registrar Miembro'}
@@ -1495,61 +2046,171 @@ const PerfilesPage: React.FC = () => {
             {activePersonal ? 'Editar Personal' : 'Registrar Personal'}
           </DialogTitle>
           <DialogContent dividers sx={{ bgcolor: 'background.default', p: { xs: 2, md: 3 } }}>
-
             {!activePersonal && (
-              <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}>
+              <Paper
+                elevation={0}
+                sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}
+              >
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos de Usuario</Typography>
-                  <Typography variant="body2" color="text.secondary">Credenciales de acceso al sistema</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                    Datos de Usuario
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Credenciales de acceso al sistema
+                  </Typography>
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}><TextField name="username" fullWidth label="Username" required size="small" error={errorFieldPersonal === 'username'} helperText={errorFieldPersonal === 'username' ? errorPersonal : undefined} /></Grid>
-                  <Grid item xs={12} sm={4}><TextField name="email" fullWidth label="Email" type="email" required size="small" error={errorFieldPersonal === 'email'} helperText={errorFieldPersonal === 'email' ? errorPersonal : undefined} /></Grid>
-                  <Grid item xs={12} sm={4}><TextField name="password" fullWidth label="Password" type="password" required size="small" error={errorFieldPersonal === 'password'} helperText={errorFieldPersonal === 'password' ? errorPersonal : undefined} /></Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="username"
+                      fullWidth
+                      label="Username"
+                      required
+                      size="small"
+                      error={errorFieldPersonal === 'username'}
+                      helperText={errorFieldPersonal === 'username' ? errorPersonal : undefined}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="email"
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      required
+                      size="small"
+                      error={errorFieldPersonal === 'email'}
+                      helperText={errorFieldPersonal === 'email' ? errorPersonal : undefined}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      name="password"
+                      fullWidth
+                      label="Password"
+                      type="password"
+                      required
+                      size="small"
+                      error={errorFieldPersonal === 'password'}
+                      helperText={errorFieldPersonal === 'password' ? errorPersonal : undefined}
+                    />
+                  </Grid>
                 </Grid>
               </Paper>
             )}
 
-            <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}>
+            <Paper
+              elevation={0}
+              sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3, mb: 3 }}
+            >
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos Personales</Typography>
-                <Typography variant="body2" color="text.secondary">Información básica del personal</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                  Datos Personales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Información básica del personal
+                </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}><TextField name="nombre" defaultValue={activePersonal?.nombre} fullWidth label="Nombres" required size="small" /></Grid>
-                <Grid item xs={12} sm={6}><TextField name="apellido" defaultValue={activePersonal?.apellido} fullWidth label="Apellidos" required size="small" /></Grid>
-                <Grid item xs={12} sm={4}><TextField name="ci" defaultValue={activePersonal?.ci} fullWidth label="C.I." required size="small" error={errorFieldPersonal === 'ci'} helperText={errorFieldPersonal === 'ci' ? errorPersonal : undefined} /></Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="nombre" defaultValue={activePersonal?.nombre} fullWidth label="Nombres" required size="small" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="apellido" defaultValue={activePersonal?.apellido} fullWidth label="Apellidos" required size="small" />
+                </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField name="expedicion" defaultValue={activePersonal?.expedicion || 'LP'} fullWidth select label="Expedición" size="small">
+                  <TextField
+                    name="ci"
+                    defaultValue={activePersonal?.ci}
+                    fullWidth
+                    label="C.I."
+                    required
+                    size="small"
+                    error={errorFieldPersonal === 'ci'}
+                    helperText={errorFieldPersonal === 'ci' ? errorPersonal : undefined}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    name="expedicion"
+                    defaultValue={activePersonal?.expedicion || 'LP'}
+                    fullWidth
+                    select
+                    label="Expedición"
+                    size="small"
+                  >
                     {EXPEDICION_CHOICES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={4}><TextField name="celular" defaultValue={activePersonal?.celular} fullWidth label="Celular" required size="small" /></Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField name="celular" defaultValue={activePersonal?.celular} fullWidth label="Celular" required size="small" />
+                </Grid>
               </Grid>
             </Paper>
 
             <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3 }}>
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>Datos Institucionales</Typography>
-                <Typography variant="body2" color="text.secondary">Cargo y ubicación</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
+                  Datos Institucionales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Cargo, rol y ubicación
+                </Typography>
               </Box>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField name="cargo" defaultValue={activePersonal?.cargo || 'SECRETARIA'} fullWidth select label="Cargo" required size="small">
+                  <TextField
+                    name="cargo"
+                    defaultValue={activePersonal?.cargo || 'SECRETARIA'}
+                    fullWidth
+                    select
+                    label="Cargo"
+                    required
+                    size="small"
+                  >
                     {CARGO_CHOICES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={6}><TextField name="direccion" defaultValue={activePersonal?.direccion} fullWidth label="Dirección" required size="small" /></Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField name="direccion" defaultValue={activePersonal?.direccion} fullWidth label="Dirección" required size="small" />
+                </Grid>
+                {!activePersonal && (
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      select
+                      label="Rol del sistema"
+                      size="small"
+                      value={selectedRolPersonal}
+                      onChange={(e) => setSelectedRolPersonal(e.target.value)}
+                      helperText="Selecciona el rol de acceso que tendrá este usuario en el sistema"
+                    >
+                      <MenuItem value="">
+                        <em>Sin rol</em>
+                      </MenuItem>
+                      {dataRoles?.todosLosRoles?.map((rol: any) => (
+                        <MenuItem key={rol.idRol} value={rol.idRol}>
+                          {rol.nombre}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                )}
               </Grid>
             </Paper>
-
           </DialogContent>
           <DialogActions sx={{ p: 2, px: 3, bgcolor: 'background.paper' }}>
-            <Button onClick={() => setOpenPersonal(false)} color="secondary" variant="outlined">Cancelar</Button>
+            <Button onClick={() => setOpenPersonal(false)} color="secondary" variant="outlined">
+              Cancelar
+            </Button>
             <Button type="submit" variant="contained" sx={{ px: 4 }}>
               {activePersonal ? 'Actualizar Personal' : 'Guardar Personal'}
             </Button>
@@ -1561,20 +2222,19 @@ const PerfilesPage: React.FC = () => {
       <Snackbar
         open={snackErr.open}
         autoHideDuration={5000}
-        onClose={() => setSnackErr(p => ({ ...p, open: false }))}
+        onClose={() => setSnackErr((p) => ({ ...p, open: false }))}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         sx={{ mt: 7 }}
       >
         <Alert
           severity="error"
           variant="filled"
-          onClose={() => setSnackErr(p => ({ ...p, open: false }))}
+          onClose={() => setSnackErr((p) => ({ ...p, open: false }))}
           sx={{ minWidth: 320, fontWeight: 500, boxShadow: 6 }}
         >
           {snackErr.msg}
         </Alert>
       </Snackbar>
-
     </MainCard>
   );
 };

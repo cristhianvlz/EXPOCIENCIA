@@ -75,7 +75,7 @@ export default function Profile() {
     limpiarPermisos();
     limpiarUsuario();
     setOpenLogout(false);
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   return (

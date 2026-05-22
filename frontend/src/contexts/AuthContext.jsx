@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { useApolloClient, gql } from '@apollo/client';
 
 const ME_PERMISOS = gql`
@@ -35,6 +35,7 @@ const ME_QUERY = gql`
         expedicion
       }
       tribunal {
+        idTribunal
         nombre
         apellido
         ci
@@ -78,6 +79,19 @@ export function AuthProvider({ children }) {
   });
 
   const client = useApolloClient();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    client.query({ query: ME_QUERY, fetchPolicy: 'network-only' })
+      .then(({ data }) => {
+        const userData = data?.me || null;
+        setUsuario(userData);
+        localStorage.setItem('usuario', JSON.stringify(userData));
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const cargarPermisos = async () => {
     const token = localStorage.getItem('token');

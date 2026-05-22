@@ -9,6 +9,60 @@ import {
   ClockCircleOutlined, CheckOutlined, FormOutlined, TrophyOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
+import { useAuth } from 'contexts/AuthContext';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface Criterio {
+  idCriterio: string;
+  nombre: string;
+  puntaje: string;
+}
+
+interface Seccion {
+  idSeccion: string;
+  nombre: string;
+  ponderacion: number;
+  criterios: Criterio[];
+}
+
+interface PuntuacionCriterio {
+  id: string;
+  puntuacionCriterio: string;
+  criterio: { idCriterio: string; nombre: string; puntaje: string };
+}
+
+interface Tribunal {
+  idTribunal: string;
+  nombre: string;
+  apellido: string;
+}
+
+interface DetalleEvaluacion {
+  id: string;
+  puntuacion: string;
+  estado: string;
+  tribunal: Tribunal;
+  puntuacionesCriterio: PuntuacionCriterio[];
+}
+
+interface PlanillaEvaluativa {
+  idPlanillaEvaluativa: string;
+  nombre: string;
+  notaMaxima: string;
+  secciones: Seccion[];
+}
+
+interface Acta {
+  idActaEvaluacion: string;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  notaFinal: string;
+  estado: boolean;
+  proyecto: { idProyecto: string; titulo: string; estado: string };
+  planillaEvaluativa: PlanillaEvaluativa;
+  detallesEvaluacion: DetalleEvaluacion[];
+}
 
 // ── GQL ──────────────────────────────────────────────────────────────────────
 const GET_DATA = gql`
@@ -63,16 +117,25 @@ const EDIT_DETALLE = gql`mutation($idDetalleEvaluacion: ID!, $puntuacion: Decima
 }`;
 
 // ── Scoring dialog ────────────────────────────────────────────────────────────
-function ScoringDialog({ open, onClose, acta, detalle, onSave, saving }) {
+interface ScoringDialogProps {
+  open: boolean;
+  onClose: () => void;
+  acta: Acta | null;
+  detalle: DetalleEvaluacion | null;
+  onSave: (scores: Record<string, string>, total: number, existingMap: Record<string, PuntuacionCriterio>) => void;
+  saving: boolean;
+}
+
+function ScoringDialog({ open, onClose, acta, detalle, onSave, saving }: ScoringDialogProps) {
   const planilla = acta?.planillaEvaluativa;
-  const existingMap = {};
+  const existingMap: Record<string, PuntuacionCriterio> = {};
   (detalle?.puntuacionesCriterio || []).forEach(p => {
     existingMap[p.criterio.idCriterio] = p;
   });
 
   const allCriterios = (planilla?.secciones || []).flatMap(s => s.criterios || []);
-  const [scores, setScores] = useState(() => {
-    const init = {};
+  const [scores, setScores] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
     allCriterios.forEach(c => {
       init[c.idCriterio] = existingMap[c.idCriterio]?.puntuacionCriterio ?? '';
     });
@@ -80,7 +143,7 @@ function ScoringDialog({ open, onClose, acta, detalle, onSave, saving }) {
   });
 
   const handleEnter = () => {
-    const init = {};
+    const init: Record<string, string> = {};
     allCriterios.forEach(c => {
       init[c.idCriterio] = existingMap[c.idCriterio]?.puntuacionCriterio ?? '';
     });
@@ -92,7 +155,7 @@ function ScoringDialog({ open, onClose, acta, detalle, onSave, saving }) {
     return sum + (isNaN(v) ? 0 : v);
   }, 0);
 
-  const notaMaxima = parseFloat(planilla?.notaMaxima || 100);
+  const notaMaxima = parseFloat(planilla?.notaMaxima || '100');
   const progress = Math.min((totalPuntuacion / notaMaxima) * 100, 100);
 
   return (
@@ -122,7 +185,7 @@ function ScoringDialog({ open, onClose, acta, detalle, onSave, saving }) {
             const v = parseFloat(scores[c.idCriterio]);
             return s + (isNaN(v) ? 0 : v);
           }, 0);
-          const seccionMax = (seccion.criterios || []).reduce((s, c) => s + parseFloat(c.puntaje || 0), 0);
+          const seccionMax = (seccion.criterios || []).reduce((s, c) => s + parseFloat(c.puntaje || '0'), 0);
 
           return (
             <Box key={seccion.idSeccion} sx={{ mb: 3 }}>
@@ -177,10 +240,17 @@ function ScoringDialog({ open, onClose, acta, detalle, onSave, saving }) {
 }
 
 // ── Acta card ─────────────────────────────────────────────────────────────────
-function ActaCard({ acta, onCalificar }) {
+interface ActaCardProps {
+  acta: Acta;
+  miDetalle: DetalleEvaluacion;
+  onCalificar: (acta: Acta, detalle: DetalleEvaluacion) => void;
+}
+
+function ActaCard({ acta, miDetalle, onCalificar }: ActaCardProps) {
   const detalles = acta.detallesEvaluacion || [];
   const totalJurados = detalles.length;
   const completados = detalles.filter(d => (d.puntuacionesCriterio || []).length > 0).length;
+  const yaCalifique = (miDetalle.puntuacionesCriterio || []).length > 0;
 
   return (
     <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -190,7 +260,7 @@ function ActaCard({ acta, onCalificar }) {
             {acta.proyecto.titulo}
           </Typography>
           <Chip label={acta.proyecto.estado} size="small"
-            color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
+            color={({ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' } as Record<string, 'success' | 'info' | 'warning' | 'error'>)[acta.proyecto.estado] || 'default'} />
         </Stack>
 
         <Typography variant="caption" color="text.secondary">
@@ -247,20 +317,17 @@ function ActaCard({ acta, onCalificar }) {
       </CardContent>
 
       <CardActions sx={{ pt: 0, px: 2, pb: 2 }}>
-        {detalles.map(d => (
-          <Tooltip key={d.id}
-            title={`Calificar como: ${d.tribunal.nombre} ${d.tribunal.apellido}`}>
-            <Button size="small" variant={d.puntuacionesCriterio?.length > 0 ? 'outlined' : 'contained'}
-              color={d.puntuacionesCriterio?.length > 0 ? 'success' : 'primary'}
-              startIcon={d.puntuacionesCriterio?.length > 0 ? <CheckOutlined /> : <FormOutlined />}
-              onClick={() => onCalificar(acta, d)}>
-              {d.tribunal.nombre}
-            </Button>
-          </Tooltip>
-        ))}
-        {detalles.length === 0 && (
-          <Typography variant="caption" color="text.secondary">Sin jurados asignados.</Typography>
-        )}
+        <Tooltip title={`Calificar como: ${miDetalle.tribunal.nombre} ${miDetalle.tribunal.apellido}`}>
+          <Button
+            size="small"
+            variant={yaCalifique ? 'outlined' : 'contained'}
+            color={yaCalifique ? 'success' : 'primary'}
+            startIcon={yaCalifique ? <CheckOutlined /> : <FormOutlined />}
+            onClick={() => onCalificar(acta, miDetalle)}
+          >
+            {miDetalle.tribunal.nombre}
+          </Button>
+        </Tooltip>
       </CardActions>
     </Card>
   );
@@ -268,6 +335,9 @@ function ActaCard({ acta, onCalificar }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PanelCalificacionPage() {
+  const { usuario } = useAuth();
+  const miIdTribunal = String(usuario?.tribunal?.idTribunal ?? '');
+
   const { data, loading, error, refetch } = useQuery(GET_DATA, { fetchPolicy: 'network-only' });
 
   const [crearPuntuacion] = useMutation(CREATE_PUNTUACION);
@@ -275,50 +345,54 @@ export default function PanelCalificacionPage() {
   const [editarDetalle]   = useMutation(EDIT_DETALLE);
 
   const [saving, setSaving] = useState(false);
-  const [notif, setNotif] = useState({ open: false, msg: '', sev: 'success' });
-  const showNotif = (msg, sev = 'success') => setNotif({ open: true, msg, sev });
+  const [notif, setNotif] = useState({ open: false, msg: '', sev: 'success' as 'success' | 'error' });
+  const showNotif = (msg: string, sev: 'success' | 'error' = 'success') => setNotif({ open: true, msg, sev });
 
-  const [scoringDialog, setScoringDialog] = useState({ open: false, acta: null, detalle: null });
+  const [scoringDialog, setScoringDialog] = useState<{ open: boolean; acta: Acta | null; detalle: DetalleEvaluacion | null }>(
+    { open: false, acta: null, detalle: null }
+  );
 
-  const actas = (data?.todasLasActas || []).filter(a => a.estado);
+  // Only show actas where the current tribunal user is assigned as a jurado
+  const actas: Acta[] = (data?.todasLasActas || []).filter((a: Acta) => {
+    if (!a.estado) return false;
+    if (!miIdTribunal) return false;
+    return a.detallesEvaluacion.some(d => String(d.tribunal.idTribunal) === miIdTribunal);
+  });
 
-  const handleCalificar = (acta, detalle) => {
+  const handleCalificar = (acta: Acta, detalle: DetalleEvaluacion) => {
     setScoringDialog({ open: true, acta, detalle });
   };
 
-  const handleSaveScores = async (scores, totalPuntuacion, existingMap) => {
+  const handleSaveScores = async (
+    scores: Record<string, string>,
+    totalPuntuacion: number,
+    existingMap: Record<string, PuntuacionCriterio>
+  ) => {
     setSaving(true);
     const { detalle } = scoringDialog;
     try {
-      const allCriterioIds = Object.keys(scores);
-      for (const idCriterio of allCriterioIds) {
+      for (const idCriterio of Object.keys(scores)) {
         const val = parseFloat(scores[idCriterio]);
         if (isNaN(val)) continue;
         const existing = existingMap[idCriterio];
         if (existing) {
-          await editarPuntuacion({ variables: {
-            idPuntuacionCriterio: existing.id,
-            puntuacionCriterio: val
-          } });
+          await editarPuntuacion({ variables: { idPuntuacionCriterio: existing.id, puntuacionCriterio: val } });
         } else {
-          await crearPuntuacion({ variables: {
-            idDetalleEvaluacion: detalle.id,
-            idCriterio,
-            puntuacionCriterio: val
-          } });
+          await crearPuntuacion({ variables: { idDetalleEvaluacion: detalle!.id, idCriterio, puntuacionCriterio: val } });
         }
       }
-      await editarDetalle({ variables: {
-        idDetalleEvaluacion: detalle.id,
-        puntuacion: totalPuntuacion
-      } });
+      await editarDetalle({ variables: { idDetalleEvaluacion: detalle!.id, puntuacion: totalPuntuacion } });
 
       showNotif('Calificación guardada exitosamente');
       refetch();
       setScoringDialog({ open: false, acta: null, detalle: null });
-    } catch { showNotif('Error al guardar calificación', 'error'); }
+    } catch {
+      showNotif('Error al guardar calificación', 'error');
+    }
     setSaving(false);
   };
+
+  const noEsTribunal = !loading && !error && !miIdTribunal;
 
   return (
     <MainCard title="Panel de Calificación">
@@ -326,18 +400,25 @@ export default function PanelCalificacionPage() {
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
       ) : error ? (
         <Alert severity="error">Error al cargar: {error.message}</Alert>
+      ) : noEsTribunal ? (
+        <Alert severity="warning">Tu usuario no tiene un perfil de tribunal asignado.</Alert>
       ) : actas.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
           <FormOutlined style={{ fontSize: 48, marginBottom: 12 }} />
-          <Typography>No hay actas activas para calificar.</Typography>
+          <Typography>No hay actas activas en las que estés asignado como jurado.</Typography>
         </Box>
       ) : (
         <Grid container spacing={2}>
-          {actas.map(acta => (
-            <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
-              <ActaCard acta={acta} onCalificar={handleCalificar} />
-            </Grid>
-          ))}
+          {actas.map(acta => {
+            const miDetalle = acta.detallesEvaluacion.find(
+              d => String(d.tribunal.idTribunal) === miIdTribunal
+            )!;
+            return (
+              <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
+                <ActaCard acta={acta} miDetalle={miDetalle} onCalificar={handleCalificar} />
+              </Grid>
+            );
+          })}
         </Grid>
       )}
 
