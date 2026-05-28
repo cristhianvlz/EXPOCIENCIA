@@ -27,6 +27,7 @@ const MembretesFirmas = Loadable(lazy(() => import('pages/modules/eventos/membre
 const Proyectos            = Loadable(lazy(() => import('pages/modules/proyectos')));
 const ProyectosInscripcion = Loadable(lazy(() => import('pages/modules/proyectos/inscripcion')));
 const ProyectosRevision    = Loadable(lazy(() => import('pages/modules/proyectos/revision')));
+const MisProyectos         = Loadable(lazy(() => import('pages/modules/proyectos/MisProyectos')));
 const EvaluacionesPlanillas  = Loadable(lazy(() => import('pages/modules/evaluaciones/planillas')));
 const EvaluacionesActas      = Loadable(lazy(() => import('pages/modules/evaluaciones/actas')));
 const EvaluacionesCalificar  = Loadable(lazy(() => import('pages/modules/evaluaciones/calificar')));
@@ -99,7 +100,8 @@ const MainRoutes = {
       children: [
         { index: true,           element: <Proyectos /> },
         { path: 'inscripcion',   element: guard('proyectos.inscripcion', <ProyectosInscripcion />) },
-        { path: 'revision',      element: guard('proyectos.revision',    <ProyectosRevision />) }
+        { path: 'revision',      element: guard('proyectos.revision',    <ProyectosRevision />) },
+        { path: 'mis-proyectos', element: <MisProyectos /> }
       ]
     },
     {

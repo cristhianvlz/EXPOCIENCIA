@@ -128,14 +128,13 @@ class Participante(models.Model):
         on_delete=models.CASCADE,
         related_name='participante',
     )
-    # referencia en cadena para evitar importación circular con la app proyectos
-    proyecto = models.ForeignKey(
-        'proyectos.Proyecto',
-        on_delete=models.PROTECT,
-        related_name='participantes',
-        null=True,
-        blank=True,
-    )
+    # proyecto = models.ForeignKey(
+    #     'proyectos.Proyecto',
+    #     on_delete=models.PROTECT,
+    #     related_name='participantes',
+    #     null=True,
+    #     blank=True,
+    # )
     tutor = models.ForeignKey(
         'Tutor',
         on_delete=models.SET_NULL,
@@ -183,14 +182,13 @@ class Tutor(models.Model):
         on_delete=models.CASCADE,
         related_name='tutor',
     )
-    # referencia en cadena para evitar importación circular con la app proyectos
-    proyecto = models.ForeignKey(
-        'proyectos.Proyecto',
-        on_delete=models.PROTECT,
-        related_name='tutores',
-        null=True,
-        blank=True,
-    )
+    # proyecto = models.ForeignKey(
+    #     'proyectos.Proyecto',
+    #     on_delete=models.PROTECT,
+    #     related_name='tutores',
+    #     null=True,
+    #     blank=True,
+    # )
     cod_empleado = models.CharField(max_length=50, unique=True)
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)

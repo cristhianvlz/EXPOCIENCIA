@@ -54,7 +54,8 @@ const modules = {
       icon: icons.ProjectOutlined,
       children: [
         { id: 'inscripcion-proyectos', title: 'Inscripción de Proyectos', type: 'item', url: '/proyectos/inscripcion', permission: 'proyectos.inscripcion' },
-        { id: 'revision-proyectos',    title: 'Revisión y Aprobación',    type: 'item', url: '/proyectos/revision',    permission: 'proyectos.revision' }
+        { id: 'revision-proyectos',    title: 'Revisión y Aprobación',    type: 'item', url: '/proyectos/revision',    permission: 'proyectos.revision' },
+        { id: 'mis-proyectos',         title: 'Mis Proyectos',            type: 'item', url: '/proyectos/mis-proyectos', permission: 'proyectos.mis_proyectos' }
       ]
     },
     {

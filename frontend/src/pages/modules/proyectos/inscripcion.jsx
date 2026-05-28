@@ -22,11 +22,9 @@ const GET_DATA = gql`
     }
     todosLosParticipantes {
       idParticipante nombre apellido ci celular codigoEspecifico
-      proyecto { idProyecto }
     }
     todosLosTutores {
       idTutor nombre apellido ci celular codEmpleado
-      proyecto { idProyecto }
     }
   }
 `;
@@ -41,10 +39,10 @@ const CREAR_USUARIO = gql`
 `;
 
 const CREAR_PROYECTO = gql`
-  mutation($idOfertaEaCarrera: ID!, $titulo: String!, $resumen: String, $archivo: Upload) {
+  mutation($idOfertaEaCarrera: ID!, $titulo: String!, $resumen: String, $archivo: Upload!) {
     crearProyecto(
       idOfertaEaCarrera: $idOfertaEaCarrera, titulo: $titulo,
-      resumen: $resumen, archivo: $archivo, estado: "inscrito"
+      resumen: $resumen, archivo: $archivo, estado: "revision"
     ) {
       proyecto { idProyecto }
       ok error
@@ -202,7 +200,7 @@ export default function InscripcionPage() {
   const stepValid = () => {
     switch (activeStep) {
       case 0: return !!selectedOec;
-      case 1: return !!titulo.trim();
+      case 1: return !!titulo.trim() && !!archivoFile;
       case 2: return participantes.length > 0 && participantes.every(p =>
         p.modo === 'existente'
           ? !!p.idParticipante
@@ -377,7 +375,7 @@ export default function InscripcionPage() {
       />
       <Box>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          Documento del Proyecto <Typography component="span" variant="caption" color="text.secondary">(opcional)</Typography>
+          Documento del Proyecto *
         </Typography>
         <FileDropZone file={archivoFile} onFile={setArchivoFile} />
         {archivoFile && (
@@ -650,7 +648,7 @@ export default function InscripcionPage() {
         <Typography variant="h5" sx={{ mt: 2, mb: 1 }}>¡Proyecto inscrito exitosamente!</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
           El proyecto <strong>"{titulo}"</strong> fue registrado con estado{' '}
-          <Chip label="Inscrito" color="info" size="small" />{' '}
+          <Chip label="En Revisión" color="warning" size="small" />{' '}
           y está en espera de revisión por el comité.
         </Typography>
         <Button variant="contained" onClick={handleReset}>Inscribir otro proyecto</Button>

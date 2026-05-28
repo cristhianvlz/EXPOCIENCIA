@@ -4,7 +4,6 @@ from django.db import models
 class Proyecto(models.Model):
 
     ESTADO_CHOICES = [
-        ('inscrito', 'Inscrito'),
         ('revision', 'Revisión'),
         ('aprobado', 'Aprobado'),
         ('rechazado', 'Rechazado'),
@@ -29,10 +28,22 @@ class Proyecto(models.Model):
     estado = models.CharField(
         max_length=50,
         choices=ESTADO_CHOICES,
-        default='inscrito',
+        default='revision',
     )
     fecha_confirmacion = models.DateTimeField(null=True, blank=True)
     activo = models.BooleanField(default=True)
+    
+    participantes = models.ManyToManyField(
+        'usuarios.Participante',
+        related_name='proyectos_inscritos',
+        blank=True
+    )
+    
+    tutores = models.ManyToManyField(
+        'usuarios.Tutor',
+        related_name='proyectos_tutelados',
+        blank=True
+    )
 
     class Meta:
         db_table = 'proyecto'

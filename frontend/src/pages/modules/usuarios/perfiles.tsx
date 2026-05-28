@@ -56,9 +56,6 @@ const OBTENER_PARTICIPANTES = gql`
       celular
       estado
       codigoEspecifico
-      proyecto {
-        idProyecto
-      }
       tutor {
         idTutor
       }
@@ -83,9 +80,6 @@ const OBTENER_TUTORES = gql`
       celular
       direccion
       estado
-      proyecto {
-        idProyecto
-      }
     }
   }
 `;

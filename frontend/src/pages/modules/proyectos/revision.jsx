@@ -27,11 +27,11 @@ const GET_ALL = gql`
     }
     todosLosParticipantes {
       idParticipante nombre apellido ci
-      proyecto { idProyecto }
+      proyectosInscritos { idProyecto }
     }
     todosLosTutores {
       idTutor nombre apellido ci codEmpleado
-      proyecto { idProyecto }
+      proyectosTutelados { idProyecto }
     }
   }
 `;
@@ -45,7 +45,7 @@ const EDITAR_PROYECTO = gql`
 `;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const ESTADOS = ['inscrito', 'revision', 'aprobado', 'rechazado'];
+const ESTADOS = ['revision', 'aprobado', 'rechazado'];
 
 const ESTADO_CONFIG = {
   inscrito:  { label: 'Inscrito',    color: 'info' },
@@ -141,8 +141,8 @@ export default function RevisionPage() {
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
 
-  const getParticipantes = (id) => participantes.filter(p => p.proyecto?.idProyecto === id);
-  const getTutores       = (id) => tutores.filter(t => t.proyecto?.idProyecto === id);
+  const getParticipantes = (id) => participantes.filter(p => p.proyectosInscritos?.some(proy => proy.idProyecto === id));
+  const getTutores       = (id) => tutores.filter(t => t.proyectosTutelados?.some(proy => proy.idProyecto === id));
 
   const handleOpenProject = (proyecto) => {
     setSelected(proyecto);

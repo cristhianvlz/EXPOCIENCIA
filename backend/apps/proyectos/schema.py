@@ -41,14 +41,14 @@ class CrearProyecto(graphene.Mutation):
         resumen = graphene.String()
         observacion = graphene.String()
         estado = graphene.String()
-        archivo = Upload()
+        archivo = Upload(required=True)
 
     proyecto = graphene.Field(ProyectoType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_oferta_ea_carrera, titulo, resumen="", observacion="", estado="inscrito", archivo=None):
+    def mutate(root, info, id_oferta_ea_carrera, titulo, resumen="", observacion="", estado="revision", archivo=None):
         try:
             oferta_ea_carrera = OfertaEaCarrera.objects.get(pk=id_oferta_ea_carrera)
         except OfertaEaCarrera.DoesNotExist:

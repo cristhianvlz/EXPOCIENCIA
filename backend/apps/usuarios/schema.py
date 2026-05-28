@@ -465,7 +465,6 @@ class CrearTutor(graphene.Mutation):
 
         tutor = Tutor.objects.create(
             usuario=usuario,
-            proyecto_id=id_proyecto,
             cod_empleado=cod_empleado,
             nombre=nombre,
             apellido=apellido,
@@ -474,6 +473,9 @@ class CrearTutor(graphene.Mutation):
             ci=ci,
             expedicion=expedicion
         )
+        if id_proyecto:
+            tutor.proyectos_tutelados.add(id_proyecto)
+            
         return CrearTutor(tutor=tutor, ok=True, error=None) # type: ignore
 
 
@@ -512,7 +514,7 @@ class EditarTutor(graphene.Mutation):
                 
         id_proyecto = kwargs.get('id_proyecto')
         if id_proyecto is not None:
-            tutor.proyecto_id = id_proyecto
+            tutor.proyectos_tutelados.add(id_proyecto)
 
         ci = kwargs.get('ci')
         if ci is not None and ci != tutor.ci:
@@ -585,7 +587,6 @@ class CrearParticipante(graphene.Mutation):
 
         participante = Participante.objects.create(
             usuario=usuario,
-            proyecto_id=id_proyecto,
             codigo_especifico=codigo_especifico,
             nombre=nombre,
             apellido=apellido,
@@ -594,6 +595,8 @@ class CrearParticipante(graphene.Mutation):
             expedicion=expedicion,
             tutor_id=id_tutor
         )
+        if id_proyecto:
+            participante.proyectos_inscritos.add(id_proyecto)
         
         if direccion or institucion:
             ParticipanteExt.objects.create(
@@ -642,7 +645,7 @@ class EditarParticipante(graphene.Mutation):
                 
         id_proyecto = kwargs.get('id_proyecto')
         if id_proyecto is not None:
-            participante.proyecto_id = id_proyecto
+            participante.proyectos_inscritos.add(id_proyecto)
             
         id_tutor = kwargs.get('id_tutor')
         if id_tutor is not None:
