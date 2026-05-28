@@ -7,6 +7,7 @@ from apps.evaluaciones.models import (
 from apps.proyectos.models import Proyecto
 from apps.usuarios.models import Tribunal
 from config.fcm import send_push
+from apps.eventos.utils import get_cronograma_activo
 
 class PlanillaEvaluativaType(DjangoObjectType):
     class Meta:
@@ -478,12 +479,22 @@ class CrearActaEvaluacion(graphene.Mutation):
             return CrearActaEvaluacion(acta=None, ok=False, error="La planilla no existe.") # type: ignore
 
         try:
-            proyecto = Proyecto.objects.get(pk=id_proyecto)
+            proyecto = Proyecto.objects.select_related(
+                'oferta_ea_carrera__oferta__categoria_evento__evento'
+            ).get(pk=id_proyecto)
         except Proyecto.DoesNotExist:
             return CrearActaEvaluacion(acta=None, ok=False, error="El proyecto no existe.") # type: ignore
 
         if proyecto.estado.lower() != 'aprobado':
             return CrearActaEvaluacion(acta=None, ok=False, error="El proyecto debe estar aprobado para crear un acta de evaluación.") # type: ignore
+
+        try:
+            evento = proyecto.oferta_ea_carrera.oferta.categoria_evento.evento
+        except Exception:
+            return CrearActaEvaluacion(acta=None, ok=False, error="No se pudo determinar el evento asociado al proyecto.") # type: ignore
+
+        if not get_cronograma_activo(evento, 'evaluacion'):
+            return CrearActaEvaluacion(acta=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo para este evento.") # type: ignore
 
         if ActaEvaluacion.objects.filter(proyecto=proyecto, planilla_evaluativa=planilla).exists():
             return CrearActaEvaluacion(acta=None, ok=False, error="El proyecto ya fue evaluado con esta planilla.") # type: ignore
@@ -688,9 +699,19 @@ class CrearPuntuacionCriterio(graphene.Mutation):
     @staticmethod
     def mutate(root, info, id_detalle_evaluacion, id_criterio, puntuacion_criterio):
         try:
-            detalle = DetalleEvaluacion.objects.get(pk=id_detalle_evaluacion)
+            detalle = DetalleEvaluacion.objects.select_related(
+                'acta_evaluacion__proyecto__oferta_ea_carrera__oferta__categoria_evento__evento'
+            ).get(pk=id_detalle_evaluacion)
         except DetalleEvaluacion.DoesNotExist:
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El detalle de evaluación no existe.") # type: ignore
+
+        try:
+            evento = detalle.acta_evaluacion.proyecto.oferta_ea_carrera.oferta.categoria_evento.evento
+        except Exception:
+            return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="No se pudo determinar el evento asociado a este detalle.") # type: ignore
+
+        if not get_cronograma_activo(evento, 'evaluacion'):
+            return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo.") # type: ignore
 
         try:
             criterio = Criterio.objects.get(pk=id_criterio)

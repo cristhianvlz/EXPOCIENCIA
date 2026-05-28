@@ -655,6 +655,72 @@ class EliminarCertificado(graphene.Mutation):
             return EliminarCertificado(ok=False, error="El certificado no existe.") # type: ignore
 
 
+class CerrarActaResultados(graphene.Mutation):
+    class Arguments:
+        id_evento = graphene.ID(required=True)
+        id_premio = graphene.ID(required=True)
+
+    candidatos = graphene.List(CandidatoPremioType)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_evento, id_premio):
+        from django.utils import timezone
+        from apps.eventos.models import Cronograma, Evento
+        now = timezone.now()
+
+        try:
+            evento = Evento.objects.get(pk=id_evento)
+        except Evento.DoesNotExist:
+            return CerrarActaResultados(candidatos=None, ok=False, error="El evento no existe.") # type: ignore
+
+        cronograma = Cronograma.objects.filter(
+            evento=evento,
+            actividad__nombre_actividad__icontains='resultado',
+            estado=True,
+        ).first()
+
+        if not cronograma:
+            return CerrarActaResultados(candidatos=None, ok=False, error="No existe cronograma de Publicación de Resultados para este evento.") # type: ignore
+
+        if now <= cronograma.fecha_fin:
+            return CerrarActaResultados(candidatos=None, ok=False, error="El período de Publicación de Resultados aún no ha finalizado.") # type: ignore
+
+        try:
+            premio = Premio.objects.get(pk=id_premio)
+        except Premio.DoesNotExist:
+            return CerrarActaResultados(candidatos=None, ok=False, error="El premio no existe.") # type: ignore
+
+        actas = ActaEvaluacion.objects.filter(
+            proyecto__oferta_ea_carrera__oferta__categoria_evento__evento=evento,
+            estado=True,
+        ).order_by('-nota_final')
+
+        if not actas.exists():
+            return CerrarActaResultados(candidatos=None, ok=False, error="No hay proyectos evaluados para este evento.") # type: ignore
+
+        max_nota = actas.first().nota_final
+        top_actas = actas.filter(nota_final=max_nota)
+
+        candidatos_resultado = []
+        for acta in top_actas:
+            existing = CandidatoPremio.objects.filter(premio=premio, proyecto=acta.proyecto).first()
+            if existing:
+                candidatos_resultado.append(existing)
+            else:
+                candidato = CandidatoPremio.objects.create(
+                    premio=premio,
+                    proyecto=acta.proyecto,
+                    acta_evaluacion=acta,
+                    nota=acta.nota_final,
+                    estado='candidato',
+                )
+                candidatos_resultado.append(candidato)
+
+        return CerrarActaResultados(candidatos=candidatos_resultado, ok=True, error=None) # type: ignore
+
+
 class Mutation(graphene.ObjectType):
     crear_tipo_descriptor = CrearTipoDescriptor.Field()
     editar_tipo_descriptor = EditarTipoDescriptor.Field()
@@ -684,3 +750,5 @@ class Mutation(graphene.ObjectType):
 
     crear_certificado = CrearCertificado.Field()
     eliminar_certificado = EliminarCertificado.Field()
+
+    cerrar_acta_resultados = CerrarActaResultados.Field()

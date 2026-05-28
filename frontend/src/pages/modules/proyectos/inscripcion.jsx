@@ -17,7 +17,10 @@ const GET_DATA = gql`
   query {
     todosLosOfertaEaCarreras {
       id carrera plan estado
-      oferta { idOferta nombre }
+      oferta {
+        idOferta nombre
+        categoriaEvento { evento { idEvento } }
+      }
       entidadAcademica { idEntidadAcademica nombre }
     }
     todosLosParticipantes {
@@ -25,6 +28,11 @@ const GET_DATA = gql`
     }
     todosLosTutores {
       idTutor nombre apellido ci celular codEmpleado
+    }
+    todosLosCronogramas {
+      idCronograma fechaInicio fechaFin estado
+      actividad { nombreActividad }
+      evento { idEvento }
     }
   }
 `;
@@ -189,9 +197,25 @@ export default function InscripcionPage() {
   const [crearTutor]          = useMutation(CREAR_TUTOR);
   const [editarTutor]         = useMutation(EDITAR_TUTOR);
 
-  const ofertas          = (data?.todosLosOfertaEaCarreras || []).filter(o => o.estado);
+  const ofertas            = (data?.todosLosOfertaEaCarreras || []).filter(o => o.estado);
   const todosParticipantes = data?.todosLosParticipantes || [];
   const todosTutores       = data?.todosLosTutores       || [];
+  const cronogramas        = data?.todosLosCronogramas   || [];
+
+  // Determina si el período de inscripción está activo para la oferta seleccionada
+  const inscripcionActiva = (() => {
+    if (!selectedOec) return null; // sin oferta seleccionada: indeterminado
+    const oec = ofertas.find(o => o.id === selectedOec);
+    const idEvento = oec?.oferta?.categoriaEvento?.evento?.idEvento;
+    if (!idEvento) return null;
+    const now = new Date();
+    return cronogramas.some(c =>
+      c.actividad?.nombreActividad?.toLowerCase().includes('inscripcion') &&
+      c.evento?.idEvento === idEvento &&
+      new Date(c.fechaInicio) <= now &&
+      new Date(c.fechaFin) >= now
+    );
+  })();
 
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
@@ -199,7 +223,8 @@ export default function InscripcionPage() {
   // ── Validation ────────────────────────────────────────────────────────────
   const stepValid = () => {
     switch (activeStep) {
-      case 0: return !!selectedOec;
+      // Bloquear avance si el período de inscripción está explícitamente cerrado
+      case 0: return !!selectedOec && inscripcionActiva !== false;
       case 1: return !!titulo.trim() && !!archivoFile;
       case 2: return participantes.length > 0 && participantes.every(p =>
         p.modo === 'existente'
@@ -658,6 +683,14 @@ export default function InscripcionPage() {
 
   return (
     <MainCard title="Inscripción de Proyectos">
+      {/* Banner: período de inscripción cerrado */}
+      {selectedOec && inscripcionActiva === false && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          <strong>Período de inscripción cerrado.</strong> La fecha límite para inscribir proyectos en esta
+          oferta académica ya venció o aún no ha comenzado. No es posible continuar con el registro.
+        </Alert>
+      )}
+
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
         {WIZARD_STEPS.map((label, idx) => (
           <Step key={label} completed={activeStep > idx}>

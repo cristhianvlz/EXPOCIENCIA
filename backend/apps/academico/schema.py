@@ -136,7 +136,10 @@ class Query(graphene.ObjectType):
             return None
 
     def resolve_todos_los_oferta_ea_carreras(root, info):
-        return OfertaEaCarrera.objects.select_related('oferta', 'entidad_academica').all()
+        return OfertaEaCarrera.objects.select_related(
+            'oferta__categoria_evento__evento',
+            'entidad_academica',
+        ).all()
 
     def resolve_oferta_ea_carrera(root, info, id):
         try:

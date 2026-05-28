@@ -41,9 +41,12 @@ const GET_ALL = gql`
     }
     todosLosModalidadAreas {
       id
-      modalidad { nombre }
-      area      { nombre }
+      modalidad { idModalidad nombre }
+      area      { idArea nombre }
     }
+    todasLasCategorias  { idCategoria nombre estado }
+    todasLasModalidades { idModalidad nombre estado }
+    todasLasAreas       { idArea nombre estado }
     todasLasEntidadesAcademicas { idEntidadAcademica nombre estado }
     todosLosEventos             { idEvento nombre estado }
   }
@@ -51,7 +54,28 @@ const GET_ALL = gql`
 
 const CREATE_OFERTA = gql`
   mutation($idCategoriaEvento: ID!, $idModalidadArea: ID!, $nombre: String!, $descripcion: String) {
-    crearOferta(idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, nombre: $nombre, descripcion: $descripcion) { ok error }
+    crearOferta(idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, nombre: $nombre, descripcion: $descripcion) {
+      oferta { idOferta }
+      ok error
+    }
+  }
+`;
+
+const CREAR_CAT_EV = gql`
+  mutation($idCategoria: ID!, $idEvento: ID!) {
+    crearCategoriaEvento(idCategoria: $idCategoria, idEvento: $idEvento) {
+      categoriaEvento { id }
+      ok error
+    }
+  }
+`;
+
+const CREAR_MOD_AREA = gql`
+  mutation($idModalidad: ID!, $idArea: ID!) {
+    crearModalidadArea(idModalidad: $idModalidad, idArea: $idArea) {
+      modalidadArea { id }
+      ok error
+    }
   }
 `;
 const EDIT_OFERTA = gql`
@@ -78,7 +102,7 @@ const DELETE_OEC = gql`
 `;
 
 // ── Wizard steps labels ───────────────────────────────────────────────────────
-const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Datos de la Oferta'];
+const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Datos de la Oferta', 'Carrera Autorizada'];
 
 const INIT_EDIT_OFERTA = { nombre: '', descripcion: '', estado: true };
 const INIT_OEC         = { idOferta: '', idEntidadAcademica: '', carrera: '', plan: '' };
@@ -91,18 +115,28 @@ export default function OfertasPage() {
   const [crearOferta]    = useMutation(CREATE_OFERTA);
   const [editarOferta]   = useMutation(EDIT_OFERTA);
   const [eliminarOferta] = useMutation(DELETE_OFERTA);
-  const [crearOEC]    = useMutation(CREATE_OEC);
-  const [editarOEC]   = useMutation(EDIT_OEC);
-  const [eliminarOEC] = useMutation(DELETE_OEC);
+  const [crearOEC]       = useMutation(CREATE_OEC);
+  const [editarOEC]      = useMutation(EDIT_OEC);
+  const [eliminarOEC]    = useMutation(DELETE_OEC);
+  const [crearCatEv]     = useMutation(CREAR_CAT_EV);
+  const [crearModArea]   = useMutation(CREAR_MOD_AREA);
 
-  // Wizard state (create oferta)
-  const [openWizard, setOpenWizard]       = useState(false);
-  const [wizardStep, setWizardStep]       = useState(0);
-  const [wizardEvento, setWizardEvento]   = useState('');
-  const [wizardCatEv, setWizardCatEv]     = useState('');
-  const [wizardModArea, setWizardModArea] = useState('');
-  const [wizardNombre, setWizardNombre]   = useState('');
-  const [wizardDesc, setWizardDesc]       = useState('');
+  // Wizard state
+  const [openWizard, setOpenWizard]           = useState(false);
+  const [wizardStep, setWizardStep]           = useState(0);
+  const [wizardEvento, setWizardEvento]       = useState('');
+  const [wizardCategoria, setWizardCategoria] = useState('');
+  const [wizardModalidad, setWizardModalidad] = useState('');
+  const [wizardArea, setWizardArea]           = useState('');
+  const [wizardNombre, setWizardNombre]       = useState('');
+  const [wizardDesc, setWizardDesc]           = useState('');
+  const [wizardEntidad, setWizardEntidad]     = useState('');
+  const [wizardCarrera, setWizardCarrera]     = useState('');
+  const [wizardPlan, setWizardPlan]           = useState('');
+  // IDs resueltos internamente (find-or-create)
+  const [resolvedCatEvId, setResolvedCatEvId]     = useState('');
+  const [resolvedModAreaId, setResolvedModAreaId] = useState('');
+  const [wizardAdvancing, setWizardAdvancing]     = useState(false);
 
   // Edit oferta state (non-wizard)
   const [openEditOferta, setOpenEditOferta]   = useState(false);
@@ -127,53 +161,139 @@ export default function OfertasPage() {
   const modalidadAreas   = data?.todosLosModalidadAreas       || [];
   const entidades        = data?.todasLasEntidadesAcademicas  || [];
   const eventos          = data?.todosLosEventos              || [];
+  const categorias       = data?.todasLasCategorias           || [];
+  const modalidades      = data?.todasLasModalidades          || [];
+  const areas            = data?.todasLasAreas                || [];
 
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
-
-  // ── Derived: categoriaEventos filtered by selected evento ────────────────
-  const catEvFiltered = categoriaEventos.filter(
-    ce => ce.evento?.idEvento === wizardEvento
-  );
 
   // ── Wizard helpers ────────────────────────────────────────────────────────
   const resetWizard = () => {
     setWizardStep(0);
     setWizardEvento('');
-    setWizardCatEv('');
-    setWizardModArea('');
+    setWizardCategoria('');
+    setWizardModalidad('');
+    setWizardArea('');
     setWizardNombre('');
     setWizardDesc('');
+    setWizardEntidad('');
+    setWizardCarrera('');
+    setWizardPlan('');
+    setResolvedCatEvId('');
+    setResolvedModAreaId('');
   };
 
   const wizardNextDisabled = () => {
+    if (wizardAdvancing) return true;
     if (wizardStep === 0) return !wizardEvento;
-    if (wizardStep === 1) return !wizardCatEv;
-    if (wizardStep === 2) return !wizardModArea;
+    if (wizardStep === 1) return !wizardCategoria;
+    if (wizardStep === 2) return !wizardModalidad || !wizardArea;
     if (wizardStep === 3) return !wizardNombre.trim();
+    if (wizardStep === 4) return !wizardEntidad || !wizardCarrera.trim() || !wizardPlan.trim();
     return false;
   };
 
-  const handleWizardSubmit = async () => {
+  // Avanza pasos: los pasos 1 y 2 resuelven (find-or-create) la relación antes de avanzar
+  const handleWizardNext = async () => {
+    if (wizardStep === 1) {
+      // Buscar CategoriaEvento existente
+      const existing = categoriaEventos.find(
+        ce => ce.categoria?.idCategoria === wizardCategoria && ce.evento?.idEvento === wizardEvento
+      );
+      if (existing) {
+        setResolvedCatEvId(existing.id);
+        setWizardStep(2);
+        return;
+      }
+      // Crear si no existe
+      setWizardAdvancing(true);
+      try {
+        const res = await crearCatEv({ variables: { idCategoria: wizardCategoria, idEvento: wizardEvento } });
+        const result = res.data?.crearCategoriaEvento;
+        if (result?.ok) {
+          setResolvedCatEvId(result.categoriaEvento.id);
+          await refetch();
+          setWizardStep(2);
+        } else {
+          showNotif(result?.error || 'Error al vincular categoría-evento', 'error');
+        }
+      } catch { showNotif('Error de conexión', 'error'); }
+      setWizardAdvancing(false);
+      return;
+    }
+
+    if (wizardStep === 2) {
+      // Buscar ModalidadArea existente
+      const existing = modalidadAreas.find(
+        ma => ma.modalidad?.idModalidad === wizardModalidad && ma.area?.idArea === wizardArea
+      );
+      if (existing) {
+        setResolvedModAreaId(existing.id);
+        setWizardStep(3);
+        return;
+      }
+      // Crear si no existe
+      setWizardAdvancing(true);
+      try {
+        const res = await crearModArea({ variables: { idModalidad: wizardModalidad, idArea: wizardArea } });
+        const result = res.data?.crearModalidadArea;
+        if (result?.ok) {
+          setResolvedModAreaId(result.modalidadArea.id);
+          await refetch();
+          setWizardStep(3);
+        } else {
+          showNotif(result?.error || 'Error al vincular modalidad-área', 'error');
+        }
+      } catch { showNotif('Error de conexión', 'error'); }
+      setWizardAdvancing(false);
+      return;
+    }
+
+    setWizardStep(s => s + 1);
+  };
+
+  // Paso final: crear Oferta + OfertaEaCarrera en secuencia
+  const handleWizardFinal = async () => {
     setSaving(true);
     try {
-      const res = await crearOferta({
+      // 1. Crear Oferta
+      const ofertaRes = await crearOferta({
         variables: {
-          idCategoriaEvento: wizardCatEv,
-          idModalidadArea:   wizardModArea,
+          idCategoriaEvento: resolvedCatEvId,
+          idModalidadArea:   resolvedModAreaId,
           nombre:            wizardNombre,
           descripcion:       wizardDesc,
         }
       });
-      const result = res.data?.crearOferta;
-      if (result?.ok) {
-        showNotif('Oferta creada exitosamente');
-        refetch();
-        setOpenWizard(false);
-        resetWizard();
-      } else {
-        showNotif(result?.error || 'Error al crear oferta', 'error');
+      const ofertaResult = ofertaRes.data?.crearOferta;
+      if (!ofertaResult?.ok) {
+        showNotif(ofertaResult?.error || 'Error al crear oferta', 'error');
+        setSaving(false);
+        return;
       }
+      const idNuevaOferta = ofertaResult.oferta.idOferta;
+
+      // 2. Crear OfertaEaCarrera (carrera autorizada)
+      const oecRes = await crearOEC({
+        variables: {
+          idOferta:            idNuevaOferta,
+          idEntidadAcademica:  wizardEntidad,
+          carrera:             wizardCarrera,
+          plan:                wizardPlan,
+        }
+      });
+      const oecResult = oecRes.data?.crearOfertaEaCarrera;
+      if (!oecResult?.ok) {
+        showNotif(oecResult?.error || 'Error al asignar carrera', 'error');
+        setSaving(false);
+        return;
+      }
+
+      showNotif('Oferta y carrera autorizada creadas exitosamente');
+      await refetch();
+      setOpenWizard(false);
+      resetWizard();
     } catch { showNotif('Error de conexión', 'error'); }
     setSaving(false);
   };
@@ -266,58 +386,66 @@ export default function OfertasPage() {
         return (
           <FormControl fullWidth required>
             <InputLabel>Evento</InputLabel>
-            <Select value={wizardEvento} label="Evento" onChange={e => { setWizardEvento(e.target.value); setWizardCatEv(''); }}>
+            <Select value={wizardEvento} label="Evento"
+              onChange={e => { setWizardEvento(e.target.value); setWizardCategoria(''); }}>
               {eventos.filter(ev => ev.estado).map(ev => (
                 <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre}</MenuItem>
               ))}
             </Select>
           </FormControl>
         );
+
       case 1:
         return (
-          <Box>
-            {catEvFiltered.length === 0 ? (
-              <Alert severity="warning">
-                No hay categorías vinculadas a este evento. Ve a "Estructuras y Relaciones" para crearlas.
-              </Alert>
-            ) : (
-              <FormControl fullWidth required>
-                <InputLabel>Categoría del Evento</InputLabel>
-                <Select value={wizardCatEv} label="Categoría del Evento" onChange={e => setWizardCatEv(e.target.value)}>
-                  {catEvFiltered.map(ce => (
-                    <MenuItem key={ce.id} value={ce.id}>
-                      {ce.categoria?.nombre}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-          </Box>
-        );
-      case 2:
-        return (
           <FormControl fullWidth required>
-            <InputLabel>Modalidad × Área</InputLabel>
-            <Select value={wizardModArea} label="Modalidad × Área" onChange={e => setWizardModArea(e.target.value)}>
-              {modalidadAreas.map(ma => (
-                <MenuItem key={ma.id} value={ma.id}>
-                  {ma.modalidad?.nombre} / {ma.area?.nombre}
-                </MenuItem>
+            <InputLabel>Categoría</InputLabel>
+            <Select value={wizardCategoria} label="Categoría"
+              onChange={e => setWizardCategoria(e.target.value)}>
+              {categorias.filter(c => c.estado).map(c => (
+                <MenuItem key={c.idCategoria} value={c.idCategoria}>{c.nombre}</MenuItem>
               ))}
             </Select>
           </FormControl>
         );
+
+      case 2:
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <FormControl fullWidth required>
+              <InputLabel>Modalidad</InputLabel>
+              <Select value={wizardModalidad} label="Modalidad"
+                onChange={e => setWizardModalidad(e.target.value)}>
+                {modalidades.filter(m => m.estado).map(m => (
+                  <MenuItem key={m.idModalidad} value={m.idModalidad}>{m.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth required>
+              <InputLabel>Área</InputLabel>
+              <Select value={wizardArea} label="Área"
+                onChange={e => setWizardArea(e.target.value)}>
+                {areas.filter(a => a.estado).map(a => (
+                  <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        );
+
       case 3: {
-        const selEvento  = eventos.find(ev => ev.idEvento === wizardEvento);
-        const selCatEv   = categoriaEventos.find(ce => ce.id === wizardCatEv);
-        const selModArea = modalidadAreas.find(ma => ma.id === wizardModArea);
+        const selEvento    = eventos.find(ev => ev.idEvento === wizardEvento);
+        const selCategoria = categorias.find(c => c.idCategoria === wizardCategoria);
+        const selModalidad = modalidades.find(m => m.idModalidad === wizardModalidad);
+        const selArea      = areas.find(a => a.idArea === wizardArea);
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>Resumen de selección</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                Resumen de selección
+              </Typography>
               <Typography variant="body2"><strong>Evento:</strong> {selEvento?.nombre}</Typography>
-              <Typography variant="body2"><strong>Categoría:</strong> {selCatEv?.categoria?.nombre}</Typography>
-              <Typography variant="body2"><strong>Modalidad × Área:</strong> {selModArea?.modalidad?.nombre} / {selModArea?.area?.nombre}</Typography>
+              <Typography variant="body2"><strong>Categoría:</strong> {selCategoria?.nombre}</Typography>
+              <Typography variant="body2"><strong>Modalidad / Área:</strong> {selModalidad?.nombre} / {selArea?.nombre}</Typography>
             </Box>
             <Divider />
             <TextField
@@ -331,6 +459,35 @@ export default function OfertasPage() {
           </Box>
         );
       }
+
+      case 4:
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Alert severity="info" sx={{ mb: 0.5 }}>
+              Asigna la carrera y entidad que podrán inscribir proyectos a esta oferta.
+            </Alert>
+            <FormControl fullWidth required>
+              <InputLabel>Facultad / Entidad Académica</InputLabel>
+              <Select value={wizardEntidad} label="Facultad / Entidad Académica"
+                onChange={e => setWizardEntidad(e.target.value)}>
+                {entidades.filter(ea => ea.estado).map(ea => (
+                  <MenuItem key={ea.idEntidadAcademica} value={ea.idEntidadAcademica}>
+                    {ea.nombre}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Carrera" value={wizardCarrera} fullWidth required
+              onChange={e => setWizardCarrera(e.target.value)}
+            />
+            <TextField
+              label="Plan" value={wizardPlan} fullWidth required
+              onChange={e => setWizardPlan(e.target.value)}
+            />
+          </Box>
+        );
+
       default: return null;
     }
   };
@@ -339,9 +496,7 @@ export default function OfertasPage() {
     <Button key="of" variant="contained" startIcon={<PlusOutlined />} onClick={() => { resetWizard(); setOpenWizard(true); }}>
       Nueva Oferta
     </Button>,
-    <Button key="oec" variant="contained" startIcon={<PlusOutlined />} onClick={() => handleOpenOEC()}>
-      Nueva Asignación
-    </Button>,
+    null,
   ];
 
   return (
@@ -496,26 +651,27 @@ export default function OfertasPage() {
             Cancelar
           </Button>
           {wizardStep > 0 && (
-            <Button onClick={() => setWizardStep(s => s - 1)} color="inherit">
+            <Button onClick={() => setWizardStep(s => s - 1)} color="inherit" disabled={wizardAdvancing || saving}>
               Atrás
             </Button>
           )}
           {wizardStep < WIZARD_STEPS.length - 1 ? (
             <Button
-              onClick={() => setWizardStep(s => s + 1)}
+              onClick={handleWizardNext}
               variant="contained"
               disabled={wizardNextDisabled()}
+              startIcon={wizardAdvancing ? <CircularProgress size={16} color="inherit" /> : null}
             >
-              Siguiente
+              {wizardAdvancing ? 'Procesando...' : 'Siguiente'}
             </Button>
           ) : (
             <Button
-              onClick={handleWizardSubmit}
+              onClick={handleWizardFinal}
               variant="contained"
               disabled={wizardNextDisabled() || saving}
               startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlined />}
             >
-              {saving ? 'Guardando...' : 'Crear Oferta'}
+              {saving ? 'Creando...' : 'Crear Oferta y Carrera'}
             </Button>
           )}
         </DialogActions>
@@ -565,68 +721,139 @@ export default function OfertasPage() {
       </Dialog>
 
       {/* ── Dialog: Ver Oferta ── */}
-      <Dialog open={openViewOferta} onClose={() => setOpenViewOferta(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar sx={{ bgcolor: 'primary.main' }}>
-            <SolutionOutlined />
-          </Avatar>
-          <Box>
-            <Typography variant="h6">{viewOferta?.nombre}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Oferta #{viewOferta?.idOferta}
-            </Typography>
-          </Box>
-          <Box sx={{ ml: 'auto' }}>
-            <Chip
-              label={viewOferta?.estado ? 'ACTIVA' : 'INACTIVA'}
-              color={viewOferta?.estado ? 'success' : 'default'}
-              variant="outlined"
-            />
-          </Box>
-        </DialogTitle>
-        <DialogContent dividers sx={{ bgcolor: 'background.default' }}>
-          {viewOferta && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Evento
-                </Typography>
-                <Typography variant="subtitle1" sx={{ mt: 0.5 }}>
-                  {viewOferta.categoriaEvento?.evento?.nombre}
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Box sx={{ flex: 1, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Categoría
-                  </Typography>
-                  <Typography variant="subtitle1" sx={{ mt: 0.5 }}>
-                    {viewOferta.categoriaEvento?.categoria?.nombre}
-                  </Typography>
+      <Dialog open={openViewOferta} onClose={() => setOpenViewOferta(false)} fullWidth maxWidth="md">
+        {viewOferta && (() => {
+          const viewOECs = oecList.filter(oec => oec.oferta?.idOferta === viewOferta.idOferta);
+          return (
+            <>
+              {/* ── Cabecera ── */}
+              <DialogTitle sx={{ p: 0 }}>
+                <Box sx={{
+                  px: 3, py: 2.5, display: 'flex', alignItems: 'center', gap: 2,
+                  borderBottom: '1px solid', borderColor: 'divider',
+                  background: 'linear-gradient(135deg, rgba(24,144,255,0.06) 0%, transparent 60%)',
+                }}>
+                  <Avatar sx={{ bgcolor: 'primary.main', width: 52, height: 52 }}>
+                    <SolutionOutlined style={{ fontSize: 24 }} />
+                  </Avatar>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h5" fontWeight={700}>{viewOferta.nombre}</Typography>
+                    <Typography variant="caption" color="text.secondary">Oferta Académica #{viewOferta.idOferta}</Typography>
+                  </Box>
+                  <Chip
+                    label={viewOferta.estado ? 'ACTIVA' : 'INACTIVA'}
+                    color={viewOferta.estado ? 'success' : 'default'}
+                    variant="filled" size="small"
+                    sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+                  />
                 </Box>
-                <Box sx={{ flex: 1, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Modalidad / Área
+              </DialogTitle>
+
+              <DialogContent sx={{ p: 3, bgcolor: 'background.default' }}>
+                {/* ── Bloque 1: Evento ── */}
+                <Box sx={{ mb: 2.5 }}>
+                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                    Evento Asociado
                   </Typography>
-                  <Typography variant="subtitle1" sx={{ mt: 0.5 }}>
-                    {viewOferta.modalidadArea?.modalidad?.nombre} / {viewOferta.modalidadArea?.area?.nombre}
-                  </Typography>
+                  <Box sx={{
+                    mt: 0.75, p: 2, bgcolor: 'background.paper',
+                    borderRadius: 2, border: '1px solid', borderColor: 'divider',
+                    display: 'flex', alignItems: 'center', gap: 1.5
+                  }}>
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main', flexShrink: 0 }} />
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      {viewOferta.categoriaEvento?.evento?.nombre || '—'}
+                    </Typography>
+                  </Box>
                 </Box>
-              </Box>
-              {viewOferta.descripcion && (
-                <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Descripción
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>{viewOferta.descripcion}</Typography>
+
+                {/* ── Bloque 2: Categoría + Modalidad/Área ── */}
+                <Box sx={{ display: 'flex', gap: 2, mb: 2.5 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                      Categoría
+                    </Typography>
+                    <Box sx={{ mt: 0.75, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                      <Chip
+                        label={viewOferta.categoriaEvento?.categoria?.nombre || '—'}
+                        color="primary" variant="outlined" size="small"
+                      />
+                    </Box>
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                      Modalidad / Área
+                    </Typography>
+                    <Box sx={{ mt: 0.75, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="body2" fontWeight={500}>
+                        {viewOferta.modalidadArea?.modalidad?.nombre || '—'}
+                      </Typography>
+                      <Chip
+                        label={viewOferta.modalidadArea?.area?.nombre || '—'}
+                        size="small" variant="outlined" sx={{ mt: 0.5 }}
+                      />
+                    </Box>
+                  </Box>
                 </Box>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenViewOferta(false)} variant="outlined">Cerrar</Button>
-        </DialogActions>
+
+                {/* ── Bloque 3: Descripción ── */}
+                {viewOferta.descripcion && (
+                  <Box sx={{ mb: 2.5 }}>
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                      Descripción
+                    </Typography>
+                    <Box sx={{ mt: 0.75, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                        {viewOferta.descripcion}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+
+                {/* ── Bloque 4: Carreras Autorizadas ── */}
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                      Carreras Autorizadas
+                    </Typography>
+                    <Chip label={`${viewOECs.length} carrera${viewOECs.length !== 1 ? 's' : ''}`} size="small" color="secondary" variant="outlined" />
+                  </Box>
+                  {viewOECs.length === 0 ? (
+                    <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                      Esta oferta aún no tiene carreras autorizadas asignadas.
+                    </Alert>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {viewOECs.map(oec => (
+                        <Box key={oec.id} sx={{
+                          p: 2, bgcolor: 'background.paper', borderRadius: 2,
+                          border: '1px solid', borderColor: 'divider',
+                          display: 'flex', alignItems: 'center', gap: 2,
+                        }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="body2" fontWeight={600}>{oec.carrera}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {oec.entidadAcademica?.nombre} · Plan: {oec.plan}
+                            </Typography>
+                          </Box>
+                          <Chip
+                            label={oec.estado ? 'Activo' : 'Inactivo'}
+                            color={oec.estado ? 'success' : 'default'}
+                            size="small" variant="outlined"
+                          />
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              </DialogContent>
+
+              <DialogActions sx={{ px: 3, py: 2 }}>
+                <Button onClick={() => setOpenViewOferta(false)} variant="outlined">Cerrar</Button>
+              </DialogActions>
+            </>
+          );
+        })()}
       </Dialog>
 
       {/* ── Dialog: Asignación de Carrera ── */}

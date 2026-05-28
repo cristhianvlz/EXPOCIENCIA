@@ -39,6 +39,14 @@ class CronogramaType(DjangoObjectType):
         model = Cronograma
         fields = '__all__'
 
+    def resolve_estado(root, info):
+        from django.utils import timezone
+        if not root.estado:
+            return False
+        # Solo marcar inactivo automáticamente cuando la fecha_fin ya expiró.
+        # Antes de fecha_inicio el cronograma sigue activo (planificado).
+        return timezone.now() <= root.fecha_fin
+
 class Query(graphene.ObjectType):
     todos_los_tipos_eventos = graphene.List(TipoEventoType)
     tipo_evento = graphene.Field(TipoEventoType, id=graphene.ID(required=True))

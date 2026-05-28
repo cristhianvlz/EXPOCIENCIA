@@ -31,9 +31,8 @@ const modules = {
       type: 'collapse',
       icon: icons.BookOutlined,
       children: [
-        { id: 'catalogos-base',          title: 'Catálogos Base',            type: 'item', url: '/academico/facultades', permission: 'academico.facultades' },
-        { id: 'estructuras-relaciones',  title: 'Estructuras y Relaciones',  type: 'item', url: '/academico/areas',      permission: 'academico.areas' },
-        { id: 'ofertas-academicas',      title: 'Ofertas Académicas',        type: 'item', url: '/academico/ofertas',    permission: 'academico.ofertas' }
+        { id: 'catalogos-base',     title: 'Catálogos Base',     type: 'item', url: '/academico/facultades', permission: 'academico.facultades' },
+        { id: 'ofertas-academicas', title: 'Ofertas Académicas', type: 'item', url: '/academico/ofertas',    permission: 'academico.ofertas' }
       ]
     },
     {

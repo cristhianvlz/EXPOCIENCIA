@@ -71,6 +71,20 @@ const GET_DATA = gql`
     }
     todosLosEventos { idEvento nombre estado }
     todasLasAreas { idArea nombre estado }
+    todosLosCronogramas {
+      idCronograma fechaFin estado
+      actividad { nombreActividad }
+      evento { idEvento nombre }
+    }
+  }
+`;
+
+const CERRAR_ACTA_RESULTADOS = gql`
+  mutation($idEvento: ID!, $idPremio: ID!) {
+    cerrarActaResultados(idEvento: $idEvento, idPremio: $idPremio) {
+      ok error
+      candidatos { idCandidatoPremio nota estado proyecto { titulo } }
+    }
   }
 `;
 
@@ -568,11 +582,39 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
 }
 
 // ── Tab 2: Ranking / Leaderboard ──────────────────────────────────────────────
-function RankingTab({ actas, premios, refetch, showNotif }) {
+function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
   const [crearCandidato] = useMutation(CREAR_CANDIDATO);
+  const [cerrarActa] = useMutation(CERRAR_ACTA_RESULTADOS);
   const [saving, setSaving] = useState(false);
   const [candidatoDialog, setCandidatoDialog] = useState({ open: false, acta: null });
   const [candidatoForm, setCandidatoForm] = useState({ idPremio: '', observacion: '' });
+  const [cerrarDialog, setCerrarDialog] = useState({ open: false, evento: null });
+  const [cerrarPremio, setCerrarPremio] = useState('');
+
+  const now = new Date();
+  const cronogramasResultadoExpirados = cronogramas.filter(c =>
+    c.actividad?.nombreActividad?.toLowerCase().includes('resultado') &&
+    new Date(c.fechaFin) < now
+  );
+
+  const handleCerrarActa = async () => {
+    if (!cerrarPremio || !cerrarDialog.evento) return;
+    setSaving(true);
+    try {
+      const res = (await cerrarActa({
+        variables: { idEvento: cerrarDialog.evento.idEvento, idPremio: cerrarPremio },
+      })).data?.cerrarActaResultados;
+      if (res?.ok) {
+        showNotif(`Acta cerrada. ${res.candidatos?.length || 0} candidato(s) adjudicado(s) automáticamente.`);
+        refetch();
+        setCerrarDialog({ open: false, evento: null });
+        setCerrarPremio('');
+      } else {
+        showNotif(res?.error || 'Error al cerrar acta', 'error');
+      }
+    } catch { showNotif('Error de conexión', 'error'); }
+    setSaving(false);
+  };
 
   const actasOrdenadas = [...actas]
     .filter(a => parseFloat(a.notaFinal) > 0)
@@ -607,6 +649,26 @@ function RankingTab({ actas, premios, refetch, showNotif }) {
 
   return (
     <Box>
+      {/* Alertas de períodos de resultados expirados */}
+      {cronogramasResultadoExpirados.map(c => (
+        <Alert
+          key={c.idCronograma}
+          severity="warning"
+          sx={{ mb: 1.5 }}
+          action={
+            <Button
+              size="small" color="warning" variant="contained"
+              onClick={() => { setCerrarDialog({ open: true, evento: c.evento }); setCerrarPremio(''); }}
+            >
+              Cerrar Acta
+            </Button>
+          }
+        >
+          El período de <strong>Publicación de Resultados</strong> finalizó para <strong>{c.evento?.nombre}</strong>.
+          Cierra el acta para adjudicar candidatos automáticamente.
+        </Alert>
+      ))}
+
       {/* Summary */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {[
@@ -682,6 +744,56 @@ function RankingTab({ actas, premios, refetch, showNotif }) {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Cerrar Acta Dialog */}
+      <Dialog open={cerrarDialog.open} onClose={() => setCerrarDialog({ open: false, evento: null })} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <TrophyOutlined style={{ color: '#faad14' }} />
+            Cerrar Acta de Resultados
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Se adjudicarán automáticamente como candidatos los proyectos con la <strong>nota más alta</strong>.
+            En caso de empate, todos los proyectos empatados serán incluidos.
+          </Alert>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Evento: <strong>{cerrarDialog.evento?.nombre}</strong>
+          </Typography>
+          <FormControl fullWidth required>
+            <InputLabel>Premio a adjudicar</InputLabel>
+            <Select
+              value={cerrarPremio}
+              label="Premio a adjudicar"
+              onChange={e => setCerrarPremio(e.target.value)}
+            >
+              {premios
+                .filter(p => p.estado && p.evento?.idEvento === cerrarDialog.evento?.idEvento)
+                .map(pr => (
+                  <MenuItem key={pr.idPremio} value={pr.idPremio}>
+                    {pr.area?.nombre} — Bs. {pr.monto}
+                    <Stack direction="row" gap={0.5} sx={{ ml: 1 }}>
+                      {(pr.premioDescriptores || []).map(pd => (
+                        <Chip key={pd.id} label={pd.descriptor.descripcion} size="small" />
+                      ))}
+                    </Stack>
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCerrarDialog({ open: false, evento: null })} color="secondary">Cancelar</Button>
+          <Button
+            variant="contained" color="warning"
+            disabled={!cerrarPremio || saving}
+            onClick={handleCerrarActa}
+          >
+            {saving ? <CircularProgress size={22} color="inherit" /> : 'Cerrar Acta y Adjudicar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Candidato Dialog */}
       <Dialog open={candidatoDialog.open} onClose={() => setCandidatoDialog({ open: false, acta: null })} maxWidth="sm" fullWidth>
@@ -894,6 +1006,7 @@ export default function CuadroHonorPage() {
   const actas = data?.todasLasActas || [];
   const eventos = data?.todosLosEventos || [];
   const areas = data?.todasLasAreas || [];
+  const cronogramas = data?.todosLosCronogramas || [];
 
   return (
     <MainCard title="Cuadro de Honor y Premios">
@@ -913,7 +1026,7 @@ export default function CuadroHonorPage() {
             <GestionPremiosTab tipos={tipos} descriptores={descriptores} premios={premios} eventos={eventos} areas={areas} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
           <TabPanel value={tab} index={1}>
-            <RankingTab actas={actas} premios={premios} refetch={refetch} showNotif={showNotif} />
+            <RankingTab actas={actas} premios={premios} cronogramas={cronogramas} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
           <TabPanel value={tab} index={2}>
             <AdjudicacionTab candidatos={candidatos} refetch={refetch} showNotif={showNotif} />

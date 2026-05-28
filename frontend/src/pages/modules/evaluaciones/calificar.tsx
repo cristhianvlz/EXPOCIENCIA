@@ -59,7 +59,18 @@ interface Acta {
   horaFin: string;
   notaFinal: string;
   estado: boolean;
-  proyecto: { idProyecto: string; titulo: string; estado: string };
+  proyecto: {
+    idProyecto: string;
+    titulo: string;
+    estado: string;
+    ofertaEaCarrera?: {
+      oferta?: {
+        categoriaEvento?: {
+          evento?: { idEvento: string; nombre: string };
+        };
+      };
+    };
+  };
   planillaEvaluativa: PlanillaEvaluativa;
   detallesEvaluacion: DetalleEvaluacion[];
 }
@@ -74,7 +85,16 @@ const GET_DATA = gql`
       horaFin
       notaFinal
       estado
-      proyecto { idProyecto titulo estado }
+      proyecto {
+        idProyecto titulo estado
+        ofertaEaCarrera {
+          oferta {
+            categoriaEvento {
+              evento { idEvento nombre }
+            }
+          }
+        }
+      }
       planillaEvaluativa {
         idPlanillaEvaluativa
         nombre
@@ -103,6 +123,11 @@ const GET_DATA = gql`
       }
     }
     todosLosTribunales { idTribunal nombre apellido especialidad }
+    todosLosCronogramas {
+      idCronograma fechaInicio fechaFin estado
+      actividad { nombreActividad }
+      evento { idEvento nombre }
+    }
   }
 `;
 
@@ -333,6 +358,73 @@ function ActaCard({ acta, miDetalle, onCalificar }: ActaCardProps) {
   );
 }
 
+// ── Animated block alert ──────────────────────────────────────────────────────
+function BlockAlert({ open, message, onClose }: { open: boolean; message: string; onClose: () => void }) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 2,
+          border: '2.5px solid #ff0000',
+          bgcolor: '#0d0000',
+          boxShadow: '0 0 32px rgba(255,0,0,0.5)',
+          animation: open
+            ? 'blockShake 0.5s cubic-bezier(.36,.07,.19,.97) both, pulseBorder 1.2s ease 0.5s infinite'
+            : 'none',
+          '@keyframes blockShake': {
+            '0%':   { transform: 'translateX(0)' },
+            '10%':  { transform: 'translateX(-12px)' },
+            '25%':  { transform: 'translateX(12px)' },
+            '40%':  { transform: 'translateX(-10px)' },
+            '55%':  { transform: 'translateX(10px)' },
+            '70%':  { transform: 'translateX(-6px)' },
+            '85%':  { transform: 'translateX(6px)' },
+            '100%': { transform: 'translateX(0)' },
+          },
+          '@keyframes pulseBorder': {
+            '0%, 100%': { boxShadow: '0 0 0 0 rgba(255,0,0,0.7), 0 0 32px rgba(255,0,0,0.4)' },
+            '50%':      { boxShadow: '0 0 0 8px rgba(255,0,0,0), 0 0 32px rgba(255,0,0,0.4)' },
+          },
+        }
+      }}>
+      <DialogContent sx={{ py: 3, px: 3 }}>
+        <Stack direction="row" spacing={2} alignItems="flex-start">
+          <Box sx={{
+            width: 56, height: 56, borderRadius: '50%', flexShrink: 0, mt: 0.25,
+            background: 'radial-gradient(circle, rgba(255,0,0,0.25) 0%, rgba(255,0,0,0.05) 70%)',
+            border: '1.5px solid rgba(255,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Typography sx={{ fontSize: 28, lineHeight: 1 }}>🚫</Typography>
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.75, color: '#ff1a1a', letterSpacing: 0.3 }}>
+              Calificación no permitida
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,200,200,0.9)', lineHeight: 1.65 }}>
+              {message}
+            </Typography>
+          </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5, pt: 0 }}>
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={onClose}
+          sx={{
+            bgcolor: '#cc0000',
+            '&:hover': { bgcolor: '#990000' },
+            borderRadius: 1.5, fontWeight: 700, py: 1,
+            boxShadow: '0 4px 16px rgba(204,0,0,0.5)',
+          }}>
+          Entendido
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PanelCalificacionPage() {
   const { usuario } = useAuth();
@@ -352,6 +444,48 @@ export default function PanelCalificacionPage() {
     { open: false, acta: null, detalle: null }
   );
 
+  const [blockAlert, setBlockAlert] = useState({ open: false, message: '' });
+
+  const cronogramas: any[] = data?.todosLosCronogramas || [];
+  const now = new Date();
+
+  // Verificación POR ACTA: encuentra el cronograma de evaluación del evento específico
+  const getEvaluacionStatus = (acta: Acta): { activa: boolean; mensaje: string } => {
+    const idEvento = acta.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.idEvento;
+    const nombreEvento = acta.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre || 'este evento';
+
+    // Sin evento determinado → permitir (fail-open)
+    if (!idEvento) return { activa: true, mensaje: '' };
+
+    const cronograma = cronogramas.find((c: any) => {
+      const nombre = (c.actividad?.nombreActividad || '').toLowerCase();
+      return (
+        (nombre.includes('evaluacion') || nombre.includes('defenza') || nombre.includes('defensa')) &&
+        String(c.evento?.idEvento) === String(idEvento)
+      );
+    });
+
+    // Sin cronograma de evaluación para este evento → permitir
+    if (!cronograma) return { activa: true, mensaje: '' };
+
+    const inicio = new Date(cronograma.fechaInicio);
+    const fin    = new Date(cronograma.fechaFin);
+
+    if (now >= inicio && now <= fin) return { activa: true, mensaje: '' };
+
+    if (now < inicio) {
+      return {
+        activa: false,
+        mensaje: `La fase de evaluación para "${nombreEvento}" aún no ha iniciado. Estará disponible a partir del ${inicio.toLocaleString('es-BO', { dateStyle: 'long', timeStyle: 'short' })}.`,
+      };
+    }
+
+    return {
+      activa: false,
+      mensaje: `La fase de evaluación para "${nombreEvento}" ya finalizó el ${fin.toLocaleString('es-BO', { dateStyle: 'long', timeStyle: 'short' })}. Ya no es posible calificar.`,
+    };
+  };
+
   // Only show actas where the current tribunal user is assigned as a jurado
   const actas: Acta[] = (data?.todasLasActas || []).filter((a: Acta) => {
     if (!a.estado) return false;
@@ -360,6 +494,11 @@ export default function PanelCalificacionPage() {
   });
 
   const handleCalificar = (acta: Acta, detalle: DetalleEvaluacion) => {
+    const status = getEvaluacionStatus(acta);
+    if (!status.activa) {
+      setBlockAlert({ open: true, message: status.mensaje });
+      return;
+    }
     setScoringDialog({ open: true, acta, detalle });
   };
 
@@ -402,24 +541,28 @@ export default function PanelCalificacionPage() {
         <Alert severity="error">Error al cargar: {error.message}</Alert>
       ) : noEsTribunal ? (
         <Alert severity="warning">Tu usuario no tiene un perfil de tribunal asignado.</Alert>
-      ) : actas.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
-          <FormOutlined style={{ fontSize: 48, marginBottom: 12 }} />
-          <Typography>No hay actas activas en las que estés asignado como jurado.</Typography>
-        </Box>
       ) : (
-        <Grid container spacing={2}>
-          {actas.map(acta => {
-            const miDetalle = acta.detallesEvaluacion.find(
-              d => String(d.tribunal.idTribunal) === miIdTribunal
-            )!;
-            return (
-              <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
-                <ActaCard acta={acta} miDetalle={miDetalle} onCalificar={handleCalificar} />
-              </Grid>
-            );
-          })}
-        </Grid>
+        <>
+          {actas.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+              <FormOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+              <Typography>No hay actas activas en las que estés asignado como jurado.</Typography>
+            </Box>
+          ) : (
+            <Grid container spacing={2}>
+              {actas.map(acta => {
+                const miDetalle = acta.detallesEvaluacion.find(
+                  d => String(d.tribunal.idTribunal) === miIdTribunal
+                )!;
+                return (
+                  <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
+                    <ActaCard acta={acta} miDetalle={miDetalle} onCalificar={handleCalificar} />
+                  </Grid>
+                );
+              })}
+            </Grid>
+          )}
+        </>
       )}
 
       <ScoringDialog
@@ -429,6 +572,13 @@ export default function PanelCalificacionPage() {
         detalle={scoringDialog.detalle}
         onSave={handleSaveScores}
         saving={saving}
+      />
+
+      {/* Alerta de bloqueo animada */}
+      <BlockAlert
+        open={blockAlert.open}
+        message={blockAlert.message}
+        onClose={() => setBlockAlert({ open: false, message: '' })}
       />
 
       <Snackbar open={notif.open} autoHideDuration={4000}

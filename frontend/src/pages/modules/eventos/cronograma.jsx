@@ -155,6 +155,14 @@ export default function CronogramaPage() {
   const [viewItem, setViewItem] = useState(null);
   const [viewType, setViewType] = useState('');
 
+  // Grupos expandidos en el cronograma (Set de idEvento)
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+  const toggleGroup = (id) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   // Paginación
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -356,59 +364,143 @@ export default function CronogramaPage() {
         <Box sx={{ p: 2 }}><Alert severity="error">Error al cargar datos: {error.message}</Alert></Box>
       ) : (
         <>
-          {/* ── Tab 0: Cronograma ── */}
-          {tab === 0 && (
-            <>
-              <TableContainer component={Paper} elevation={0}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>ID</TableCell>
-                      <TableCell>Evento</TableCell>
-                      <TableCell>Actividad</TableCell>
-                      <TableCell>Grupo</TableCell>
-                      <TableCell>Fecha Inicio</TableCell>
-                      <TableCell>Fecha Fin</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {cronogramas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(c => (
-                      <TableRow key={c.idCronograma}>
-                        <TableCell>{c.idCronograma}</TableCell>
-                        <TableCell>
-                          {c.evento ? `${c.evento.nombre} v${c.evento.version} (${c.evento.gestion})` : '-'}
-                        </TableCell>
-                        <TableCell>{c.actividad?.nombreActividad || '-'}</TableCell>
-                        <TableCell>{c.actividad?.grupo?.descripcion || '-'}</TableCell>
-                        <TableCell>{formatDate(c.fechaInicio)}</TableCell>
-                        <TableCell>{formatDate(c.fechaFin)}</TableCell>
-                        <TableCell>
-                          <Chip label={c.estado ? 'Activo' : 'Inactivo'} color={c.estado ? 'success' : 'default'} size="small" />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <Tooltip title="Ver"><IconButton size="small" color="info" onClick={() => handleOpenView(c, 'Entrada de Cronograma')}><EyeOutlined /></IconButton></Tooltip>
-                            <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => handleOpenCronograma(c)}><EditOutlined /></IconButton></Tooltip>
-                            <Tooltip title={c.estado ? "Desactivar" : "Restaurar"}>
-                              <IconButton size="small" color={c.estado ? "error" : "success"} onClick={() => handleToggleCronograma(c)}>
-                                {c.estado ? <StopOutlined /> : <RedoOutlined />}
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {cronogramas.length === 0 && (
-                      <TableRow><TableCell colSpan={8} align="center">No hay entradas en el cronograma.</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination count={cronogramas.length} page={page} setPage={setPage} rowsPerPage={rowsPerPage} setRowsPerPage={setRowsPerPage} />
-            </>
-          )}
+          {/* ── Tab 0: Cronograma (agrupado por evento) ── */}
+          {tab === 0 && (() => {
+            const now = new Date();
+
+            // Estado a mostrar en el chip (3 variantes)
+            const getStatusInfo = (c) => {
+              const inicio = new Date(c.fechaInicio);
+              const fin    = new Date(c.fechaFin);
+              if (!c.estado) return { label: 'Inactivo', color: 'default' };
+              if (now < inicio) return { label: 'Muy pronto', color: 'info' };
+              return { label: 'Activo', color: 'success' };
+            };
+
+            // Agrupar por evento
+            const gruposMap = cronogramas.reduce((acc, c) => {
+              const key = c.evento?.idEvento || 'sin-evento';
+              if (!acc[key]) acc[key] = { evento: c.evento, items: [] };
+              acc[key].items.push(c);
+              return acc;
+            }, {});
+
+            // Ordenar grupos: eventos más recientes (mayor idEvento) primero
+            const eventGroups = Object.values(gruposMap).sort((a, b) => {
+              const idA = parseInt(a.evento?.idEvento || 0);
+              const idB = parseInt(b.evento?.idEvento || 0);
+              return idB - idA;
+            });
+
+            // Ordenar ítems dentro de cada grupo por idCronograma ascendente (orden original)
+            eventGroups.forEach(g => {
+              g.items.sort((a, b) => parseInt(a.idCronograma) - parseInt(b.idCronograma));
+            });
+
+            if (eventGroups.length === 0) {
+              return (
+                <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                  No hay entradas en el cronograma.
+                </Box>
+              );
+            }
+
+            return (
+              <Box>
+                {eventGroups.map((grupo) => {
+                  const key = grupo.evento?.idEvento || 'sin-evento';
+                  const isOpen = expandedGroups.has(key);
+                  return (
+                    <Box key={key} sx={{ mb: 2 }}>
+                      {/* ── Cabecera colapsable del evento ── */}
+                      <Box sx={{
+                        px: 2, py: 1.25, borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                        background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+                        border: '1px solid rgba(24,144,255,0.25)',
+                        display: 'flex', alignItems: 'center', gap: 1.5,
+                        cursor: 'default',
+                      }}>
+                        <ScheduleOutlined style={{ color: '#1890ff', fontSize: 17 }} />
+                        <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
+                          {grupo.evento
+                            ? `${grupo.evento.nombre} v${grupo.evento.version} (${grupo.evento.gestion})`
+                            : 'Sin evento asignado'}
+                        </Typography>
+                        {/* Chip-botón que colapsa/expande la tabla */}
+                        <Chip
+                          label={
+                            isOpen
+                              ? `▲ ${grupo.items.length} ${grupo.items.length === 1 ? 'actividad' : 'actividades'}`
+                              : `▼ ${grupo.items.length} ${grupo.items.length === 1 ? 'actividad' : 'actividades'}`
+                          }
+                          size="small" color="primary"
+                          variant={isOpen ? 'filled' : 'outlined'}
+                          onClick={() => toggleGroup(key)}
+                          sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                        />
+                      </Box>
+
+                      {/* ── Tabla colapsable ── */}
+                      {isOpen && (
+                        <TableContainer component={Paper} elevation={0}
+                          sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell width={50}>ID</TableCell>
+                                <TableCell>Actividad</TableCell>
+                                <TableCell>Grupo</TableCell>
+                                <TableCell>Fecha Inicio</TableCell>
+                                <TableCell>Fecha Fin</TableCell>
+                                <TableCell>Estado</TableCell>
+                                <TableCell align="right">Acciones</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {grupo.items.map(c => {
+                                const status = getStatusInfo(c);
+                                return (
+                                  <TableRow key={c.idCronograma} hover>
+                                    <TableCell>{c.idCronograma}</TableCell>
+                                    <TableCell>{c.actividad?.nombreActividad || '-'}</TableCell>
+                                    <TableCell>{c.actividad?.grupo?.descripcion || '-'}</TableCell>
+                                    <TableCell>{formatDate(c.fechaInicio)}</TableCell>
+                                    <TableCell>{formatDate(c.fechaFin)}</TableCell>
+                                    <TableCell>
+                                      <Chip label={status.label} color={status.color} size="small" />
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                        <Tooltip title="Ver">
+                                          <IconButton size="small" color="info" onClick={() => handleOpenView(c, 'Entrada de Cronograma')}>
+                                            <EyeOutlined />
+                                          </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Editar">
+                                          <IconButton size="small" color="primary" onClick={() => handleOpenCronograma(c)}>
+                                            <EditOutlined />
+                                          </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title={c.estado ? 'Desactivar' : 'Restaurar'}>
+                                          <IconButton size="small" color={c.estado ? 'error' : 'success'} onClick={() => handleToggleCronograma(c)}>
+                                            {c.estado ? <StopOutlined /> : <RedoOutlined />}
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Box>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Box>
+            );
+          })()}
 
           {/* ── Tab 1: Actividades ── */}
           {tab === 1 && (

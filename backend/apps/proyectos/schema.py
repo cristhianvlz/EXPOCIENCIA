@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from apps.proyectos.models import Proyecto
 from apps.academico.models import OfertaEaCarrera
+from apps.eventos.utils import get_cronograma_activo
 
 class ProyectoType(DjangoObjectType):
     participantes = graphene.List('apps.usuarios.schema.ParticipanteType')
@@ -50,9 +51,19 @@ class CrearProyecto(graphene.Mutation):
     @staticmethod
     def mutate(root, info, id_oferta_ea_carrera, titulo, resumen="", observacion="", estado="revision", archivo=None):
         try:
-            oferta_ea_carrera = OfertaEaCarrera.objects.get(pk=id_oferta_ea_carrera)
+            oferta_ea_carrera = OfertaEaCarrera.objects.select_related(
+                'oferta__categoria_evento__evento'
+            ).get(pk=id_oferta_ea_carrera)
         except OfertaEaCarrera.DoesNotExist:
             return CrearProyecto(proyecto=None, ok=False, error="El registro de oferta-EA-carrera no existe.") # type: ignore
+
+        try:
+            evento = oferta_ea_carrera.oferta.categoria_evento.evento
+        except Exception:
+            return CrearProyecto(proyecto=None, ok=False, error="No se pudo determinar el evento asociado a esta oferta académica.") # type: ignore
+
+        if not get_cronograma_activo(evento, 'inscripcion'):
+            return CrearProyecto(proyecto=None, ok=False, error="El período de inscripción de proyectos no está activo para este evento.") # type: ignore
 
         if Proyecto.objects.filter(titulo=titulo).exists():
             return CrearProyecto(proyecto=None, ok=False, error="Un proyecto con este título ya existe.") # type: ignore
