@@ -25,9 +25,14 @@ const GET_DATA = gql`
         idGanadorPremio estado
         candidatoPremio {
           nota
-          proyecto { idProyecto titulo }
+          proyecto {
+            idProyecto titulo
+            ofertaEaCarrera { oferta { idOferta nombre } }
+            participantes { nombre apellido }
+            tutores { nombre apellido }
+          }
           premio {
-            monto
+            monto numeroGanadores
             evento { nombre }
             area { nombre }
             premioDescriptores { descriptor { descripcion } }
@@ -39,9 +44,14 @@ const GET_DATA = gql`
       idGanadorPremio estado
       candidatoPremio {
         nota
-        proyecto { idProyecto titulo }
+        proyecto {
+          idProyecto titulo
+          ofertaEaCarrera { oferta { idOferta nombre } }
+          participantes { nombre apellido }
+          tutores { nombre apellido }
+        }
         premio {
-          monto
+          monto numeroGanadores
           evento { nombre }
           area { nombre }
           premioDescriptores { descriptor { descripcion } }
@@ -69,7 +79,6 @@ function TabPanel({ children, value, index }) {
   return value === index ? <Box sx={{ pt: 3 }}>{children}</Box> : null;
 }
 
-// Diálogo de confirmación reutilizable (reemplaza window.confirm)
 function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', confirmColor = 'error', onConfirm, onCancel }) {
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
@@ -90,26 +99,43 @@ function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', confi
   );
 }
 
+const posLabel = (n) => ({ 1: '🥇 1er Lugar', 2: '🥈 2do Lugar', 3: '🥉 3er Lugar' }[n] || `${n}° Lugar`);
+
 const VARIABLES_HINT = [
   { token: '{{Nombre_Proyecto}}', desc: 'Título del proyecto' },
-  { token: '{{Descriptor}}', desc: 'Etiqueta del premio (ej. Primer Lugar)' },
-  { token: '{{Area}}', desc: 'Área del premio' },
-  { token: '{{Evento}}', desc: 'Nombre del evento' },
-  { token: '{{Nota}}', desc: 'Nota obtenida por el proyecto' },
-  { token: '{{Monto}}', desc: 'Monto del premio en Bs.' },
+  { token: '{{Lugar}}',           desc: 'Posición obtenida (1er Lugar / 2do Lugar / 3er Lugar)' },
+  { token: '{{Descriptor}}',      desc: 'Tipo de premio (ej. Bolivianos, Certificado)' },
+  { token: '{{Oferta}}',          desc: 'Nombre de la oferta académica' },
+  { token: '{{Area}}',            desc: 'Área del premio' },
+  { token: '{{Evento}}',          desc: 'Nombre del evento' },
+  { token: '{{Nota}}',            desc: 'Nota obtenida por el proyecto' },
+  { token: '{{Monto}}',           desc: 'Monto del premio en Bs.' },
+  { token: '{{Participantes}}',   desc: 'Nombres completos de los integrantes del proyecto' },
+  { token: '{{Tutores}}',         desc: 'Nombres completos de los tutores del proyecto' },
 ];
+
+const LUGAR_MAP = { 1: '1er Lugar', 2: '2do Lugar', 3: '3er Lugar' };
 
 function resolverContenido(contenido, ganador) {
   if (!ganador || !contenido) return contenido;
   const cp = ganador.candidatoPremio;
-  const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(', ');
+  const descriptores  = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(', ');
+  const participantes = (cp.proyecto.participantes || []).map(p => `${p.nombre} ${p.apellido}`).join(', ');
+  const tutores       = (cp.proyecto.tutores || []).map(t => `${t.nombre} ${t.apellido}`).join(', ');
+  const oferta        = cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre;
+  const lugar         = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+
   return contenido
     .replace(/\{\{Nombre_Proyecto\}\}/g, cp.proyecto.titulo)
-    .replace(/\{\{Descriptor\}\}/g, descriptores || '—')
-    .replace(/\{\{Area\}\}/g, cp.premio.area.nombre)
-    .replace(/\{\{Evento\}\}/g, cp.premio.evento.nombre)
-    .replace(/\{\{Nota\}\}/g, cp.nota)
-    .replace(/\{\{Monto\}\}/g, cp.premio.monto);
+    .replace(/\{\{Lugar\}\}/g,           lugar)
+    .replace(/\{\{Descriptor\}\}/g,      descriptores || '—')
+    .replace(/\{\{Oferta\}\}/g,          oferta)
+    .replace(/\{\{Area\}\}/g,            cp.premio.area.nombre)
+    .replace(/\{\{Evento\}\}/g,          cp.premio.evento.nombre)
+    .replace(/\{\{Nota\}\}/g,            cp.nota)
+    .replace(/\{\{Monto\}\}/g,           cp.premio.monto || '—')
+    .replace(/\{\{Participantes\}\}/g,   participantes || '—')
+    .replace(/\{\{Tutores\}\}/g,         tutores || '—');
 }
 
 // Genera y abre la ventana de impresión para una lista de certificados
@@ -346,15 +372,27 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
   const [eliminarCertificado] = useMutation(ELIMINAR_CERTIFICADO);
 
   const [saving, setSaving] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
   const [genDialog, setGenDialog] = useState({ open: false });
+  const [batchDialog, setBatchDialog] = useState({ open: false });
   const [form, setForm] = useState({ idGanadorPremio: '', idPlantilla: '' });
+  const [batchPlantilla, setBatchPlantilla] = useState('');
   const [confirm, setConfirm] = useState({ open: false, id: null });
   const [printAllConfirm, setPrintAllConfirm] = useState(false);
+  const [expandidos, setExpandidos] = useState(new Set());
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
+  });
 
   const plantillasActivas = plantillas.filter(p => p.estado);
-  const ganadoresActivos = ganadores.filter(g => g.estado);
-  const certActivos = certificados.filter(c => c.estado);
+  const ganadoresActivos  = ganadores.filter(g => g.estado);
+  const certActivos       = certificados.filter(c => c.estado);
 
+  // IDs de ganadores que ya tienen certificado
+  const ganadoresConCert = new Set(certActivos.map(c => c.ganadorPremio?.idGanadorPremio));
+  const ganadores_pendientes = ganadoresActivos.filter(g => !ganadoresConCert.has(g.idGanadorPremio));
+
+  // ── Generar uno ──
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -369,29 +407,90 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
     setSaving(false);
   };
 
+  // ── Generar en lote ──
+  const handleBatchGenerate = async () => {
+    if (!batchPlantilla || ganadores_pendientes.length === 0) return;
+    setBatchSaving(true);
+    let ok = 0; let err = 0;
+    for (const g of ganadores_pendientes) {
+      try {
+        const res = (await crearCertificado({
+          variables: { idGanadorPremio: g.idGanadorPremio, idPlantilla: batchPlantilla }
+        })).data?.crearCertificado;
+        res?.ok ? ok++ : err++;
+      } catch { err++; }
+    }
+    refetch();
+    showNotif(`${ok} certificado(s) generado(s)${err > 0 ? `. ${err} error(es).` : '.'}`, err > 0 ? 'warning' : 'success');
+    setBatchDialog({ open: false });
+    setBatchPlantilla('');
+    setBatchSaving(false);
+  };
+
+  // ── Eliminar ──
   const handleDelete = async () => {
     try {
       const res = (await eliminarCertificado({ variables: { idCertificado: confirm.id } })).data?.eliminarCertificado;
-      if (res?.ok) { showNotif('Certificado desactivado'); refetch(); }
+      if (res?.ok) { showNotif('Certificado eliminado'); refetch(); }
       else showNotif(res?.error || 'Error', 'error');
     } catch { showNotif('Error de conexión', 'error'); }
     setConfirm({ open: false, id: null });
   };
 
-  const selectedGanador = ganadores.find(g => g.idGanadorPremio === form.idGanadorPremio);
+  // Auto-sugerir plantilla por posición al seleccionar ganador
+  const handleSelectGanador = (idGanador) => {
+    const g = ganadores.find(x => x.idGanadorPremio === idGanador);
+    const pos = g?.candidatoPremio?.premio?.numeroGanadores;
+    let sugerida = '';
+    if (pos) {
+      const keywords = { 1: ['1er', 'primer', 'primero'], 2: ['2do', 'segundo'], 3: ['3er', 'tercero'] }[pos] || [];
+      const match = plantillasActivas.find(pl =>
+        keywords.some(k => pl.descripcion.toLowerCase().includes(k))
+      );
+      if (match) sugerida = match.idPlantilla;
+    }
+    setForm(p => ({ ...p, idGanadorPremio: idGanador, idPlantilla: sugerida || p.idPlantilla }));
+  };
+
+  const selectedGanador   = ganadores.find(g => g.idGanadorPremio === form.idGanadorPremio);
   const selectedPlantilla = plantillas.find(p => p.idPlantilla === form.idPlantilla);
   const previewTexto = selectedGanador && selectedPlantilla
-    ? resolverContenido(selectedPlantilla.contenido, selectedGanador)
-    : null;
+    ? resolverContenido(selectedPlantilla.contenido, selectedGanador) : null;
+
+  // Agrupar certificados por oferta
+  const certPorOferta = certActivos.reduce((acc, cert) => {
+    const oferta = cert.ganadorPremio?.candidatoPremio?.proyecto?.ofertaEaCarrera?.oferta;
+    const key = oferta?.idOferta || 'sin_oferta';
+    if (!acc[key]) acc[key] = { oferta, certs: [] };
+    acc[key].certs.push(cert);
+    return acc;
+  }, {});
+  const gruposCert = Object.values(certPorOferta);
 
   return (
     <Box>
+      {/* ── Alerta de pendientes ── */}
+      {ganadores_pendientes.length > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <Button size="small" color="warning" variant="contained"
+              onClick={() => setBatchDialog({ open: true })}>
+              Generar Pendientes ({ganadores_pendientes.length})
+            </Button>
+          }
+        >
+          <strong>{ganadores_pendientes.length}</strong> ganador(es) aún no tienen certificado emitido.
+        </Alert>
+      )}
+
+      {/* ── Cabecera ── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Certificados Emitidos</Typography>
         <Stack direction="row" gap={1}>
           <Button variant="outlined" startIcon={<PrinterOutlined />}
-            onClick={() => setPrintAllConfirm(true)}
-            disabled={certActivos.length === 0}>
+            onClick={() => setPrintAllConfirm(true)} disabled={certActivos.length === 0}>
             Imprimir Todos ({certActivos.length})
           </Button>
           <Button variant="contained" startIcon={<PlusOutlined />} onClick={() => setGenDialog({ open: true })}>
@@ -400,74 +499,110 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
         </Stack>
       </Box>
 
-      <TableContainer component={Paper} elevation={0}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell width={60}>ID</TableCell>
-              <TableCell>Proyecto</TableCell>
-              <TableCell>Premio</TableCell>
-              <TableCell>Plantilla</TableCell>
-              <TableCell align="center">Nota</TableCell>
-              <TableCell>Fecha Emisión</TableCell>
-              <TableCell align="center">Estado</TableCell>
-              <TableCell align="right" width={110}>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {certificados.map(cert => {
-              const cp = cert.ganadorPremio.candidatoPremio;
-              const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(', ');
-              return (
-                <TableRow key={cert.idCertificado} hover>
-                  <TableCell>{cert.idCertificado}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{cp.premio.area.nombre}</Typography>
-                    <Typography variant="caption" color="text.secondary">{descriptores || cp.premio.evento.nombre}</Typography>
-                  </TableCell>
-                  <TableCell>{cert.plantilla.descripcion}</TableCell>
-                  <TableCell align="center">
-                    <Typography fontWeight={600} color="primary.main">{cp.nota}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{new Date(cert.fechaEmision).toLocaleDateString('es-BO')}</Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip label={cert.estado ? 'Activo' : 'Inactivo'} size="small" color={cert.estado ? 'success' : 'default'} />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Imprimir este certificado">
-                      <IconButton size="small" color="primary"
-                        onClick={() => imprimirCertificados([cert], showNotif)}>
-                        <PrinterOutlined />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Desactivar">
-                      <IconButton size="small" color="error"
-                        onClick={() => setConfirm({ open: true, id: cert.idCertificado })}>
-                        <DeleteOutlined />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {certificados.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                  Sin certificados generados.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {/* ── Certificados agrupados por oferta (colapsables) ── */}
+      {gruposCert.length === 0 ? (
+        <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>Sin certificados generados.</Box>
+      ) : gruposCert.map(grupo => {
+        const key = grupo.oferta?.idOferta || 'sin_oferta';
+        const isOpen = expandidos.has(key);
+        const certsOrdenados = [...grupo.certs].sort((a, b) =>
+          (a.ganadorPremio?.candidatoPremio?.premio?.numeroGanadores || 99) -
+          (b.ganadorPremio?.candidatoPremio?.premio?.numeroGanadores || 99)
+        );
+        return (
+          <Box key={key} sx={{ mb: 2 }}>
+            <Box sx={{
+              px: 2, py: 1.25,
+              borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+              background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+              border: '1px solid rgba(24,144,255,0.25)',
+              display: 'flex', alignItems: 'center', gap: 1.5,
+            }}>
+              <FilePdfOutlined style={{ color: '#1890ff', fontSize: 17 }} />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="subtitle2" fontWeight={700} color="primary.main">
+                  {grupo.oferta?.nombre || 'Sin Oferta'}
+                </Typography>
+              </Box>
+              <Tooltip title={`Imprimir los ${grupo.certs.length} certificado(s) de esta oferta`}>
+                <IconButton size="small" color="primary"
+                  onClick={() => imprimirCertificados(grupo.certs, showNotif)}>
+                  <PrinterOutlined />
+                </IconButton>
+              </Tooltip>
+              <Chip
+                label={isOpen ? `▲ ${grupo.certs.length} certificado(s)` : `▼ ${grupo.certs.length} certificado(s)`}
+                size="small" color="primary"
+                variant={isOpen ? 'filled' : 'outlined'}
+                onClick={() => toggleExpandido(key)}
+                sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+              />
+            </Box>
 
-      {/* Generar Certificado Dialog */}
-      <Dialog open={genDialog.open} onClose={() => { setGenDialog({ open: false }); setForm({ idGanadorPremio: '', idPlantilla: '' }); }} maxWidth="md" fullWidth>
+            {isOpen && (
+              <TableContainer component={Paper} elevation={0}
+                sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell width={120} align="center">Lugar</TableCell>
+                      <TableCell>Proyecto</TableCell>
+                      <TableCell>Plantilla</TableCell>
+                      <TableCell align="center">Nota</TableCell>
+                      <TableCell>Fecha Emisión</TableCell>
+                      <TableCell align="right" width={90}>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {certsOrdenados.map(cert => {
+                      const cp = cert.ganadorPremio.candidatoPremio;
+                      return (
+                        <TableRow key={cert.idCertificado} hover>
+                          <TableCell align="center">
+                            <Typography fontWeight={700} fontSize={14}>
+                              {posLabel(cp.premio?.numeroGanadores)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
+                            <Typography variant="caption" color="text.secondary">{cp.premio.area.nombre}</Typography>
+                          </TableCell>
+                          <TableCell>{cert.plantilla.descripcion}</TableCell>
+                          <TableCell align="center">
+                            <Chip label={cp.nota} color="primary" size="small" />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{new Date(cert.fechaEmision).toLocaleDateString('es-BO')}</Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Tooltip title="Imprimir">
+                              <IconButton size="small" color="primary"
+                                onClick={() => imprimirCertificados([cert], showNotif)}>
+                                <PrinterOutlined />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Eliminar">
+                              <IconButton size="small" color="error"
+                                onClick={() => setConfirm({ open: true, id: cert.idCertificado })}>
+                                <DeleteOutlined />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        );
+      })}
+
+      {/* ── Generar uno ── */}
+      <Dialog open={genDialog.open}
+        onClose={() => { setGenDialog({ open: false }); setForm({ idGanadorPremio: '', idPlantilla: '' }); }}
+        maxWidth="md" fullWidth>
         <DialogTitle>
           <Stack direction="row" alignItems="center" gap={1}>
             <FilePdfOutlined style={{ color: '#ff4d4f' }} />
@@ -479,17 +614,20 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
             <FormControl fullWidth required>
               <InputLabel>Ganador</InputLabel>
               <Select value={form.idGanadorPremio} label="Ganador"
-                onChange={e => setForm(p => ({ ...p, idGanadorPremio: e.target.value }))}>
+                onChange={e => handleSelectGanador(e.target.value)}>
                 {ganadoresActivos.map(g => {
                   const cp = g.candidatoPremio;
-                  const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(', ');
+                  const yaTiene = ganadoresConCert.has(g.idGanadorPremio);
                   return (
                     <MenuItem key={g.idGanadorPremio} value={g.idGanadorPremio}>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {descriptores} — {cp.premio.area.nombre} ({cp.premio.evento.nombre}) · Nota: {cp.nota}
-                        </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {posLabel(cp.premio?.numeroGanadores)} — {cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
+                          </Typography>
+                        </Box>
+                        {yaTiene && <Chip label="Ya tiene cert." size="small" color="success" variant="outlined" />}
                       </Box>
                     </MenuItem>
                   );
@@ -505,18 +643,26 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                   <MenuItem key={pl.idPlantilla} value={pl.idPlantilla}>{pl.descripcion}</MenuItem>
                 ))}
               </Select>
+              {form.idPlantilla && selectedGanador && (() => {
+                const pos = selectedGanador.candidatoPremio?.premio?.numeroGanadores;
+                const keywords = { 1: ['1er', 'primer'], 2: ['2do', 'segundo'], 3: ['3er', 'tercero'] }[pos] || [];
+                const isSuggested = keywords.some(k => selectedPlantilla?.descripcion?.toLowerCase().includes(k));
+                return isSuggested
+                  ? <Typography variant="caption" color="success.main">✓ Plantilla sugerida para {LUGAR_MAP[pos]}</Typography>
+                  : null;
+              })()}
             </FormControl>
 
             {previewTexto && (
               <>
                 <Divider />
-                <Typography variant="subtitle2">Vista previa del certificado</Typography>
+                <Typography variant="subtitle2">Vista previa</Typography>
                 <Box sx={{ p: 3, border: '4px double', borderColor: 'primary.main', borderRadius: 1,
                   textAlign: 'center', bgcolor: 'background.paper' }}>
                   <Typography variant="h5" fontWeight={700} letterSpacing={3} color="primary.main" sx={{ mb: 1 }}>
                     CERTIFICADO
                   </Typography>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 2, color: 'text.primary' }}>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 2 }}>
                     {previewTexto}
                   </Typography>
                 </Box>
@@ -525,26 +671,70 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setGenDialog({ open: false }); setForm({ idGanadorPremio: '', idPlantilla: '' }); }} color="secondary">
-            Cancelar
-          </Button>
+          <Button onClick={() => { setGenDialog({ open: false }); setForm({ idGanadorPremio: '', idPlantilla: '' }); }} color="secondary">Cancelar</Button>
           <Button variant="contained" disabled={!form.idGanadorPremio || !form.idPlantilla || saving} onClick={handleSave}>
             {saving ? <CircularProgress size={22} color="inherit" /> : 'Generar'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Confirmar desactivar certificado */}
+      {/* ── Generar en lote ── */}
+      <Dialog open={batchDialog.open} onClose={() => setBatchDialog({ open: false })} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <FilePdfOutlined style={{ color: '#faad14' }} />
+            Generar Certificados Pendientes
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="info">
+              Se generará un certificado para los <strong>{ganadores_pendientes.length}</strong> ganador(es) sin certificado usando la plantilla seleccionada.
+            </Alert>
+            <Box>
+              {ganadores_pendientes.map(g => {
+                const cp = g.candidatoPremio;
+                return (
+                  <Box key={g.idGanadorPremio} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Typography fontSize={16}>{posLabel(cp.premio?.numeroGanadores)}</Typography>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
+                      </Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+            <FormControl fullWidth required>
+              <InputLabel>Plantilla para todos</InputLabel>
+              <Select value={batchPlantilla} label="Plantilla para todos"
+                onChange={e => setBatchPlantilla(e.target.value)}>
+                {plantillasActivas.map(pl => (
+                  <MenuItem key={pl.idPlantilla} value={pl.idPlantilla}>{pl.descripcion}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBatchDialog({ open: false })} color="secondary">Cancelar</Button>
+          <Button variant="contained" color="warning" disabled={!batchPlantilla || batchSaving} onClick={handleBatchGenerate}>
+            {batchSaving ? <CircularProgress size={22} color="inherit" /> : `Generar ${ganadores_pendientes.length} certificado(s)`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ConfirmDialog
         open={confirm.open}
-        title="Desactivar certificado"
-        message="¿Estás seguro de que deseas desactivar este certificado?"
-        confirmLabel="Desactivar"
+        title="Eliminar certificado"
+        message="¿Eliminar este certificado?"
+        confirmLabel="Eliminar"
         onConfirm={handleDelete}
         onCancel={() => setConfirm({ open: false, id: null })}
       />
 
-      {/* Confirmar imprimir todos */}
       <ConfirmDialog
         open={printAllConfirm}
         title="Imprimir todos los certificados"
