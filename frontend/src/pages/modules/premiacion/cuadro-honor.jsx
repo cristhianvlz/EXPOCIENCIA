@@ -62,8 +62,14 @@ const GET_DATA = gql`
       idGanadorPremio estado
       candidatoPremio {
         idCandidatoPremio nota
-        proyecto { idProyecto titulo }
-        premio { idPremio monto evento { nombre } area { nombre }
+        proyecto {
+          idProyecto titulo
+          ofertaEaCarrera { oferta { idOferta nombre } }
+        }
+        premio {
+          idPremio monto numeroGanadores
+          evento { nombre }
+          area { nombre }
           premioDescriptores { descriptor { descripcion } }
         }
       }
@@ -100,10 +106,11 @@ const GET_DATA = gql`
 `;
 
 const CERRAR_ACTA_RESULTADOS = gql`
-  mutation($idEvento: ID!, $idPremio: ID!) {
-    cerrarActaResultados(idEvento: $idEvento, idPremio: $idPremio) {
+  mutation($idOferta: ID!) {
+    cerrarActaResultados(idOferta: $idOferta) {
       ok error
-      candidatos { idCandidatoPremio nota estado proyecto { titulo } }
+      ganadores { idCandidatoPremio nota estado proyecto { titulo } premio { idPremio numeroGanadores } }
+      empates  { idCandidatoPremio nota estado proyecto { titulo } premio { idPremio numeroGanadores } }
     }
   }
 `;
@@ -142,9 +149,6 @@ const ELIMINAR_PREMIO_DESC = gql`mutation($idPremioDescriptor: ID!) {
 }`;
 
 // CandidatoPremio mutations
-const CREAR_CANDIDATO = gql`mutation($idPremio: ID!, $idProyecto: ID!, $idActaEvaluacion: ID!, $nota: Decimal!, $observacion: String) {
-  crearCandidatoPremio(idPremio: $idPremio, idProyecto: $idProyecto, idActaEvaluacion: $idActaEvaluacion, nota: $nota, observacion: $observacion) { ok error }
-}`;
 const EDITAR_CANDIDATO = gql`mutation($idCandidatoPremio: ID!, $estado: String, $activo: Boolean) {
   editarCandidatoPremio(idCandidatoPremio: $idCandidatoPremio, estado: $estado, activo: $activo) { ok error }
 }`;
@@ -191,6 +195,14 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
   // Premio dialog
   const [premioDialog, setPremioDialog] = useState({ open: false, item: null });
   const [premioForm, setPremioForm] = useState({ idOferta: '', monto: '', numeroGanadores: 1, idTipoDescriptor: '', idDescriptor: '' });
+
+  // Grupos de premios expandidos/colapsados
+  const [premiosExpandidos, setPremiosExpandidos] = useState(new Set());
+  const togglePremioGrupo = (key) => setPremiosExpandidos(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   // PremioDescriptor dialog
   const [pdDialog, setPdDialog] = useState({ open: false, premio: null });
@@ -258,29 +270,46 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
   const positionLabel = (n) => {
     const num = parseInt(n);
     if (num === 1) return '1er lugar';
-    if (num === 2) return '1er y 2do lugar';
-    if (num === 3) return '1er, 2do y 3er lugar';
-    return `${num} ganadores`;
+    if (num === 2) return '2do lugar';
+    if (num === 3) return '3er lugar';
+    return `${num}° lugar`;
   };
 
   const openPremioDialog = (item = null) => {
-    setPremioForm(item
-      ? { idOferta: '', monto: item.monto ?? '', numeroGanadores: item.numeroGanadores, idTipoDescriptor: '', idDescriptor: '' }
-      : { idOferta: '', monto: '', numeroGanadores: 1, idTipoDescriptor: '', idDescriptor: '' }
-    );
+    if (item) {
+      // Buscar la oferta que coincide con evento + área del premio
+      const matchingOferta = ofertas.find(o =>
+        o.categoriaEvento?.evento?.idEvento === item.evento?.idEvento &&
+        o.modalidadArea?.area?.idArea === item.area?.idArea
+      );
+      setPremioForm({
+        idOferta: matchingOferta?.idOferta || '',
+        monto: item.monto ?? '',
+        numeroGanadores: item.numeroGanadores,
+        idTipoDescriptor: '',
+        idDescriptor: '',
+      });
+    } else {
+      setPremioForm({ idOferta: '', monto: '', numeroGanadores: 1, idTipoDescriptor: '', idDescriptor: '' });
+    }
     setPremioDialog({ open: true, item });
   };
+
   const handleSavePremio = async () => {
     setSaving(true);
     try {
       let res;
       const montoVal = premioForm.monto !== '' ? parseFloat(premioForm.monto) : null;
       if (premioDialog.item) {
+        // Derivar idEvento + idArea desde la oferta seleccionada
+        const ofertaSel = ofertas.find(o => o.idOferta === premioForm.idOferta);
         res = (await editarPremio({
           variables: {
             idPremio: premioDialog.item.idPremio,
+            idEvento: ofertaSel?.categoriaEvento?.evento?.idEvento,
+            idArea: ofertaSel?.modalidadArea?.area?.idArea,
             monto: montoVal,
-            numeroGanadores: parseInt(premioForm.numeroGanadores)
+            numeroGanadores: parseInt(premioForm.numeroGanadores),
           }
         })).data?.editarPremio;
       } else {
@@ -289,7 +318,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
             idOferta: premioForm.idOferta,
             monto: montoVal,
             numeroGanadores: parseInt(premioForm.numeroGanadores),
-            idDescriptores: premioForm.idDescriptor ? [premioForm.idDescriptor] : undefined
+            idDescriptores: premioForm.idDescriptor ? [premioForm.idDescriptor] : undefined,
           }
         })).data?.crearPremio;
       }
@@ -299,13 +328,17 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
     setSaving(false);
   };
   const handleDeletePremio = (id) => {
-    askConfirm('Desactivar premio', '¿Estás seguro de que deseas desactivar este premio?', async () => {
-      try {
-        const res = (await eliminarPremio({ variables: { idPremio: id } })).data?.eliminarPremio;
-        if (res?.ok) { showNotif('Premio desactivado'); refetch(); }
-        else showNotif(res?.error || 'Error', 'error');
-      } catch { showNotif('Error de conexión', 'error'); }
-    });
+    askConfirm(
+      'Eliminar Premio',
+      'Esta acción eliminará el premio permanentemente y no se puede deshacer. ¿Confirmas?',
+      async () => {
+        try {
+          const res = (await eliminarPremio({ variables: { idPremio: id } })).data?.eliminarPremio;
+          if (res?.ok) { showNotif('Premio eliminado correctamente'); refetch(); }
+          else showNotif(res?.error || 'Error', 'error');
+        } catch { showNotif('Error de conexión', 'error'); }
+      }
+    );
   };
 
   // ── PremioDescriptor handlers ──
@@ -434,65 +467,134 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
 
       <Divider sx={{ mb: 3 }} />
 
-      {/* Premios */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+      {/* Premios agrupados por oferta */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Premios</Typography>
         <Button variant="contained" startIcon={<PlusOutlined />} onClick={() => openPremioDialog()}>Nuevo Premio</Button>
       </Box>
-      <TableContainer component={Paper} elevation={0}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell width={60}>ID</TableCell>
-              <TableCell>Evento</TableCell>
-              <TableCell>Área</TableCell>
-              <TableCell>Descriptores</TableCell>
-              <TableCell align="center">Monto (Bs.)</TableCell>
-              <TableCell align="center">Nro. Ganadores</TableCell>
-              <TableCell align="center">Estado</TableCell>
-              <TableCell align="right" width={130}>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {premios.map(p => (
-              <TableRow key={p.idPremio} hover>
-                <TableCell>{p.idPremio}</TableCell>
-                <TableCell>{p.evento.nombre}</TableCell>
-                <TableCell>{p.area.nombre}</TableCell>
-                <TableCell>
-                  <Stack direction="row" flexWrap="wrap" gap={0.5}>
-                    {(p.premioDescriptores || []).map(pd => (
-                      <Chip key={pd.id} label={pd.descriptor.descripcion} size="small" variant="outlined" color="secondary" />
-                    ))}
-                    {(p.premioDescriptores || []).length === 0 && (
-                      <Typography variant="caption" color="text.secondary">Sin descriptores</Typography>
-                    )}
-                  </Stack>
-                </TableCell>
-                <TableCell align="center"><Typography fontWeight={600}>{p.monto}</Typography></TableCell>
-                <TableCell align="center">{p.numeroGanadores}</TableCell>
-                <TableCell align="center">
-                  <Chip label={p.estado ? 'Activo' : 'Inactivo'} size="small" color={p.estado ? 'success' : 'default'} />
-                </TableCell>
-                <TableCell align="right">
-                  <Tooltip title="Gestionar descriptores">
-                    <IconButton size="small" color="secondary" onClick={() => openPdDialog(p)}><TagOutlined /></IconButton>
-                  </Tooltip>
-                  <Tooltip title="Editar">
-                    <IconButton size="small" color="primary" onClick={() => openPremioDialog(p)}><EditOutlined /></IconButton>
-                  </Tooltip>
-                  <Tooltip title="Desactivar">
-                    <IconButton size="small" color="error" onClick={() => handleDeletePremio(p.idPremio)}><DeleteOutlined /></IconButton>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            ))}
-            {premios.length === 0 && (
-              <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin premios registrados.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {(() => {
+        // Asociar cada premio con su oferta (matching evento + área)
+        const premiosConOferta = premios.map(p => ({
+          ...p,
+          _oferta: ofertas.find(o =>
+            o.categoriaEvento?.evento?.idEvento === p.evento?.idEvento &&
+            o.modalidadArea?.area?.idArea === p.area?.idArea
+          ) || null,
+        }));
+
+        // Agrupar por oferta
+        const grupos = premiosConOferta.reduce((acc, p) => {
+          const key = p._oferta?.idOferta || `evento_${p.evento?.idEvento}_area_${p.area?.idArea}`;
+          if (!acc[key]) acc[key] = { oferta: p._oferta, evento: p.evento, area: p.area, premios: [] };
+          acc[key].premios.push(p);
+          return acc;
+        }, {});
+
+        const gruposList = Object.values(grupos);
+
+        if (gruposList.length === 0) {
+          return (
+            <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+              Sin premios registrados.
+            </Box>
+          );
+        }
+
+        return gruposList.map((grupo, gi) => {
+          const key = grupo.oferta?.idOferta || `g_${gi}`;
+          const isOpen = premiosExpandidos.has(key);
+          return (
+            <Box key={key} sx={{ mb: 2 }}>
+              {/* Cabecera colapsable */}
+              <Box sx={{
+                px: 2, py: 1.25,
+                borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                background: 'linear-gradient(135deg, rgba(114,46,209,0.08), rgba(114,46,209,0.02))',
+                border: '1px solid rgba(114,46,209,0.25)',
+                display: 'flex', alignItems: 'center', gap: 1.5,
+                cursor: 'default',
+              }}>
+                <GoldOutlined style={{ color: '#722ed1', fontSize: 17 }} />
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="secondary.main">
+                    {grupo.oferta?.nombre || `${grupo.evento?.nombre} — ${grupo.area?.nombre}`}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {grupo.evento?.nombre}
+                    {grupo.oferta?.categoriaEvento?.evento?.version
+                      ? ` v${grupo.oferta.categoriaEvento.evento.version}`
+                      : ''}
+                  </Typography>
+                </Box>
+                <Chip
+                  label={isOpen
+                    ? `▲ ${grupo.premios.length} premio(s)`
+                    : `▼ ${grupo.premios.length} premio(s)`}
+                  size="small"
+                  color="secondary"
+                  variant={isOpen ? 'filled' : 'outlined'}
+                  onClick={() => togglePremioGrupo(key)}
+                  sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                />
+              </Box>
+
+              {isOpen && (
+                <TableContainer component={Paper} elevation={0}
+                  sx={{ border: '1px solid rgba(114,46,209,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell align="center" width={110}>Lugar</TableCell>
+                        <TableCell>Descriptores</TableCell>
+                        <TableCell align="center">Monto (Bs.)</TableCell>
+                        <TableCell align="right" width={120}>Acciones</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {grupo.premios
+                        .slice()
+                        .sort((a, b) => a.numeroGanadores - b.numeroGanadores)
+                        .map(p => (
+                          <TableRow key={p.idPremio} hover>
+                            <TableCell align="center">
+                              <Typography fontWeight={700} fontSize={14}>
+                                {posLabel(p.numeroGanadores)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                                {(p.premioDescriptores || []).map(pd => (
+                                  <Chip key={pd.id} label={pd.descriptor.descripcion} size="small" variant="outlined" color="secondary" />
+                                ))}
+                                {(p.premioDescriptores || []).length === 0 && (
+                                  <Typography variant="caption" color="text.secondary">Sin descriptores</Typography>
+                                )}
+                              </Stack>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Typography fontWeight={600}>{p.monto ? `Bs. ${p.monto}` : '—'}</Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Tooltip title="Gestionar descriptores">
+                                <IconButton size="small" color="secondary" onClick={() => openPdDialog(p)}><TagOutlined /></IconButton>
+                              </Tooltip>
+                              <Tooltip title="Editar">
+                                <IconButton size="small" color="primary" onClick={() => openPremioDialog(p)}><EditOutlined /></IconButton>
+                              </Tooltip>
+                              <Tooltip title="Eliminar">
+                                <IconButton size="small" color="error" onClick={() => handleDeletePremio(p.idPremio)}><DeleteOutlined /></IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          );
+        });
+      })()}
 
       {/* ── Dialogs ── */}
       {/* TipoDescriptor Dialog */}
@@ -531,78 +633,66 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
         </DialogActions>
       </Dialog>
 
-      {/* Premio Dialog */}
+      {/* Premio Dialog — mismo formulario para crear y editar */}
       <Dialog open={premioDialog.open} onClose={() => setPremioDialog({ open: false, item: null })} maxWidth="sm" fullWidth>
         <DialogTitle>{premioDialog.item ? 'Editar Premio' : 'Nuevo Premio'}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            {premioDialog.item ? (
-              /* ── Modo edición: muestra info del evento/área y permite editar monto y ganadores ── */
-              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">Evento / Área (no editable)</Typography>
-                <Typography variant="body2" fontWeight={600}>
-                  {premioDialog.item.evento?.nombre} — {premioDialog.item.area?.nombre}
-                </Typography>
-              </Box>
-            ) : (
-              /* ── Modo creación: selección por oferta ── */
-              <FormControl fullWidth required>
-                <InputLabel>Oferta académica</InputLabel>
-                <Select
-                  value={premioForm.idOferta}
-                  label="Oferta académica"
-                  onChange={e => setPremioForm(p => ({ ...p, idOferta: e.target.value }))}
-                >
-                  {ofertas.filter(o => o.estado).map(o => (
-                    <MenuItem key={o.idOferta} value={o.idOferta}>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>{o.nombre}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {o.categoriaEvento?.evento?.nombre}
-                          {o.categoriaEvento?.evento?.version ? ` — v${o.categoriaEvento.evento.version}` : ''}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
+            {/* Oferta */}
+            <FormControl fullWidth required>
+              <InputLabel>Oferta académica</InputLabel>
+              <Select
+                value={premioForm.idOferta}
+                label="Oferta académica"
+                onChange={e => setPremioForm(p => ({ ...p, idOferta: e.target.value }))}
+              >
+                {ofertas.filter(o => o.estado).map(o => (
+                  <MenuItem key={o.idOferta} value={o.idOferta}>
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>{o.nombre}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {o.categoriaEvento?.evento?.nombre}
+                        {o.categoriaEvento?.evento?.version ? ` — v${o.categoriaEvento.evento.version}` : ''}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* Tipo de Premio */}
-            {!premioDialog.item && (
-              <>
-                <FormControl fullWidth>
-                  <InputLabel>Tipo de Premio</InputLabel>
-                  <Select
-                    value={premioForm.idTipoDescriptor}
-                    label="Tipo de Premio"
-                    onChange={e => setPremioForm(p => ({ ...p, idTipoDescriptor: e.target.value, idDescriptor: '' }))}
-                  >
-                    <MenuItem value=""><em>Sin tipo</em></MenuItem>
-                    {tipos.filter(t => t.estado).map(t => (
-                      <MenuItem key={t.idTipoDescriptor} value={t.idTipoDescriptor}>{t.nombre}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Tipo de Premio</InputLabel>
+              <Select
+                value={premioForm.idTipoDescriptor}
+                label="Tipo de Premio"
+                onChange={e => setPremioForm(p => ({ ...p, idTipoDescriptor: e.target.value, idDescriptor: '' }))}
+              >
+                <MenuItem value=""><em>Sin tipo</em></MenuItem>
+                {tipos.filter(t => t.estado).map(t => (
+                  <MenuItem key={t.idTipoDescriptor} value={t.idTipoDescriptor}>{t.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-                <FormControl fullWidth disabled={!premioForm.idTipoDescriptor}>
-                  <InputLabel>Premio</InputLabel>
-                  <Select
-                    value={premioForm.idDescriptor}
-                    label="Premio"
-                    onChange={e => setPremioForm(p => ({ ...p, idDescriptor: e.target.value }))}
-                  >
-                    <MenuItem value=""><em>Sin premio</em></MenuItem>
-                    {descriptores
-                      .filter(d => d.estado && d.tipoDescriptor.idTipoDescriptor === premioForm.idTipoDescriptor)
-                      .map(d => (
-                        <MenuItem key={d.idDescriptor} value={d.idDescriptor}>{d.descripcion}</MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
-              </>
-            )}
+            {/* Descriptor / Premio */}
+            <FormControl fullWidth disabled={!premioForm.idTipoDescriptor}>
+              <InputLabel>Premio</InputLabel>
+              <Select
+                value={premioForm.idDescriptor}
+                label="Premio"
+                onChange={e => setPremioForm(p => ({ ...p, idDescriptor: e.target.value }))}
+              >
+                <MenuItem value=""><em>Sin premio</em></MenuItem>
+                {descriptores
+                  .filter(d => d.estado && d.tipoDescriptor.idTipoDescriptor === premioForm.idTipoDescriptor)
+                  .map(d => (
+                    <MenuItem key={d.idDescriptor} value={d.idDescriptor}>{d.descripcion}</MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
 
+            {/* Monto */}
             <TextField
               label="Monto (Bs.)"
               type="number"
@@ -613,13 +703,14 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
               onChange={e => setPremioForm(p => ({ ...p, monto: e.target.value }))}
             />
 
+            {/* Lugar */}
             <TextField
-              label="Número de ganadores"
+              label="Lugar (posición)"
               type="number"
               fullWidth
               required
               value={premioForm.numeroGanadores}
-              helperText={`Posición(es): ${positionLabel(premioForm.numeroGanadores)}`}
+              helperText={`Este premio es para el ${positionLabel(premioForm.numeroGanadores)}`}
               inputProps={{ min: 1, max: 3 }}
               onChange={e => setPremioForm(p => ({ ...p, numeroGanadores: e.target.value }))}
             />
@@ -629,7 +720,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
           <Button onClick={() => setPremioDialog({ open: false, item: null })} color="secondary">Cancelar</Button>
           <Button
             variant="contained"
-            disabled={(!premioDialog.item && !premioForm.idOferta) || !premioForm.numeroGanadores || saving}
+            disabled={!premioForm.idOferta || !premioForm.numeroGanadores || saving}
             onClick={handleSavePremio}
           >
             {saving ? <CircularProgress size={22} color="inherit" /> : 'Guardar'}
@@ -698,28 +789,30 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
   );
 }
 
-// ── Tab 2: Ranking / Leaderboard ──────────────────────────────────────────────
-function RankingTab({ actas, premios, refetch, showNotif }) {
-  const [crearCandidato] = useMutation(CREAR_CANDIDATO);
+// ── Tab 2: Ranking ────────────────────────────────────────────────────────────
+function RankingTab({ actas, premios, ganadores, refetch, showNotif }) {
   const [cerrarActa] = useMutation(CERRAR_ACTA_RESULTADOS);
   const [saving, setSaving] = useState(false);
-  const [candidatoDialog, setCandidatoDialog] = useState({ open: false, acta: null });
-  const [candidatoForm, setCandidatoForm] = useState({ idPremio: '', observacion: '' });
-  const [cerrarDialog, setCerrarDialog] = useState({ open: false, oferta: null, evento: null });
-  const [cerrarPremio, setCerrarPremio] = useState('');
+  const [cerrarDialog, setCerrarDialog] = useState({ open: false, oferta: null });
 
   const handleCerrarActa = async () => {
-    if (!cerrarPremio || !cerrarDialog.evento) return;
+    if (!cerrarDialog.oferta) return;
     setSaving(true);
     try {
       const res = (await cerrarActa({
-        variables: { idEvento: cerrarDialog.evento.idEvento, idPremio: cerrarPremio },
+        variables: { idOferta: cerrarDialog.oferta.idOferta },
       })).data?.cerrarActaResultados;
       if (res?.ok) {
-        showNotif(`Acta cerrada. ${res.candidatos?.length || 0} candidato(s) adjudicado(s) automáticamente.`);
+        const g = res.ganadores?.length || 0;
+        const e = res.empates?.length || 0;
+        const msg = g > 0
+          ? `${g} ganador(es) adjudicado(s) automáticamente.${e > 0 ? ` ${e} empate(s) requieren resolución manual.` : ''}`
+          : e > 0
+          ? `${e} proyecto(s) empatados — ve a "Ganadores" para resolverlos manualmente.`
+          : 'Acta cerrada. No hay proyectos suficientes para los premios configurados.';
+        showNotif(msg, e > 0 && g === 0 ? 'warning' : 'success');
         refetch();
-        setCerrarDialog({ open: false, oferta: null, evento: null });
-        setCerrarPremio('');
+        setCerrarDialog({ open: false, oferta: null });
       } else {
         showNotif(res?.error || 'Error al cerrar acta', 'error');
       }
@@ -728,8 +821,6 @@ function RankingTab({ actas, premios, refetch, showNotif }) {
   };
 
   const actasConNota = [...actas].filter(a => parseFloat(a.notaFinal) > 0);
-
-  // Agrupar por oferta
   const actasPorOferta = actasConNota.reduce((acc, acta) => {
     const oferta = acta.proyecto?.ofertaEaCarrera?.oferta;
     const key = oferta?.idOferta || 'sin_oferta';
@@ -737,46 +828,24 @@ function RankingTab({ actas, premios, refetch, showNotif }) {
     acc[key].actas.push(acta);
     return acc;
   }, {});
-
-  // Ordenar actas dentro de cada grupo por nota descendente
   const gruposOferta = Object.values(actasPorOferta).map(g => ({
     ...g,
     actas: [...g.actas].sort((a, b) => parseFloat(b.notaFinal) - parseFloat(a.notaFinal)),
   }));
 
-  const premiosActivos = premios.filter(p => p.estado);
   const totalActas = actasConNota.length;
   const todasNotas = actasConNota.map(a => parseFloat(a.notaFinal));
   const notaMax = todasNotas.length > 0 ? Math.max(...todasNotas) : 0;
   const notaMin = todasNotas.length > 0 ? Math.min(...todasNotas) : 0;
+  const premiosActivos = premios.filter(p => p.estado);
 
-  const openCandidatoDialog = (acta) => {
-    setCandidatoForm({ idPremio: '', observacion: '' });
-    setCandidatoDialog({ open: true, acta });
-  };
-
-  const handlePostular = async () => {
-    const { acta } = candidatoDialog;
-    setSaving(true);
-    try {
-      const res = (await crearCandidato({
-        variables: {
-          idPremio: candidatoForm.idPremio,
-          idProyecto: acta.proyecto.idProyecto,
-          idActaEvaluacion: acta.idActaEvaluacion,
-          nota: parseFloat(acta.notaFinal),
-          observacion: candidatoForm.observacion,
-        }
-      })).data?.crearCandidatoPremio;
-      if (res?.ok) { showNotif('Proyecto postulado como candidato'); refetch(); setCandidatoDialog({ open: false, acta: null }); }
-      else showNotif(res?.error || 'Error', 'error');
-    } catch { showNotif('Error de conexión', 'error'); }
-    setSaving(false);
-  };
+  // IDs de ofertas que ya tienen al menos un ganador confirmado
+  const ofertasConGanador = new Set(
+    ganadores.map(g => g.candidatoPremio?.proyecto?.ofertaEaCarrera?.oferta?.idOferta).filter(Boolean)
+  );
 
   return (
     <Box>
-      {/* Summary */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {[
           { label: 'Proyectos evaluados', value: totalActas, color: 'primary.lighter' },
@@ -797,179 +866,100 @@ function RankingTab({ actas, premios, refetch, showNotif }) {
 
       {gruposOferta.length === 0 ? (
         <Alert severity="info">No hay actas con nota final registrada.</Alert>
-      ) : (
-        gruposOferta.map(grupo => {
-          const evento = grupo.oferta?.categoriaEvento?.evento;
-          const maxNotaGrupo = parseFloat(grupo.actas[0]?.notaFinal) || 1;
-          return (
-            <Box key={grupo.oferta?.idOferta || 'sin_oferta'} sx={{ mb: 4 }}>
-              <Box sx={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                p: 1.5, bgcolor: 'primary.lighter', borderRadius: 1, mb: 1
-              }}>
-                <Stack direction="row" alignItems="center" gap={1}>
-                  <TrophyOutlined style={{ fontSize: 18, color: '#1677ff' }} />
-                  <Typography fontWeight={700}>{grupo.oferta?.nombre || 'Sin Oferta'}</Typography>
-                  <Chip label={`${grupo.actas.length} proyecto(s)`} size="small" variant="outlined" />
-                </Stack>
-                <Button
+      ) : gruposOferta.map(grupo => {
+        const maxNotaGrupo = parseFloat(grupo.actas[0]?.notaFinal) || 1;
+        return (
+          <Box key={grupo.oferta?.idOferta || 'sin_oferta'} sx={{ mb: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: 'primary.lighter', borderRadius: 1, mb: 1 }}>
+              <Stack direction="row" alignItems="center" gap={1}>
+                <TrophyOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+                <Typography fontWeight={700}>{grupo.oferta?.nombre || 'Sin Oferta'}</Typography>
+                <Chip label={`${grupo.actas.length} proyecto(s)`} size="small" variant="outlined" />
+              </Stack>
+              {ofertasConGanador.has(grupo.oferta?.idOferta) ? (
+                <Chip
+                  label="Acta cerrada"
+                  color="success"
+                  icon={<CheckCircleOutlined style={{ fontSize: 13 }} />}
                   size="small"
-                  variant="contained"
-                  color="warning"
+                />
+              ) : (
+                <Button
+                  size="small" variant="contained" color="warning"
                   startIcon={<CheckCircleOutlined />}
-                  onClick={() => {
-                    setCerrarDialog({ open: true, oferta: grupo.oferta, evento });
-                    setCerrarPremio('');
-                  }}
+                  onClick={() => setCerrarDialog({ open: true, oferta: grupo.oferta })}
                 >
                   Cerrar Acta
                 </Button>
-              </Box>
-
-              <TableContainer component={Paper} elevation={0}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell width={60} align="center">Pos.</TableCell>
-                      <TableCell>Proyecto</TableCell>
-                      <TableCell>Fecha Evaluación</TableCell>
-                      <TableCell align="center">Nota Final</TableCell>
-                      <TableCell align="right">Acción</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {grupo.actas.map((acta, idx) => {
-                      const nota = parseFloat(acta.notaFinal);
-                      const pct = maxNotaGrupo > 0 ? (nota / maxNotaGrupo) * 100 : 0;
-                      const medalColor = idx === 0 ? '#faad14' : idx === 1 ? '#bfbfbf' : idx === 2 ? '#d46b08' : 'inherit';
-                      return (
-                        <TableRow key={acta.idActaEvaluacion} hover sx={{ bgcolor: idx < 3 ? 'action.hover' : 'inherit' }}>
-                          <TableCell align="center">
-                            <Typography fontWeight={700} sx={{ color: medalColor, fontSize: idx < 3 ? 18 : 14 }}>
-                              {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
-                            <Chip label={acta.proyecto.estado} size="small" sx={{ mt: 0.3 }}
-                              color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
-                          </TableCell>
-                          <TableCell><Typography variant="body2">{acta.fecha}</Typography></TableCell>
-                          <TableCell align="center">
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
-                              <Box sx={{ width: 80, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
-                                <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: idx === 0 ? 'warning.main' : 'primary.main', borderRadius: 3 }} />
-                              </Box>
-                              <Typography fontWeight={700} color={idx === 0 ? 'warning.main' : 'primary.main'}>{nota}</Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button size="small" variant="outlined" color="secondary" startIcon={<TrophyOutlined />}
-                              onClick={() => openCandidatoDialog(acta)}>
-                              Postular
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              )}
             </Box>
-          );
-        })
-      )}
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell width={60} align="center">Pos.</TableCell>
+                    <TableCell>Proyecto</TableCell>
+                    <TableCell>Fecha Evaluación</TableCell>
+                    <TableCell align="center">Nota Final</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {grupo.actas.map((acta, idx) => {
+                    const nota = parseFloat(acta.notaFinal);
+                    const pct = maxNotaGrupo > 0 ? (nota / maxNotaGrupo) * 100 : 0;
+                    const medalColor = idx === 0 ? '#faad14' : idx === 1 ? '#bfbfbf' : idx === 2 ? '#d46b08' : 'inherit';
+                    return (
+                      <TableRow key={acta.idActaEvaluacion} hover sx={{ bgcolor: idx < 3 ? 'action.hover' : 'inherit' }}>
+                        <TableCell align="center">
+                          <Typography fontWeight={700} sx={{ color: medalColor, fontSize: idx < 3 ? 18 : 14 }}>
+                            {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
+                          <Chip label={acta.proyecto.estado} size="small" sx={{ mt: 0.3 }}
+                            color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
+                        </TableCell>
+                        <TableCell><Typography variant="body2">{acta.fecha}</Typography></TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
+                            <Box sx={{ width: 80, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
+                              <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: idx === 0 ? 'warning.main' : 'primary.main', borderRadius: 3 }} />
+                            </Box>
+                            <Typography fontWeight={700} color={idx === 0 ? 'warning.main' : 'primary.main'}>{nota}</Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        );
+      })}
 
-      {/* Cerrar Acta Dialog */}
-      <Dialog open={cerrarDialog.open} onClose={() => setCerrarDialog({ open: false, oferta: null, evento: null })} maxWidth="sm" fullWidth>
+      {/* Confirmar cierre de acta */}
+      <Dialog open={cerrarDialog.open} onClose={() => setCerrarDialog({ open: false, oferta: null })} maxWidth="xs" fullWidth>
         <DialogTitle>
           <Stack direction="row" alignItems="center" gap={1}>
             <TrophyOutlined style={{ color: '#faad14' }} />
-            Cerrar Acta de Resultados
+            Cerrar Acta
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Se adjudicarán automáticamente como candidatos los proyectos con la <strong>nota más alta</strong>.
-            En caso de empate, todos los proyectos empatados serán incluidos.
+            Se asignarán automáticamente los ganadores de cada lugar según las notas.
+            Si hay empate en algún lugar, podrás resolverlo manualmente en la sección "Ganadores".
           </Alert>
-          <Typography variant="body2" sx={{ mb: 1 }}>
+          <Typography variant="body2">
             Oferta: <strong>{cerrarDialog.oferta?.nombre}</strong>
           </Typography>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Evento: <strong>{cerrarDialog.evento?.nombre}</strong>
-          </Typography>
-          <FormControl fullWidth required>
-            <InputLabel>Premio a adjudicar</InputLabel>
-            <Select
-              value={cerrarPremio}
-              label="Premio a adjudicar"
-              onChange={e => setCerrarPremio(e.target.value)}
-            >
-              {premios
-                .filter(p => p.estado && p.evento?.idEvento === cerrarDialog.evento?.idEvento)
-                .map(pr => (
-                  <MenuItem key={pr.idPremio} value={pr.idPremio}>
-                    {pr.area?.nombre} — Bs. {pr.monto}
-                    <Stack direction="row" gap={0.5} sx={{ ml: 1 }}>
-                      {(pr.premioDescriptores || []).map(pd => (
-                        <Chip key={pd.id} label={pd.descriptor.descripcion} size="small" />
-                      ))}
-                    </Stack>
-                  </MenuItem>
-                ))}
-            </Select>
-          </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCerrarDialog({ open: false, oferta: null, evento: null })} color="secondary">Cancelar</Button>
-          <Button
-            variant="contained" color="warning"
-            disabled={!cerrarPremio || saving}
-            onClick={handleCerrarActa}
-          >
-            {saving ? <CircularProgress size={22} color="inherit" /> : 'Cerrar Acta y Adjudicar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Candidato Dialog */}
-      <Dialog open={candidatoDialog.open} onClose={() => setCandidatoDialog({ open: false, acta: null })} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Stack direction="row" alignItems="center" gap={1}>
-            <TrophyOutlined style={{ color: '#faad14' }} />
-            Postular como Candidato
-          </Stack>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-              <Typography variant="body2" fontWeight={500}>{candidatoDialog.acta?.proyecto?.titulo}</Typography>
-              <Typography variant="caption" color="text.secondary">Nota: {candidatoDialog.acta?.notaFinal}</Typography>
-            </Box>
-            <FormControl fullWidth required>
-              <InputLabel>Premio</InputLabel>
-              <Select value={candidatoForm.idPremio} label="Premio" onChange={e => setCandidatoForm(p => ({ ...p, idPremio: e.target.value }))}>
-                {premiosActivos.map(pr => (
-                  <MenuItem key={pr.idPremio} value={pr.idPremio}>
-                    {pr.area.nombre} — {pr.evento.nombre} (Bs. {pr.monto})
-                    <Stack direction="row" gap={0.5} sx={{ ml: 1 }}>
-                      {(pr.premioDescriptores || []).map(pd => (
-                        <Chip key={pd.id} label={pd.descriptor.descripcion} size="small" />
-                      ))}
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField label="Observación (opcional)" fullWidth multiline rows={2}
-              value={candidatoForm.observacion} onChange={e => setCandidatoForm(p => ({ ...p, observacion: e.target.value }))} />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCandidatoDialog({ open: false, acta: null })} color="secondary">Cancelar</Button>
-          <Button variant="contained" color="warning" disabled={!candidatoForm.idPremio || saving} onClick={handlePostular}>
-            {saving ? <CircularProgress size={22} color="inherit" /> : 'Postular'}
+          <Button onClick={() => setCerrarDialog({ open: false, oferta: null })} color="secondary">Cancelar</Button>
+          <Button variant="contained" color="warning" disabled={saving} onClick={handleCerrarActa}>
+            {saving ? <CircularProgress size={22} color="inherit" /> : 'Confirmar y Cerrar'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -977,148 +967,209 @@ function RankingTab({ actas, premios, refetch, showNotif }) {
   );
 }
 
-// ── Tab 3: Adjudicación ───────────────────────────────────────────────────────
-function AdjudicacionTab({ candidatos, refetch, showNotif }) {
+// ── Tab 3: Ganadores ──────────────────────────────────────────────────────────
+const posLabel = (n) => ({ 1: '🥇 1er Lugar', 2: '🥈 2do Lugar', 3: '🥉 3er Lugar' }[n] || `${n}° Lugar`);
+
+function GanadoresTab({ ganadores, empates, refetch, showNotif }) {
   const [editarCandidato] = useMutation(EDITAR_CANDIDATO);
   const [crearGanador] = useMutation(CREAR_GANADOR);
   const [saving, setSaving] = useState(false);
-  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onOk: null, color: 'error' });
-  const askConfirm = (title, message, onOk, color = 'error') => setConfirm({ open: true, title, message, onOk, color });
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onOk: null });
+  const askConfirm = (title, message, onOk) => setConfirm({ open: true, title, message, onOk });
   const closeConfirm = () => setConfirm(p => ({ ...p, open: false }));
+  const [expandidos, setExpandidos] = useState(new Set());
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
-  const handleMarcarGanador = (candidato) => {
+  const handleElegirGanador = (candidato, otrosEmpate) => {
     askConfirm(
-      'Adjudicar Ganador',
-      `¿Confirmas que "${candidato.proyecto.titulo}" es el GANADOR? Los demás candidatos de este premio pasarán a estado "Descartado". Esta acción no se puede deshacer.`,
-      async () => {
-      setSaving(true);
-      try {
-      // Crear el registro de ganador
-      const resGanador = (await crearGanador({ variables: { idCandidatoPremio: candidato.idCandidatoPremio } })).data?.crearGanadorPremio;
-      if (!resGanador?.ok) { showNotif(resGanador?.error || 'Error al crear ganador', 'error'); setSaving(false); return; }
-
-      // Actualizar estado del candidato ganador
-      await editarCandidato({ variables: { idCandidatoPremio: candidato.idCandidatoPremio, estado: 'ganador' } });
-
-      // Descartar los demás candidatos del mismo premio
-      const otrosCandidatos = candidatos.filter(
-        c => c.premio.idPremio === candidato.premio.idPremio &&
-          c.idCandidatoPremio !== candidato.idCandidatoPremio &&
-          c.estado?.toLowerCase() === 'candidato'
-      );
-      for (const otro of otrosCandidatos) {
-        await editarCandidato({ variables: { idCandidatoPremio: otro.idCandidatoPremio, estado: 'descartado' } });
-      }
-
-      showNotif('¡Ganador adjudicado exitosamente!');
-      refetch();
-      } catch { showNotif('Error de conexión', 'error'); }
-      setSaving(false);
-    },
-    'success'
-    );
-  };
-
-  const handleDescartar = (candidato) => {
-    askConfirm(
-      'Descartar candidato',
-      `¿Descartar a "${candidato.proyecto.titulo}" de este premio?`,
+      'Resolver Empate',
+      `¿Confirmas a "${candidato.proyecto.titulo}" como ganador de este lugar? Los demás proyectos empatados quedarán descartados.`,
       async () => {
         setSaving(true);
         try {
-          const res = (await editarCandidato({ variables: { idCandidatoPremio: candidato.idCandidatoPremio, estado: 'descartado' } })).data?.editarCandidatoPremio;
-          if (res?.ok) { showNotif('Candidato descartado'); refetch(); }
-          else showNotif(res?.error || 'Error', 'error');
+          const resGanador = (await crearGanador({ variables: { idCandidatoPremio: candidato.idCandidatoPremio } })).data?.crearGanadorPremio;
+          if (!resGanador?.ok) { showNotif(resGanador?.error || 'Error', 'error'); setSaving(false); return; }
+          await editarCandidato({ variables: { idCandidatoPremio: candidato.idCandidatoPremio, estado: 'ganador' } });
+          for (const otro of otrosEmpate) {
+            if (otro.idCandidatoPremio !== candidato.idCandidatoPremio) {
+              await editarCandidato({ variables: { idCandidatoPremio: otro.idCandidatoPremio, estado: 'descartado' } });
+            }
+          }
+          showNotif('Ganador adjudicado exitosamente');
+          refetch();
         } catch { showNotif('Error de conexión', 'error'); }
         setSaving(false);
       }
     );
   };
 
-  // Agrupar por oferta del proyecto del candidato
-  const candidatosPorOferta = candidatos.reduce((acc, c) => {
-    const oferta = c.proyecto?.ofertaEaCarrera?.oferta;
+  // Agrupar ganadores por oferta, ordenados por posición
+  const ganadoresPorOferta = ganadores.reduce((acc, g) => {
+    const oferta = g.candidatoPremio?.proyecto?.ofertaEaCarrera?.oferta;
     const key = oferta?.idOferta || 'sin_oferta';
-    if (!acc[key]) acc[key] = { oferta, candidatos: [] };
+    if (!acc[key]) acc[key] = { oferta, items: [] };
+    acc[key].items.push(g);
+    return acc;
+  }, {});
+  const gruposGanadores = Object.values(ganadoresPorOferta).map(g => ({
+    ...g,
+    items: [...g.items].sort((a, b) =>
+      (a.candidatoPremio?.premio?.numeroGanadores || 99) - (b.candidatoPremio?.premio?.numeroGanadores || 99)
+    ),
+  }));
+
+  // Agrupar empates por premio
+  const empatesPorPremio = empates.reduce((acc, c) => {
+    const key = c.premio?.idPremio || 'sin_premio';
+    if (!acc[key]) acc[key] = { premio: c.premio, oferta: c.proyecto?.ofertaEaCarrera?.oferta, candidatos: [] };
     acc[key].candidatos.push(c);
     return acc;
   }, {});
-
-  const grupos = Object.values(candidatosPorOferta);
+  const gruposEmpate = Object.values(empatesPorPremio);
 
   return (
     <Box>
-      {grupos.length === 0 ? (
-        <Alert severity="info">No hay candidatos registrados. Postula proyectos desde el tab "Ranking".</Alert>
-      ) : (
-        grupos.map(grupo => (
-          <Box key={grupo.oferta?.idOferta || 'sin_oferta'} sx={{ mb: 4 }}>
-            <Box sx={{ p: 1.5, bgcolor: 'secondary.lighter', borderRadius: 1, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <GoldOutlined style={{ fontSize: 20, color: '#722ed1' }} />
-              <Box>
-                <Typography fontWeight={700}>{grupo.oferta?.nombre || 'Sin Oferta'}</Typography>
-                <Chip label={`${grupo.candidatos.length} candidato(s)`} size="small" variant="outlined" color="secondary" />
-              </Box>
+      {/* ── Empates pendientes ── */}
+      {gruposEmpate.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Hay <strong>{gruposEmpate.length} empate(s)</strong> pendientes de resolución. Elige el ganador de cada lugar.
+          </Alert>
+          {gruposEmpate.map(grupo => (
+            <Box key={grupo.premio?.idPremio} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'warning.light', borderRadius: 1 }}>
+              <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 1 }}>
+                <ExclamationCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                <Typography fontWeight={700} color="warning.main">
+                  Empate — {posLabel(grupo.premio?.numeroGanadores)} | {grupo.oferta?.nombre || grupo.premio?.area?.nombre}
+                </Typography>
+              </Stack>
+              <Stack spacing={1}>
+                {grupo.candidatos.map(c => (
+                  <Box key={c.idCandidatoPremio} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight={600}>{c.proyecto.titulo}</Typography>
+                      <Typography variant="caption" color="text.secondary">Nota: {c.nota}</Typography>
+                    </Box>
+                    <Button
+                      size="small" variant="contained" color="success"
+                      startIcon={<CheckCircleOutlined />}
+                      disabled={saving}
+                      onClick={() => handleElegirGanador(c, grupo.candidatos)}
+                    >
+                      Elegir como Ganador
+                    </Button>
+                  </Box>
+                ))}
+              </Stack>
             </Box>
-            <TableContainer component={Paper} elevation={0} variant="outlined">
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Proyecto</TableCell>
-                    <TableCell align="center">Nota</TableCell>
-                    <TableCell>Observación</TableCell>
-                    <TableCell align="center">Estado</TableCell>
-                    <TableCell align="right">Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {grupo.candidatos
-                    .sort((a, b) => parseFloat(b.nota) - parseFloat(a.nota))
-                    .map(c => (
-                      <TableRow key={c.idCandidatoPremio} hover>
-                        <TableCell><Typography variant="body2" fontWeight={500}>{c.proyecto.titulo}</Typography></TableCell>
-                        <TableCell align="center"><Typography fontWeight={700} color="primary.main">{c.nota}</Typography></TableCell>
-                        <TableCell><Typography variant="body2" color="text.secondary">{c.observacion || '—'}</Typography></TableCell>
-                        <TableCell align="center">
-                          <Chip label={c.estado} size="small" color={estadoColor[c.estado?.toLowerCase()] || 'default'} />
-                        </TableCell>
-                        <TableCell align="right">
-                          {c.estado?.toLowerCase() === 'candidato' && (
-                            <>
-                              <Tooltip title="Marcar como ganador">
-                                <IconButton size="small" color="success" disabled={saving} onClick={() => handleMarcarGanador(c)}>
-                                  <CheckCircleOutlined />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Descartar candidato">
-                                <IconButton size="small" color="error" disabled={saving} onClick={() => handleDescartar(c)}>
-                                  <CloseCircleOutlined />
-                                </IconButton>
-                              </Tooltip>
-                            </>
-                          )}
-                          {c.estado?.toLowerCase() === 'ganador' && (
-                            <Chip label="GANADOR" color="success" size="small" icon={<TrophyOutlined style={{ fontSize: 12 }} />} />
-                          )}
-                          {c.estado?.toLowerCase() === 'descartado' && (
-                            <Typography variant="caption" color="text.secondary">Descartado</Typography>
-                          )}
-                        </TableCell>
+          ))}
+          <Divider sx={{ my: 3 }} />
+        </Box>
+      )}
+
+      {/* ── Ganadores por oferta (colapsables) ── */}
+      {gruposGanadores.length === 0 ? (
+        <Alert severity="info">
+          {gruposEmpate.length > 0
+            ? 'Aún no hay ganadores confirmados. Resuelve los empates arriba.'
+            : 'No hay ganadores registrados. Cierra un acta desde la sección "Ranking".'}
+        </Alert>
+      ) : (
+        gruposGanadores.map(grupo => {
+          const key = grupo.oferta?.idOferta || 'sin_oferta';
+          const isOpen = expandidos.has(key);
+          return (
+            <Box key={key} sx={{ mb: 2 }}>
+              {/* Cabecera colapsable */}
+              <Box sx={{
+                px: 2, py: 1.5,
+                borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                background: 'linear-gradient(135deg, rgba(56,158,13,0.10), rgba(56,158,13,0.03))',
+                border: '1px solid rgba(56,158,13,0.30)',
+                display: 'flex', alignItems: 'center', gap: 1.5,
+                cursor: 'default',
+              }}>
+                <GoldOutlined style={{ color: '#389e0d', fontSize: 18 }} />
+                <Typography variant="subtitle2" fontWeight={700} color="success.dark" sx={{ flex: 1 }}>
+                  {grupo.oferta?.nombre || 'Sin Oferta'}
+                </Typography>
+                <Chip
+                  label={isOpen
+                    ? `▲ ${grupo.items.length} ganador(es)`
+                    : `▼ ${grupo.items.length} ganador(es)`}
+                  size="small"
+                  color="success"
+                  variant={isOpen ? 'filled' : 'outlined'}
+                  onClick={() => toggleExpandido(key)}
+                  sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                />
+              </Box>
+
+              {/* Tabla colapsable */}
+              {isOpen && (
+                <TableContainer
+                  component={Paper}
+                  elevation={0}
+                  sx={{ border: '1px solid rgba(56,158,13,0.30)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}
+                >
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width={130} align="center">Lugar</TableCell>
+                        <TableCell>Proyecto</TableCell>
+                        <TableCell align="center">Nota</TableCell>
+                        <TableCell>Premio</TableCell>
                       </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Box>
-        ))
+                    </TableHead>
+                    <TableBody>
+                      {grupo.items.map(g => {
+                        const cp = g.candidatoPremio;
+                        const pos = cp?.premio?.numeroGanadores;
+                        return (
+                          <TableRow key={g.idGanadorPremio} hover>
+                            <TableCell align="center">
+                              <Typography fontWeight={700} fontSize={pos <= 3 ? 16 : 14}>
+                                {posLabel(pos)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight={600}>{cp?.proyecto?.titulo}</Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip label={cp?.nota} color="primary" size="small" />
+                            </TableCell>
+                            <TableCell>
+                              <Stack direction="row" gap={0.5} flexWrap="wrap">
+                                {cp?.premio?.monto && (
+                                  <Chip label={`Bs. ${cp.premio.monto}`} size="small" color="warning" variant="outlined" />
+                                )}
+                                {(cp?.premio?.premioDescriptores || []).map(pd => (
+                                  <Chip key={pd.descriptor?.descripcion} label={pd.descriptor?.descripcion} size="small" variant="outlined" />
+                                ))}
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          );
+        })
       )}
 
       <ConfirmDialog
         open={confirm.open}
         title={confirm.title}
         message={confirm.message}
-        confirmColor={confirm.color}
-        confirmLabel={confirm.color === 'success' ? 'Confirmar' : 'Aceptar'}
+        confirmLabel="Confirmar"
+        confirmColor="success"
         onConfirm={() => { confirm.onOk?.(); closeConfirm(); }}
         onCancel={closeConfirm}
       />
@@ -1136,8 +1187,9 @@ export default function CuadroHonorPage() {
   const tipos = data?.todosSLosTiposDescriptores || [];
   const descriptores = data?.todosLosDescriptores || [];
   const premios = data?.todosLosPremios || [];
-  const candidatos = data?.todosLosCandidatosPremios?.filter(c => c.activo) || [];
   const actas = data?.todasLasActas || [];
+  const ganadores = data?.todosLosGanadoresPremios?.filter(g => g.estado) || [];
+  const empates = data?.todosLosCandidatosPremios?.filter(c => c.activo && c.estado?.toLowerCase() === 'candidato') || [];
   const ofertas = data?.todasLasOfertas || [];
   const eventos = data?.todosLosEventos || [];
   const areas = data?.todasLasAreas || [];
@@ -1154,17 +1206,23 @@ export default function CuadroHonorPage() {
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 0 }}>
             <Tab label="Gestión de Premios" icon={<GoldOutlined />} iconPosition="start" />
             <Tab label="Ranking / Candidatos" icon={<TrophyOutlined />} iconPosition="start" />
-            <Tab label="Adjudicación de Ganadores" icon={<CheckCircleOutlined />} iconPosition="start" />
+            <Tab
+              label="Ganadores"
+              icon={empates.length > 0
+                ? <Chip label={empates.length} size="small" color="warning" sx={{ height: 18, fontSize: '0.65rem' }} />
+                : <CheckCircleOutlined />}
+              iconPosition="start"
+            />
           </Tabs>
 
           <TabPanel value={tab} index={0}>
             <GestionPremiosTab tipos={tipos} descriptores={descriptores} premios={premios} ofertas={ofertas} eventos={eventos} areas={areas} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
           <TabPanel value={tab} index={1}>
-            <RankingTab actas={actas} premios={premios} refetch={refetch} showNotif={showNotif} />
+            <RankingTab actas={actas} premios={premios} ganadores={ganadores} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
           <TabPanel value={tab} index={2}>
-            <AdjudicacionTab candidatos={candidatos} refetch={refetch} showNotif={showNotif} />
+            <GanadoresTab ganadores={ganadores} empates={empates} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
         </>
       )}

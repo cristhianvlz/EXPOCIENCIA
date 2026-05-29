@@ -371,11 +371,15 @@ class EliminarPremio(graphene.Mutation):
     def mutate(root, info, id_premio):
         try:
             premio = Premio.objects.get(pk=id_premio)
-            premio.estado = False
-            premio.save()
-            return EliminarPremio(ok=True, error=None) # type: ignore
         except Premio.DoesNotExist:
             return EliminarPremio(ok=False, error="El premio no existe.") # type: ignore
+
+        try:
+            # Los PremioDescriptor se eliminan en cascada automáticamente
+            premio.delete()
+            return EliminarPremio(ok=True, error=None) # type: ignore
+        except Exception:
+            return EliminarPremio(ok=False, error="No se puede eliminar: el premio tiene candidatos o ganadores asignados. Elimínalos primero.") # type: ignore
 
 
 # ================= MUTACIONES PremioDescriptor =================
@@ -671,68 +675,136 @@ class EliminarCertificado(graphene.Mutation):
 
 class CerrarActaResultados(graphene.Mutation):
     class Arguments:
-        id_evento = graphene.ID(required=True)
-        id_premio = graphene.ID(required=True)
+        id_oferta = graphene.ID(required=True)
 
-    candidatos = graphene.List(CandidatoPremioType)
     ok = graphene.Boolean()
     error = graphene.String()
+    ganadores = graphene.List(CandidatoPremioType)
+    empates = graphene.List(CandidatoPremioType)
 
     @staticmethod
-    def mutate(root, info, id_evento, id_premio):
-        from django.utils import timezone
-        from apps.eventos.models import Cronograma, Evento
-        now = timezone.now()
-
+    def mutate(root, info, id_oferta):
         try:
-            evento = Evento.objects.get(pk=id_evento)
-        except Evento.DoesNotExist:
-            return CerrarActaResultados(candidatos=None, ok=False, error="El evento no existe.") # type: ignore
+            oferta = Oferta.objects.select_related(
+                'categoria_evento__evento',
+                'modalidad_area__area'
+            ).get(pk=id_oferta)
+        except Oferta.DoesNotExist:
+            return CerrarActaResultados(ok=False, error="La oferta no existe.", ganadores=[], empates=[]) # type: ignore
 
-        cronograma = Cronograma.objects.filter(
-            evento=evento,
-            actividad__nombre_actividad__icontains='resultado',
+        evento = oferta.categoria_evento.evento
+        area = oferta.modalidad_area.area
+
+        # Premios de esta oferta ordenados por lugar (numero_ganadores = posición)
+        premios_list = list(Premio.objects.filter(
+            evento=evento, area=area, estado=True
+        ).order_by('numero_ganadores'))
+
+        if not premios_list:
+            return CerrarActaResultados(ok=False, error="No hay premios configurados para esta oferta.", ganadores=[], empates=[]) # type: ignore
+
+        # Actas de proyectos de esta oferta, ordenadas por nota descendente
+        actas_list = list(ActaEvaluacion.objects.filter(
+            proyecto__oferta_ea_carrera__oferta=oferta,
             estado=True,
-        ).first()
+        ).order_by('-nota_final').select_related('proyecto'))
 
-        if not cronograma:
-            return CerrarActaResultados(candidatos=None, ok=False, error="No existe cronograma de Publicación de Resultados para este evento.") # type: ignore
+        if not actas_list:
+            return CerrarActaResultados(ok=False, error="No hay proyectos evaluados para esta oferta.", ganadores=[], empates=[]) # type: ignore
 
-        if now <= cronograma.fecha_fin:
-            return CerrarActaResultados(candidatos=None, ok=False, error="El período de Publicación de Resultados aún no ha finalizado.") # type: ignore
+        # Agrupar actas por nota (misma nota = empate en ese lugar)
+        rank_groups = []
+        current_nota = None
+        for acta in actas_list:
+            if acta.nota_final != current_nota:
+                rank_groups.append([])
+                current_nota = acta.nota_final
+            rank_groups[-1].append(acta)
 
-        try:
-            premio = Premio.objects.get(pk=id_premio)
-        except Premio.DoesNotExist:
-            return CerrarActaResultados(candidatos=None, ok=False, error="El premio no existe.") # type: ignore
+        ganadores_resultado = []
+        empates_resultado = []
 
-        actas = ActaEvaluacion.objects.filter(
-            proyecto__oferta_ea_carrera__oferta__categoria_evento__evento=evento,
-            estado=True,
-        ).order_by('-nota_final')
+        # Premios que ya tienen ganador confirmado → excluir del procesamiento
+        premios_ya_cerrados = set(
+            GanadorPremio.objects.filter(
+                candidato_premio__premio__in=premios_list,
+                estado=True
+            ).values_list('candidato_premio__premio_id', flat=True)
+        )
 
-        if not actas.exists():
-            return CerrarActaResultados(candidatos=None, ok=False, error="No hay proyectos evaluados para este evento.") # type: ignore
+        # Premios pendientes (sin ganador) ordenados por posición
+        premios_pendientes = [p for p in premios_list if p.pk not in premios_ya_cerrados]
 
-        max_nota = actas.first().nota_final
-        top_actas = actas.filter(nota_final=max_nota)
+        # Devolver ganadores existentes sin reasignar
+        for gp in GanadorPremio.objects.filter(
+            candidato_premio__premio__in=premios_list, estado=True
+        ).select_related('candidato_premio'):
+            ganadores_resultado.append(gp.candidato_premio)
 
-        candidatos_resultado = []
-        for acta in top_actas:
-            existing = CandidatoPremio.objects.filter(premio=premio, proyecto=acta.proyecto).first()
-            if existing:
-                candidatos_resultado.append(existing)
-            else:
-                candidato = CandidatoPremio.objects.create(
-                    premio=premio,
-                    proyecto=acta.proyecto,
-                    acta_evaluacion=acta,
-                    nota=acta.nota_final,
-                    estado='candidato',
+        if not premios_pendientes:
+            return CerrarActaResultados(ok=True, error=None, ganadores=ganadores_resultado, empates=[]) # type: ignore
+
+        # Proyectos ya asignados como ganadores en esta oferta (no reasignar)
+        proyectos_ya_ganadores = set(
+            cp.proyecto_id for cp in CandidatoPremio.objects.filter(
+                premio__in=premios_list, estado='ganador'
+            )
+        )
+
+        # Rank groups excluyendo proyectos ya ganadores
+        actas_disponibles = [a for a in actas_list if a.proyecto_id not in proyectos_ya_ganadores]
+
+        rank_groups_disponibles = []
+        current_nota = None
+        for acta in actas_disponibles:
+            if acta.nota_final != current_nota:
+                rank_groups_disponibles.append([])
+                current_nota = acta.nota_final
+            rank_groups_disponibles[-1].append(acta)
+
+        for i, premio in enumerate(premios_pendientes):
+            if i >= len(rank_groups_disponibles):
+                break
+
+            group = rank_groups_disponibles[i]
+
+            if len(group) == 1:
+                # Sin empate — asignar automáticamente como ganador
+                acta = group[0]
+                candidato, created = CandidatoPremio.objects.get_or_create(
+                    premio=premio, proyecto=acta.proyecto,
+                    defaults={
+                        'acta_evaluacion': acta,
+                        'nota': acta.nota_final,
+                        'estado': 'ganador',
+                        'activo': True,
+                    }
                 )
-                candidatos_resultado.append(candidato)
+                if not created:
+                    candidato.estado = 'ganador'
+                    candidato.activo = True
+                    candidato.save()
+                GanadorPremio.objects.get_or_create(candidato_premio=candidato)
+                ganadores_resultado.append(candidato)
+            else:
+                # Empate — crear candidatos para resolución manual
+                for acta in group:
+                    candidato, created = CandidatoPremio.objects.get_or_create(
+                        premio=premio, proyecto=acta.proyecto,
+                        defaults={
+                            'acta_evaluacion': acta,
+                            'nota': acta.nota_final,
+                            'estado': 'candidato',
+                            'activo': True,
+                        }
+                    )
+                    if not created and candidato.estado == 'descartado':
+                        candidato.estado = 'candidato'
+                        candidato.activo = True
+                        candidato.save()
+                    empates_resultado.append(candidato)
 
-        return CerrarActaResultados(candidatos=candidatos_resultado, ok=True, error=None) # type: ignore
+        return CerrarActaResultados(ok=True, error=None, ganadores=ganadores_resultado, empates=empates_resultado) # type: ignore
 
 
 class Mutation(graphene.ObjectType):
