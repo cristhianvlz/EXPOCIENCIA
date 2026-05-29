@@ -210,7 +210,7 @@ export default function InscripcionPage() {
     if (!idEvento) return null;
     const now = new Date();
     return cronogramas.some(c =>
-      c.actividad?.nombreActividad?.toLowerCase().includes('inscripcion') &&
+      c.actividad?.nombreActividad?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('inscripcion') &&
       c.evento?.idEvento === idEvento &&
       new Date(c.fechaInicio) <= now &&
       new Date(c.fechaFin) >= now

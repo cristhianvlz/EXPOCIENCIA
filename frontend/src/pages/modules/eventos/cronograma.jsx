@@ -46,7 +46,12 @@ const EDIT_CRONOGRAMA = gql`
 `;
 const DELETE_CRONOGRAMA = gql`mutation($idCronograma: ID!) { eliminarCronograma(idCronograma: $idCronograma) { ok error } }`;
 
-const toInputDate = (iso) => iso ? iso.substring(0, 16) : '';
+const toInputDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 const formatDate  = (iso) => iso ? new Date(iso).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '-';
 
 const INIT_CRONOGRAMA = { idEvento: '', idActividad: '', fechaInicio: '', fechaFin: '', estado: true };

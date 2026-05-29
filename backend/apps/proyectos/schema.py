@@ -62,7 +62,7 @@ class CrearProyecto(graphene.Mutation):
         except Exception:
             return CrearProyecto(proyecto=None, ok=False, error="No se pudo determinar el evento asociado a esta oferta académica.") # type: ignore
 
-        if not get_cronograma_activo(evento, 'inscripcion'):
+        if not get_cronograma_activo(evento, 'inscripc'):
             return CrearProyecto(proyecto=None, ok=False, error="El período de inscripción de proyectos no está activo para este evento.") # type: ignore
 
         if Proyecto.objects.filter(titulo=titulo).exists():

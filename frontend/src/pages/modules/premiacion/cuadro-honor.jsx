@@ -51,7 +51,10 @@ const GET_DATA = gql`
       premio { idPremio monto evento { nombre } area { nombre }
         premioDescriptores { descriptor { descripcion } }
       }
-      proyecto { idProyecto titulo }
+      proyecto {
+        idProyecto titulo
+        ofertaEaCarrera { oferta { idOferta nombre } }
+      }
       actaEvaluacion { idActaEvaluacion notaFinal }
       ganador { idGanadorPremio estado }
     }
@@ -67,7 +70,24 @@ const GET_DATA = gql`
     }
     todasLasActas {
       idActaEvaluacion notaFinal fecha
-      proyecto { idProyecto titulo estado }
+      proyecto {
+        idProyecto titulo estado
+        ofertaEaCarrera {
+          oferta {
+            idOferta nombre
+            categoriaEvento { evento { idEvento nombre } }
+          }
+        }
+      }
+    }
+    todasLasOfertas {
+      idOferta nombre estado
+      categoriaEvento {
+        evento { idEvento nombre version }
+      }
+      modalidadArea {
+        area { idArea nombre }
+      }
     }
     todosLosEventos { idEvento nombre estado }
     todasLasAreas { idArea nombre estado }
@@ -105,8 +125,8 @@ const EDITAR_DESC = gql`mutation($idDescriptor: ID!, $idTipoDescriptor: ID, $des
 const ELIMINAR_DESC = gql`mutation($idDescriptor: ID!) { eliminarDescriptor(idDescriptor: $idDescriptor) { ok error } }`;
 
 // Premio mutations
-const CREAR_PREMIO = gql`mutation($idEvento: ID!, $idArea: ID!, $monto: Decimal!, $numeroGanadores: Int!) {
-  crearPremio(idEvento: $idEvento, idArea: $idArea, monto: $monto, numeroGanadores: $numeroGanadores) { ok error }
+const CREAR_PREMIO = gql`mutation($idOferta: ID!, $monto: Decimal, $numeroGanadores: Int!, $idDescriptores: [ID]) {
+  crearPremio(idOferta: $idOferta, monto: $monto, numeroGanadores: $numeroGanadores, idDescriptores: $idDescriptores) { ok error }
 }`;
 const EDITAR_PREMIO = gql`mutation($idPremio: ID!, $idEvento: ID, $idArea: ID, $monto: Decimal, $numeroGanadores: Int, $estado: Boolean) {
   editarPremio(idPremio: $idPremio, idEvento: $idEvento, idArea: $idArea, monto: $monto, numeroGanadores: $numeroGanadores, estado: $estado) { ok error }
@@ -142,7 +162,7 @@ function TabPanel({ children, value, index }) {
 }
 
 // ── Tab 1: Gestión de Premios ─────────────────────────────────────────────────
-function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refetch, showNotif }) {
+function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, areas, refetch, showNotif }) {
   const [crearTipo] = useMutation(CREAR_TIPO);
   const [editarTipo] = useMutation(EDITAR_TIPO);
   const [eliminarTipo] = useMutation(ELIMINAR_TIPO);
@@ -170,7 +190,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
 
   // Premio dialog
   const [premioDialog, setPremioDialog] = useState({ open: false, item: null });
-  const [premioForm, setPremioForm] = useState({ idEvento: '', idArea: '', monto: '', numeroGanadores: 1 });
+  const [premioForm, setPremioForm] = useState({ idOferta: '', monto: '', numeroGanadores: 1, idTipoDescriptor: '', idDescriptor: '' });
 
   // PremioDescriptor dialog
   const [pdDialog, setPdDialog] = useState({ open: false, premio: null });
@@ -235,21 +255,43 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
   };
 
   // ── Premio handlers ──
+  const positionLabel = (n) => {
+    const num = parseInt(n);
+    if (num === 1) return '1er lugar';
+    if (num === 2) return '1er y 2do lugar';
+    if (num === 3) return '1er, 2do y 3er lugar';
+    return `${num} ganadores`;
+  };
+
   const openPremioDialog = (item = null) => {
-    setPremioForm(item ? {
-      idEvento: item.evento.idEvento, idArea: item.area.idArea,
-      monto: item.monto, numeroGanadores: item.numeroGanadores
-    } : { idEvento: '', idArea: '', monto: '', numeroGanadores: 1 });
+    setPremioForm(item
+      ? { idOferta: '', monto: item.monto ?? '', numeroGanadores: item.numeroGanadores, idTipoDescriptor: '', idDescriptor: '' }
+      : { idOferta: '', monto: '', numeroGanadores: 1, idTipoDescriptor: '', idDescriptor: '' }
+    );
     setPremioDialog({ open: true, item });
   };
   const handleSavePremio = async () => {
     setSaving(true);
     try {
       let res;
+      const montoVal = premioForm.monto !== '' ? parseFloat(premioForm.monto) : null;
       if (premioDialog.item) {
-        res = (await editarPremio({ variables: { idPremio: premioDialog.item.idPremio, ...premioForm, monto: parseFloat(premioForm.monto), numeroGanadores: parseInt(premioForm.numeroGanadores) } })).data?.editarPremio;
+        res = (await editarPremio({
+          variables: {
+            idPremio: premioDialog.item.idPremio,
+            monto: montoVal,
+            numeroGanadores: parseInt(premioForm.numeroGanadores)
+          }
+        })).data?.editarPremio;
       } else {
-        res = (await crearPremio({ variables: { ...premioForm, monto: parseFloat(premioForm.monto), numeroGanadores: parseInt(premioForm.numeroGanadores) } })).data?.crearPremio;
+        res = (await crearPremio({
+          variables: {
+            idOferta: premioForm.idOferta,
+            monto: montoVal,
+            numeroGanadores: parseInt(premioForm.numeroGanadores),
+            idDescriptores: premioForm.idDescriptor ? [premioForm.idDescriptor] : undefined
+          }
+        })).data?.crearPremio;
       }
       if (res?.ok) { showNotif('Premio guardado'); refetch(); setPremioDialog({ open: false, item: null }); }
       else showNotif(res?.error || 'Error', 'error');
@@ -494,27 +536,102 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
         <DialogTitle>{premioDialog.item ? 'Editar Premio' : 'Nuevo Premio'}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <FormControl fullWidth required>
-              <InputLabel>Evento</InputLabel>
-              <Select value={premioForm.idEvento} label="Evento" onChange={e => setPremioForm(p => ({ ...p, idEvento: e.target.value }))}>
-                {eventos.filter(ev => ev.estado).map(ev => <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>Área</InputLabel>
-              <Select value={premioForm.idArea} label="Área" onChange={e => setPremioForm(p => ({ ...p, idArea: e.target.value }))}>
-                {areas.filter(a => a.estado).map(a => <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <TextField label="Monto (Bs.)" type="number" fullWidth required value={premioForm.monto}
-              inputProps={{ min: 0, step: 0.01 }} onChange={e => setPremioForm(p => ({ ...p, monto: e.target.value }))} />
-            <TextField label="Número de ganadores" type="number" fullWidth required value={premioForm.numeroGanadores}
-              inputProps={{ min: 1 }} onChange={e => setPremioForm(p => ({ ...p, numeroGanadores: e.target.value }))} />
+            {premioDialog.item ? (
+              /* ── Modo edición: muestra info del evento/área y permite editar monto y ganadores ── */
+              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">Evento / Área (no editable)</Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {premioDialog.item.evento?.nombre} — {premioDialog.item.area?.nombre}
+                </Typography>
+              </Box>
+            ) : (
+              /* ── Modo creación: selección por oferta ── */
+              <FormControl fullWidth required>
+                <InputLabel>Oferta académica</InputLabel>
+                <Select
+                  value={premioForm.idOferta}
+                  label="Oferta académica"
+                  onChange={e => setPremioForm(p => ({ ...p, idOferta: e.target.value }))}
+                >
+                  {ofertas.filter(o => o.estado).map(o => (
+                    <MenuItem key={o.idOferta} value={o.idOferta}>
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>{o.nombre}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {o.categoriaEvento?.evento?.nombre}
+                          {o.categoriaEvento?.evento?.version ? ` — v${o.categoriaEvento.evento.version}` : ''}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {/* Tipo de Premio */}
+            {!premioDialog.item && (
+              <>
+                <FormControl fullWidth>
+                  <InputLabel>Tipo de Premio</InputLabel>
+                  <Select
+                    value={premioForm.idTipoDescriptor}
+                    label="Tipo de Premio"
+                    onChange={e => setPremioForm(p => ({ ...p, idTipoDescriptor: e.target.value, idDescriptor: '' }))}
+                  >
+                    <MenuItem value=""><em>Sin tipo</em></MenuItem>
+                    {tipos.filter(t => t.estado).map(t => (
+                      <MenuItem key={t.idTipoDescriptor} value={t.idTipoDescriptor}>{t.nombre}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth disabled={!premioForm.idTipoDescriptor}>
+                  <InputLabel>Premio</InputLabel>
+                  <Select
+                    value={premioForm.idDescriptor}
+                    label="Premio"
+                    onChange={e => setPremioForm(p => ({ ...p, idDescriptor: e.target.value }))}
+                  >
+                    <MenuItem value=""><em>Sin premio</em></MenuItem>
+                    {descriptores
+                      .filter(d => d.estado && d.tipoDescriptor.idTipoDescriptor === premioForm.idTipoDescriptor)
+                      .map(d => (
+                        <MenuItem key={d.idDescriptor} value={d.idDescriptor}>{d.descripcion}</MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </>
+            )}
+
+            <TextField
+              label="Monto (Bs.)"
+              type="number"
+              fullWidth
+              value={premioForm.monto}
+              helperText="Opcional — dejar vacío si el premio no es monetario"
+              inputProps={{ min: 0, step: 0.01 }}
+              onChange={e => setPremioForm(p => ({ ...p, monto: e.target.value }))}
+            />
+
+            <TextField
+              label="Número de ganadores"
+              type="number"
+              fullWidth
+              required
+              value={premioForm.numeroGanadores}
+              helperText={`Posición(es): ${positionLabel(premioForm.numeroGanadores)}`}
+              inputProps={{ min: 1, max: 3 }}
+              onChange={e => setPremioForm(p => ({ ...p, numeroGanadores: e.target.value }))}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPremioDialog({ open: false, item: null })} color="secondary">Cancelar</Button>
-          <Button variant="contained" disabled={!premioForm.idEvento || !premioForm.idArea || !premioForm.monto || saving} onClick={handleSavePremio}>
+          <Button
+            variant="contained"
+            disabled={(!premioDialog.item && !premioForm.idOferta) || !premioForm.numeroGanadores || saving}
+            onClick={handleSavePremio}
+          >
             {saving ? <CircularProgress size={22} color="inherit" /> : 'Guardar'}
           </Button>
         </DialogActions>
@@ -582,20 +699,14 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
 }
 
 // ── Tab 2: Ranking / Leaderboard ──────────────────────────────────────────────
-function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
+function RankingTab({ actas, premios, refetch, showNotif }) {
   const [crearCandidato] = useMutation(CREAR_CANDIDATO);
   const [cerrarActa] = useMutation(CERRAR_ACTA_RESULTADOS);
   const [saving, setSaving] = useState(false);
   const [candidatoDialog, setCandidatoDialog] = useState({ open: false, acta: null });
   const [candidatoForm, setCandidatoForm] = useState({ idPremio: '', observacion: '' });
-  const [cerrarDialog, setCerrarDialog] = useState({ open: false, evento: null });
+  const [cerrarDialog, setCerrarDialog] = useState({ open: false, oferta: null, evento: null });
   const [cerrarPremio, setCerrarPremio] = useState('');
-
-  const now = new Date();
-  const cronogramasResultadoExpirados = cronogramas.filter(c =>
-    c.actividad?.nombreActividad?.toLowerCase().includes('resultado') &&
-    new Date(c.fechaFin) < now
-  );
 
   const handleCerrarActa = async () => {
     if (!cerrarPremio || !cerrarDialog.evento) return;
@@ -607,7 +718,7 @@ function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
       if (res?.ok) {
         showNotif(`Acta cerrada. ${res.candidatos?.length || 0} candidato(s) adjudicado(s) automáticamente.`);
         refetch();
-        setCerrarDialog({ open: false, evento: null });
+        setCerrarDialog({ open: false, oferta: null, evento: null });
         setCerrarPremio('');
       } else {
         showNotif(res?.error || 'Error al cerrar acta', 'error');
@@ -616,9 +727,28 @@ function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
     setSaving(false);
   };
 
-  const actasOrdenadas = [...actas]
-    .filter(a => parseFloat(a.notaFinal) > 0)
-    .sort((a, b) => parseFloat(b.notaFinal) - parseFloat(a.notaFinal));
+  const actasConNota = [...actas].filter(a => parseFloat(a.notaFinal) > 0);
+
+  // Agrupar por oferta
+  const actasPorOferta = actasConNota.reduce((acc, acta) => {
+    const oferta = acta.proyecto?.ofertaEaCarrera?.oferta;
+    const key = oferta?.idOferta || 'sin_oferta';
+    if (!acc[key]) acc[key] = { oferta, actas: [] };
+    acc[key].actas.push(acta);
+    return acc;
+  }, {});
+
+  // Ordenar actas dentro de cada grupo por nota descendente
+  const gruposOferta = Object.values(actasPorOferta).map(g => ({
+    ...g,
+    actas: [...g.actas].sort((a, b) => parseFloat(b.notaFinal) - parseFloat(a.notaFinal)),
+  }));
+
+  const premiosActivos = premios.filter(p => p.estado);
+  const totalActas = actasConNota.length;
+  const todasNotas = actasConNota.map(a => parseFloat(a.notaFinal));
+  const notaMax = todasNotas.length > 0 ? Math.max(...todasNotas) : 0;
+  const notaMin = todasNotas.length > 0 ? Math.min(...todasNotas) : 0;
 
   const openCandidatoDialog = (acta) => {
     setCandidatoForm({ idPremio: '', observacion: '' });
@@ -644,37 +774,14 @@ function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
     setSaving(false);
   };
 
-  const premiosActivos = premios.filter(p => p.estado);
-  const maxNota = actasOrdenadas.length > 0 ? parseFloat(actasOrdenadas[0].notaFinal) : 1;
-
   return (
     <Box>
-      {/* Alertas de períodos de resultados expirados */}
-      {cronogramasResultadoExpirados.map(c => (
-        <Alert
-          key={c.idCronograma}
-          severity="warning"
-          sx={{ mb: 1.5 }}
-          action={
-            <Button
-              size="small" color="warning" variant="contained"
-              onClick={() => { setCerrarDialog({ open: true, evento: c.evento }); setCerrarPremio(''); }}
-            >
-              Cerrar Acta
-            </Button>
-          }
-        >
-          El período de <strong>Publicación de Resultados</strong> finalizó para <strong>{c.evento?.nombre}</strong>.
-          Cierra el acta para adjudicar candidatos automáticamente.
-        </Alert>
-      ))}
-
       {/* Summary */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {[
-          { label: 'Proyectos evaluados', value: actasOrdenadas.length, color: 'primary.lighter' },
-          { label: 'Nota más alta', value: actasOrdenadas[0]?.notaFinal || '—', color: 'success.lighter' },
-          { label: 'Nota más baja', value: actasOrdenadas[actasOrdenadas.length - 1]?.notaFinal || '—', color: 'warning.lighter' },
+          { label: 'Proyectos evaluados', value: totalActas, color: 'primary.lighter' },
+          { label: 'Nota más alta', value: notaMax || '—', color: 'success.lighter' },
+          { label: 'Nota más baja', value: notaMin || '—', color: 'warning.lighter' },
           { label: 'Total premios activos', value: premiosActivos.length, color: 'secondary.lighter' },
         ].map(c => (
           <Grid item xs={6} sm={3} key={c.label}>
@@ -688,65 +795,93 @@ function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
         ))}
       </Grid>
 
-      <TableContainer component={Paper} elevation={0}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell width={60} align="center">Pos.</TableCell>
-              <TableCell>Proyecto</TableCell>
-              <TableCell>Fecha Evaluación</TableCell>
-              <TableCell align="center">Nota Final</TableCell>
-              <TableCell align="right">Acción</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {actasOrdenadas.map((acta, idx) => {
-              const nota = parseFloat(acta.notaFinal);
-              const pct = maxNota > 0 ? (nota / maxNota) * 100 : 0;
-              const medalColor = idx === 0 ? '#faad14' : idx === 1 ? '#bfbfbf' : idx === 2 ? '#d46b08' : 'inherit';
-              return (
-                <TableRow key={acta.idActaEvaluacion} hover sx={{ bgcolor: idx < 3 ? 'action.hover' : 'inherit' }}>
-                  <TableCell align="center">
-                    <Typography fontWeight={700} sx={{ color: medalColor, fontSize: idx < 3 ? 18 : 14 }}>
-                      {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
-                    <Chip label={acta.proyecto.estado} size="small" sx={{ mt: 0.3 }}
-                      color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
-                  </TableCell>
-                  <TableCell><Typography variant="body2">{acta.fecha}</Typography></TableCell>
-                  <TableCell align="center">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
-                      <Box sx={{ width: 80, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
-                        <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: idx === 0 ? 'warning.main' : 'primary.main', borderRadius: 3 }} />
-                      </Box>
-                      <Typography fontWeight={700} color={idx === 0 ? 'warning.main' : 'primary.main'}>{nota}</Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button size="small" variant="outlined" color="secondary" startIcon={<TrophyOutlined />}
-                      onClick={() => openCandidatoDialog(acta)}>
-                      Postular
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {actasOrdenadas.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                  No hay actas con nota final registrada.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {gruposOferta.length === 0 ? (
+        <Alert severity="info">No hay actas con nota final registrada.</Alert>
+      ) : (
+        gruposOferta.map(grupo => {
+          const evento = grupo.oferta?.categoriaEvento?.evento;
+          const maxNotaGrupo = parseFloat(grupo.actas[0]?.notaFinal) || 1;
+          return (
+            <Box key={grupo.oferta?.idOferta || 'sin_oferta'} sx={{ mb: 4 }}>
+              <Box sx={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                p: 1.5, bgcolor: 'primary.lighter', borderRadius: 1, mb: 1
+              }}>
+                <Stack direction="row" alignItems="center" gap={1}>
+                  <TrophyOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+                  <Typography fontWeight={700}>{grupo.oferta?.nombre || 'Sin Oferta'}</Typography>
+                  <Chip label={`${grupo.actas.length} proyecto(s)`} size="small" variant="outlined" />
+                </Stack>
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="warning"
+                  startIcon={<CheckCircleOutlined />}
+                  onClick={() => {
+                    setCerrarDialog({ open: true, oferta: grupo.oferta, evento });
+                    setCerrarPremio('');
+                  }}
+                >
+                  Cerrar Acta
+                </Button>
+              </Box>
+
+              <TableContainer component={Paper} elevation={0}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell width={60} align="center">Pos.</TableCell>
+                      <TableCell>Proyecto</TableCell>
+                      <TableCell>Fecha Evaluación</TableCell>
+                      <TableCell align="center">Nota Final</TableCell>
+                      <TableCell align="right">Acción</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {grupo.actas.map((acta, idx) => {
+                      const nota = parseFloat(acta.notaFinal);
+                      const pct = maxNotaGrupo > 0 ? (nota / maxNotaGrupo) * 100 : 0;
+                      const medalColor = idx === 0 ? '#faad14' : idx === 1 ? '#bfbfbf' : idx === 2 ? '#d46b08' : 'inherit';
+                      return (
+                        <TableRow key={acta.idActaEvaluacion} hover sx={{ bgcolor: idx < 3 ? 'action.hover' : 'inherit' }}>
+                          <TableCell align="center">
+                            <Typography fontWeight={700} sx={{ color: medalColor, fontSize: idx < 3 ? 18 : 14 }}>
+                              {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
+                            <Chip label={acta.proyecto.estado} size="small" sx={{ mt: 0.3 }}
+                              color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
+                          </TableCell>
+                          <TableCell><Typography variant="body2">{acta.fecha}</Typography></TableCell>
+                          <TableCell align="center">
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
+                              <Box sx={{ width: 80, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
+                                <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: idx === 0 ? 'warning.main' : 'primary.main', borderRadius: 3 }} />
+                              </Box>
+                              <Typography fontWeight={700} color={idx === 0 ? 'warning.main' : 'primary.main'}>{nota}</Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button size="small" variant="outlined" color="secondary" startIcon={<TrophyOutlined />}
+                              onClick={() => openCandidatoDialog(acta)}>
+                              Postular
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          );
+        })
+      )}
 
       {/* Cerrar Acta Dialog */}
-      <Dialog open={cerrarDialog.open} onClose={() => setCerrarDialog({ open: false, evento: null })} maxWidth="sm" fullWidth>
+      <Dialog open={cerrarDialog.open} onClose={() => setCerrarDialog({ open: false, oferta: null, evento: null })} maxWidth="sm" fullWidth>
         <DialogTitle>
           <Stack direction="row" alignItems="center" gap={1}>
             <TrophyOutlined style={{ color: '#faad14' }} />
@@ -758,6 +893,9 @@ function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
             Se adjudicarán automáticamente como candidatos los proyectos con la <strong>nota más alta</strong>.
             En caso de empate, todos los proyectos empatados serán incluidos.
           </Alert>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Oferta: <strong>{cerrarDialog.oferta?.nombre}</strong>
+          </Typography>
           <Typography variant="body2" sx={{ mb: 2 }}>
             Evento: <strong>{cerrarDialog.evento?.nombre}</strong>
           </Typography>
@@ -784,7 +922,7 @@ function RankingTab({ actas, premios, cronogramas, refetch, showNotif }) {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCerrarDialog({ open: false, evento: null })} color="secondary">Cancelar</Button>
+          <Button onClick={() => setCerrarDialog({ open: false, oferta: null, evento: null })} color="secondary">Cancelar</Button>
           <Button
             variant="contained" color="warning"
             disabled={!cerrarPremio || saving}
@@ -897,15 +1035,16 @@ function AdjudicacionTab({ candidatos, refetch, showNotif }) {
     );
   };
 
-  // Agrupar por premio
-  const candidatosPorPremio = candidatos.reduce((acc, c) => {
-    const key = c.premio.idPremio;
-    if (!acc[key]) acc[key] = { premio: c.premio, candidatos: [] };
+  // Agrupar por oferta del proyecto del candidato
+  const candidatosPorOferta = candidatos.reduce((acc, c) => {
+    const oferta = c.proyecto?.ofertaEaCarrera?.oferta;
+    const key = oferta?.idOferta || 'sin_oferta';
+    if (!acc[key]) acc[key] = { oferta, candidatos: [] };
     acc[key].candidatos.push(c);
     return acc;
   }, {});
 
-  const grupos = Object.values(candidatosPorPremio);
+  const grupos = Object.values(candidatosPorOferta);
 
   return (
     <Box>
@@ -913,17 +1052,12 @@ function AdjudicacionTab({ candidatos, refetch, showNotif }) {
         <Alert severity="info">No hay candidatos registrados. Postula proyectos desde el tab "Ranking".</Alert>
       ) : (
         grupos.map(grupo => (
-          <Box key={grupo.premio.idPremio} sx={{ mb: 4 }}>
+          <Box key={grupo.oferta?.idOferta || 'sin_oferta'} sx={{ mb: 4 }}>
             <Box sx={{ p: 1.5, bgcolor: 'secondary.lighter', borderRadius: 1, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <GoldOutlined style={{ fontSize: 20, color: '#722ed1' }} />
               <Box>
-                <Typography fontWeight={700}>{grupo.premio.area.nombre} — {grupo.premio.evento.nombre}</Typography>
-                <Stack direction="row" gap={0.5} flexWrap="wrap">
-                  {(grupo.premio.premioDescriptores || []).map(pd => (
-                    <Chip key={pd.descriptor?.descripcion} label={pd.descriptor?.descripcion} size="small" color="secondary" />
-                  ))}
-                  <Chip label={`Bs. ${grupo.premio.monto}`} size="small" variant="outlined" />
-                </Stack>
+                <Typography fontWeight={700}>{grupo.oferta?.nombre || 'Sin Oferta'}</Typography>
+                <Chip label={`${grupo.candidatos.length} candidato(s)`} size="small" variant="outlined" color="secondary" />
               </Box>
             </Box>
             <TableContainer component={Paper} elevation={0} variant="outlined">
@@ -1004,6 +1138,7 @@ export default function CuadroHonorPage() {
   const premios = data?.todosLosPremios || [];
   const candidatos = data?.todosLosCandidatosPremios?.filter(c => c.activo) || [];
   const actas = data?.todasLasActas || [];
+  const ofertas = data?.todasLasOfertas || [];
   const eventos = data?.todosLosEventos || [];
   const areas = data?.todasLasAreas || [];
   const cronogramas = data?.todosLosCronogramas || [];
@@ -1023,10 +1158,10 @@ export default function CuadroHonorPage() {
           </Tabs>
 
           <TabPanel value={tab} index={0}>
-            <GestionPremiosTab tipos={tipos} descriptores={descriptores} premios={premios} eventos={eventos} areas={areas} refetch={refetch} showNotif={showNotif} />
+            <GestionPremiosTab tipos={tipos} descriptores={descriptores} premios={premios} ofertas={ofertas} eventos={eventos} areas={areas} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
           <TabPanel value={tab} index={1}>
-            <RankingTab actas={actas} premios={premios} cronogramas={cronogramas} refetch={refetch} showNotif={showNotif} />
+            <RankingTab actas={actas} premios={premios} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
           <TabPanel value={tab} index={2}>
             <AdjudicacionTab candidatos={candidatos} refetch={refetch} showNotif={showNotif} />

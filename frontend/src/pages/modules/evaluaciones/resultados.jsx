@@ -4,7 +4,7 @@ import {
   Typography, CircularProgress, Alert, Chip, LinearProgress, Stack, Button,
   Snackbar, Tooltip, Card, CardContent, Grid
 } from '@mui/material';
-import { CheckCircleOutlined, ClockCircleOutlined, TrophyOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, ClockCircleOutlined, TrophyOutlined, FileTextOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import MainCard from 'components/MainCard';
 
@@ -18,7 +18,17 @@ const GET_ACTAS = gql`
       horaFin
       notaFinal
       estado
-      proyecto { idProyecto titulo estado }
+      proyecto { 
+        idProyecto 
+        titulo 
+        estado 
+        ofertaEaCarrera {
+          oferta {
+            idOferta
+            nombre
+          }
+        }
+      }
       planillaEvaluativa { idPlanillaEvaluativa nombre notaMaxima }
       detallesEvaluacion {
         id
@@ -91,6 +101,13 @@ export default function ResultadosNotasPage() {
 
   const actas = data?.todasLasActas || [];
 
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+  const toggleGroup = (id) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   const handleConsolidar = async (acta) => {
     const detalles = acta.detallesEvaluacion || [];
     const notaCalculada = calcularNotaFinal(detalles);
@@ -108,6 +125,20 @@ export default function ResultadosNotasPage() {
     } catch { showNotif('Error de conexión', 'error'); }
   };
 
+  const actasMap = actas.reduce((acc, a) => {
+    const oferta = a.proyecto?.ofertaEaCarrera?.oferta;
+    const key = oferta?.idOferta || 'sin-oferta';
+    if (!acc[key]) acc[key] = { oferta, items: [] };
+    acc[key].items.push(a);
+    return acc;
+  }, {});
+
+  const ofertaGroups = Object.values(actasMap).sort((a, b) => {
+    const idA = parseInt(a.oferta?.idOferta || 0);
+    const idB = parseInt(b.oferta?.idOferta || 0);
+    return idB - idA;
+  });
+
   return (
     <MainCard title="Resultados y Notas">
       {loading ? (
@@ -118,100 +149,124 @@ export default function ResultadosNotasPage() {
         <>
           <SummaryCards actas={actas} />
 
-          <TableContainer component={Paper} elevation={0}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell width={60}>ID</TableCell>
-                  <TableCell>Proyecto</TableCell>
-                  <TableCell>Planilla</TableCell>
-                  <TableCell>Fecha</TableCell>
-                  <TableCell align="center">Progreso Jurados</TableCell>
-                  <TableCell align="center">Nota Calculada</TableCell>
-                  <TableCell align="center">Nota Final</TableCell>
-                  <TableCell align="center">Acción</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {actas.map(acta => {
-                  const detalles = acta.detallesEvaluacion || [];
-                  const totalJurados = detalles.length;
-                  const calificados = detalles.filter(d => (d.puntuacionesCriterio || []).length > 0).length;
-                  const progreso = totalJurados > 0 ? Math.round((calificados / totalJurados) * 100) : 0;
-                  const completa = totalJurados > 0 && calificados === totalJurados;
-                  const notaCalculada = calcularNotaFinal(detalles);
-                  const notaMax = parseFloat(acta.planillaEvaluativa.notaMaxima);
+          {ofertaGroups.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+              Sin actas registradas.
+            </Box>
+          ) : (
+            <Box>
+              {ofertaGroups.map((grupo) => {
+                const key = grupo.oferta?.idOferta || 'sin-oferta';
+                const isOpen = expandedGroups.has(key);
+                return (
+                  <Box key={key} sx={{ mb: 2 }}>
+                    <Box sx={{
+                      px: 2, py: 1.25, borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                      background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+                      border: '1px solid rgba(24,144,255,0.25)',
+                      display: 'flex', alignItems: 'center', gap: 1.5,
+                      cursor: 'default',
+                    }}>
+                      <ScheduleOutlined style={{ color: '#1890ff', fontSize: 17 }} />
+                      <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
+                        {grupo.oferta ? grupo.oferta.nombre : 'Sin oferta asignada'}
+                      </Typography>
+                      <Chip
+                        label={isOpen ? `▲ ${grupo.items.length} actas` : `▼ ${grupo.items.length} actas`}
+                        size="small" color="primary"
+                        variant={isOpen ? 'filled' : 'outlined'}
+                        onClick={() => toggleGroup(key)}
+                        sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                      />
+                    </Box>
 
-                  return (
-                    <TableRow key={acta.idActaEvaluacion} hover>
-                      <TableCell>{acta.idActaEvaluacion}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
-                        <Chip label={acta.proyecto.estado} size="small"
-                          color={estadoColor[acta.proyecto.estado] || 'default'} sx={{ mt: 0.3 }} />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{acta.planillaEvaluativa.nombre}</Typography>
-                        <Typography variant="caption" color="text.secondary">máx. {notaMax}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{acta.fecha}</Typography>
-                        <Typography variant="caption" color="text.secondary">{acta.horaInicio} – {acta.horaFin}</Typography>
-                      </TableCell>
-                      <TableCell align="center" sx={{ minWidth: 160 }}>
-                        <Stack spacing={0.5} alignItems="center">
-                          <Typography variant="caption">{calificados}/{totalJurados} jurados</Typography>
-                          <LinearProgress variant="determinate" value={progreso}
-                            sx={{ width: 120, height: 6, borderRadius: 3 }}
-                            color={completa ? 'success' : 'primary'} />
-                          {detalles.map(d => {
-                            const ok = (d.puntuacionesCriterio || []).length > 0;
-                            return (
-                              <Chip key={d.id} size="small"
-                                icon={ok ? <CheckCircleOutlined style={{ fontSize: 11 }} /> : <ClockCircleOutlined style={{ fontSize: 11 }} />}
-                                label={`${d.tribunal.nombre}: ${ok ? d.puntuacion + ' pts' : 'pendiente'}`}
-                                color={ok ? 'success' : 'default'} variant="outlined" />
-                            );
-                          })}
-                        </Stack>
-                      </TableCell>
-                      <TableCell align="center">
-                        {notaCalculada !== null ? (
-                          <Typography fontWeight={600} color="primary.main">{notaCalculada}</Typography>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">—</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Typography fontWeight={700}
-                          color={parseFloat(acta.notaFinal) > 0 ? 'success.main' : 'text.secondary'}>
-                          {acta.notaFinal}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title={completa ? 'Promediar y guardar nota final' : 'Faltan calificaciones de jurados'}>
-                          <span>
-                            <Button size="small" variant="contained" color="success"
-                              disabled={!completa || notaCalculada === null}
-                              onClick={() => handleConsolidar(acta)}>
-                              Consolidar
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {actas.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                      Sin actas registradas.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    {isOpen && (
+                      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell width={60}>ID</TableCell>
+                              <TableCell>Proyecto</TableCell>
+                              <TableCell>Planilla</TableCell>
+                              <TableCell>Fecha</TableCell>
+                              <TableCell align="center">Progreso Jurados</TableCell>
+                              <TableCell align="center">Nota Final</TableCell>
+                              <TableCell align="center">Acción</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {grupo.items.map(acta => {
+                              const detalles = acta.detallesEvaluacion || [];
+                              const totalJurados = detalles.length;
+                              const calificados = detalles.filter(d => (d.puntuacionesCriterio || []).length > 0).length;
+                              const progreso = totalJurados > 0 ? Math.round((calificados / totalJurados) * 100) : 0;
+                              const completa = totalJurados > 0 && calificados === totalJurados;
+                              const notaCalculada = calcularNotaFinal(detalles);
+                              const notaMax = parseFloat(acta.planillaEvaluativa.notaMaxima);
+                              const yaConsolidado = notaCalculada !== null && parseFloat(acta.notaFinal) === parseFloat(notaCalculada);
+
+                              return (
+                                <TableRow key={acta.idActaEvaluacion} hover>
+                                  <TableCell>{acta.idActaEvaluacion}</TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
+                                    <Chip label={acta.proyecto.estado} size="small"
+                                      color={estadoColor[acta.proyecto.estado] || 'default'} sx={{ mt: 0.3 }} />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2">{acta.planillaEvaluativa.nombre}</Typography>
+                                    <Typography variant="caption" color="text.secondary">máx. {notaMax}</Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2">{acta.fecha}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{acta.horaInicio} – {acta.horaFin}</Typography>
+                                  </TableCell>
+                                  <TableCell align="center" sx={{ minWidth: 160 }}>
+                                    <Stack spacing={0.5} alignItems="center">
+                                      <Typography variant="caption">{calificados}/{totalJurados} jurados</Typography>
+                                      <LinearProgress variant="determinate" value={progreso}
+                                        sx={{ width: 120, height: 6, borderRadius: 3 }}
+                                        color={completa ? 'success' : 'primary'} />
+                                      {detalles.map(d => {
+                                        const ok = (d.puntuacionesCriterio || []).length > 0;
+                                        return (
+                                          <Chip key={d.id} size="small"
+                                            icon={ok ? <CheckCircleOutlined style={{ fontSize: 11 }} /> : <ClockCircleOutlined style={{ fontSize: 11 }} />}
+                                            label={`${d.tribunal.nombre}: ${ok ? d.puntuacion + ' pts' : 'pendiente'}`}
+                                            color={ok ? 'success' : 'default'} variant="outlined" />
+                                        );
+                                      })}
+                                    </Stack>
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Typography fontWeight={700}
+                                      color={parseFloat(acta.notaFinal) > 0 ? 'success.main' : 'text.secondary'}>
+                                      {acta.notaFinal}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Tooltip title={!completa ? 'Faltan calificaciones de jurados' : yaConsolidado ? 'La nota ya está consolidada' : 'Promediar y guardar nota final'}>
+                                      <span>
+                                        <Button size="small" variant={yaConsolidado ? "outlined" : "contained"} color={yaConsolidado ? "inherit" : "success"}
+                                          disabled={!completa || notaCalculada === null || yaConsolidado}
+                                          onClick={() => handleConsolidar(acta)}>
+                                          {yaConsolidado ? 'Consolidado' : 'Consolidar'}
+                                        </Button>
+                                      </span>
+                                    </Tooltip>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
         </>
       )}
 

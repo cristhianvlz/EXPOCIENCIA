@@ -50,7 +50,7 @@ class Premio(models.Model):
         through='PremioDescriptor',
         related_name='premios',
     )
-    monto = models.DecimalField(max_digits=8, decimal_places=2)
+    monto = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     numero_ganadores = models.PositiveSmallIntegerField()
     estado = models.BooleanField(default=True)
 
@@ -58,7 +58,8 @@ class Premio(models.Model):
         db_table = 'premio'
 
     def __str__(self):
-        return f"Premio — {self.area} | {self.evento} (Bs. {self.monto})"
+        monto_str = f"Bs. {self.monto}" if self.monto is not None else "Sin monto"
+        return f"Premio — {self.area} | {self.evento} ({monto_str})"
 
 
 class PremioDescriptor(models.Model):

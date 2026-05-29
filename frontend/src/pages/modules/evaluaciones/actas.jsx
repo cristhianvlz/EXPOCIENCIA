@@ -60,7 +60,7 @@ const estadoColor = { aprobado: 'success', inscrito: 'info', revision: 'warning'
 // ── Acta dialog ───────────────────────────────────────────────────────────────
 const INIT_ACTA = { idProyecto: '', idPlanillaEvaluativa: '', fecha: '', horaInicio: '', horaFin: '', notaFinal: '0' };
 
-function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planillas }) {
+function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planillas, evaluatedIds }) {
   const editing = !!initial;
   const [form, setForm] = useState(INIT_ACTA);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -93,9 +93,15 @@ function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planill
               {proyectos.length === 0 && (
                 <MenuItem disabled>No hay proyectos aprobados disponibles</MenuItem>
               )}
-              {proyectos.map(p => (
-                <MenuItem key={p.idProyecto} value={p.idProyecto}>{p.titulo}</MenuItem>
-              ))}
+              {proyectos.map(p => {
+                const isEvaluated = evaluatedIds.has(p.idProyecto);
+                const isCurrent = initial && initial.proyecto.idProyecto === p.idProyecto;
+                return (
+                  <MenuItem key={p.idProyecto} value={p.idProyecto} disabled={isEvaluated && !isCurrent}>
+                    {p.titulo} {isEvaluated && !isCurrent && "(Ya evaluado)"}
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
           <FormControl fullWidth required>
@@ -230,6 +236,7 @@ export default function ActasEvaluacionPage() {
   const proyectos  = (data?.todosLosProyectos || []).filter(p => p.estado?.toLowerCase() === 'aprobado');
   const planillas  = data?.todasLasPlanillas || [];
   const tribunales = data?.todosLosTribunales || [];
+  const evaluatedIds = new Set(actas.map(a => a.proyecto.idProyecto));
 
   const handleSaveActa = async (form) => {
     setSaving(true);
@@ -453,6 +460,7 @@ export default function ActasEvaluacionPage() {
         initial={actaDialog.initial}
         proyectos={proyectos}
         planillas={planillas}
+        evaluatedIds={evaluatedIds}
       />
 
       <JuradosDialog

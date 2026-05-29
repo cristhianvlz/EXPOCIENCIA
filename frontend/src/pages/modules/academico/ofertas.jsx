@@ -21,13 +21,13 @@ const GET_ALL = gql`
       idOferta nombre descripcion estado
       categoriaEvento {
         id
-        categoria { nombre }
-        evento    { idEvento nombre }
+        categoria { idCategoria nombre }
+        evento    { idEvento nombre version }
       }
       modalidadArea {
         id
-        modalidad { nombre }
-        area      { nombre }
+        modalidad { idModalidad nombre }
+        area      { idArea nombre }
       }
     }
     todosLosOfertaEaCarreras {
@@ -38,7 +38,7 @@ const GET_ALL = gql`
     todosLosCategoriaEventos {
       id
       categoria { idCategoria nombre }
-      evento    { idEvento nombre }
+      evento    { idEvento nombre version }
     }
     todosLosModalidadAreas {
       id
@@ -49,7 +49,7 @@ const GET_ALL = gql`
     todasLasModalidades { idModalidad nombre estado }
     todasLasAreas       { idArea nombre estado }
     todasLasEntidadesAcademicas { idEntidadAcademica nombre estado }
-    todosLosEventos             { idEvento nombre estado }
+    todosLosEventos             { idEvento nombre version estado }
   }
 `;
 
@@ -80,8 +80,8 @@ const CREAR_MOD_AREA = gql`
   }
 `;
 const EDIT_OFERTA = gql`
-  mutation($idOferta: ID!, $nombre: String, $descripcion: String, $estado: Boolean) {
-    editarOferta(idOferta: $idOferta, nombre: $nombre, descripcion: $descripcion, estado: $estado) { ok error }
+  mutation($idOferta: ID!, $idCategoriaEvento: ID, $idModalidadArea: ID, $nombre: String, $descripcion: String, $estado: Boolean) {
+    editarOferta(idOferta: $idOferta, idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, nombre: $nombre, descripcion: $descripcion, estado: $estado) { ok error }
   }
 `;
 const DELETE_OFERTA = gql`
@@ -105,7 +105,7 @@ const DELETE_OEC = gql`
 // ── Wizard steps labels ───────────────────────────────────────────────────────
 const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Datos de la Oferta', 'Carrera Autorizada'];
 
-const INIT_EDIT_OFERTA = { nombre: '', descripcion: '', estado: true };
+const INIT_EDIT_OFERTA = { nombre: '', descripcion: '', estado: true, evento: '', categoria: '', modalidad: '', area: '' };
 const INIT_OEC         = { idOferta: '', idEntidadAcademica: '', carrera: '', plan: '' };
 
 function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPageChange }) {
@@ -379,15 +379,60 @@ export default function OfertasPage() {
   // ── Edit Oferta (non-wizard) ──────────────────────────────────────────────
   const handleOpenEditOferta = (oferta) => {
     setEditingOferta(oferta);
-    setFormEditOferta({ nombre: oferta.nombre, descripcion: oferta.descripcion || '', estado: oferta.estado });
+    setFormEditOferta({ 
+      nombre: oferta.nombre, 
+      descripcion: oferta.descripcion || '', 
+      estado: oferta.estado,
+      evento: oferta.categoriaEvento?.evento?.idEvento || '',
+      categoria: oferta.categoriaEvento?.categoria?.idCategoria || '',
+      modalidad: oferta.modalidadArea?.modalidad?.idModalidad || '',
+      area: oferta.modalidadArea?.area?.idArea || ''
+    });
     setOpenEditOferta(true);
   };
 
   const handleSaveEditOferta = async () => {
     setSaving(true);
     try {
+      let catEvId = editingOferta.categoriaEvento?.id;
+      if (formEditOferta.evento !== editingOferta.categoriaEvento?.evento?.idEvento || 
+          formEditOferta.categoria !== editingOferta.categoriaEvento?.categoria?.idCategoria) {
+         const existing = categoriaEventos.find(
+           ce => ce.categoria?.idCategoria === formEditOferta.categoria && ce.evento?.idEvento === formEditOferta.evento
+         );
+         if (existing) {
+           catEvId = existing.id;
+         } else {
+           const res = await crearCatEv({ variables: { idCategoria: formEditOferta.categoria, idEvento: formEditOferta.evento } });
+           if (res.data?.crearCategoriaEvento?.ok) catEvId = res.data.crearCategoriaEvento.categoriaEvento.id;
+           else throw new Error(res.data?.crearCategoriaEvento?.error || "Error al crear categoría-evento");
+         }
+      }
+
+      let modAreaId = editingOferta.modalidadArea?.id;
+      if (formEditOferta.modalidad !== editingOferta.modalidadArea?.modalidad?.idModalidad || 
+          formEditOferta.area !== editingOferta.modalidadArea?.area?.idArea) {
+         const existing = modalidadAreas.find(
+           ma => ma.modalidad?.idModalidad === formEditOferta.modalidad && ma.area?.idArea === formEditOferta.area
+         );
+         if (existing) {
+           modAreaId = existing.id;
+         } else {
+           const res = await crearModArea({ variables: { idModalidad: formEditOferta.modalidad, idArea: formEditOferta.area } });
+           if (res.data?.crearModalidadArea?.ok) modAreaId = res.data.crearModalidadArea.modalidadArea.id;
+           else throw new Error(res.data?.crearModalidadArea?.error || "Error al crear modalidad-área");
+         }
+      }
+
       const res = await editarOferta({
-        variables: { idOferta: editingOferta.idOferta, ...formEditOferta }
+        variables: { 
+          idOferta: editingOferta.idOferta, 
+          idCategoriaEvento: catEvId,
+          idModalidadArea: modAreaId,
+          nombre: formEditOferta.nombre, 
+          descripcion: formEditOferta.descripcion, 
+          estado: formEditOferta.estado 
+        }
       });
       const result = res.data?.editarOferta;
       if (result?.ok) {
@@ -511,7 +556,7 @@ export default function OfertasPage() {
             <Select value={wizardEvento} label="Evento"
               onChange={e => { setWizardEvento(e.target.value); setWizardCategoria(''); }}>
               {eventos.filter(ev => ev.estado).map(ev => (
-                <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre}</MenuItem>
+                <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} v{ev.version}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -565,7 +610,7 @@ export default function OfertasPage() {
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
                 Resumen de selección
               </Typography>
-              <Typography variant="body2"><strong>Evento:</strong> {selEvento?.nombre}</Typography>
+              <Typography variant="body2"><strong>Evento:</strong> {selEvento?.nombre} v{selEvento?.version}</Typography>
               <Typography variant="body2"><strong>Categoría:</strong> {selCategoria?.nombre}</Typography>
               <Typography variant="body2"><strong>Modalidad / Área:</strong> {selModalidad?.nombre} / {selArea?.nombre}</Typography>
             </Box>
@@ -618,7 +663,9 @@ export default function OfertasPage() {
     <Button key="of" variant="contained" startIcon={<PlusOutlined />} onClick={() => { resetWizard(); setOpenWizard(true); }}>
       Nueva Oferta
     </Button>,
-    null,
+    <Button key="ca" variant="contained" startIcon={<PlusOutlined />} onClick={() => handleOpenOEC()}>
+      Asignar Carrera
+    </Button>,
   ];
 
   const filteredOfertas = ofertas.filter((item) => {
@@ -696,7 +743,7 @@ export default function OfertasPage() {
                       <TableCell sx={{ fontWeight: 500 }}>{of.nombre}</TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
-                          {of.categoriaEvento?.evento?.nombre}
+                          {of.categoriaEvento?.evento?.nombre} v{of.categoriaEvento?.evento?.version}
                         </Typography>
                         <Chip label={of.categoriaEvento?.categoria?.nombre} size="small" color="primary" variant="outlined" />
                       </TableCell>
@@ -862,17 +909,42 @@ export default function OfertasPage() {
         <DialogTitle>Editar Oferta</DialogTitle>
         <DialogContent dividers>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            {editingOferta && (
-              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Evento: {editingOferta.categoriaEvento?.evento?.nombre} · Categoría: {editingOferta.categoriaEvento?.categoria?.nombre}
-                </Typography>
-                <br />
-                <Typography variant="caption" color="text.secondary">
-                  Modalidad/Área: {editingOferta.modalidadArea?.modalidad?.nombre} / {editingOferta.modalidadArea?.area?.nombre}
-                </Typography>
-              </Box>
-            )}
+            <FormControl fullWidth required>
+              <InputLabel>Evento</InputLabel>
+              <Select value={formEditOferta.evento} label="Evento"
+                onChange={e => setFormEditOferta(p => ({ ...p, evento: e.target.value }))}>
+                {eventos.filter(ev => ev.estado).map(ev => (
+                  <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} v{ev.version}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth required>
+              <InputLabel>Categoría</InputLabel>
+              <Select value={formEditOferta.categoria} label="Categoría"
+                onChange={e => setFormEditOferta(p => ({ ...p, categoria: e.target.value }))}>
+                {categorias.filter(c => c.estado).map(c => (
+                  <MenuItem key={c.idCategoria} value={c.idCategoria}>{c.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth required>
+              <InputLabel>Modalidad</InputLabel>
+              <Select value={formEditOferta.modalidad} label="Modalidad"
+                onChange={e => setFormEditOferta(p => ({ ...p, modalidad: e.target.value }))}>
+                {modalidades.filter(m => m.estado).map(m => (
+                  <MenuItem key={m.idModalidad} value={m.idModalidad}>{m.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth required>
+              <InputLabel>Área</InputLabel>
+              <Select value={formEditOferta.area} label="Área"
+                onChange={e => setFormEditOferta(p => ({ ...p, area: e.target.value }))}>
+                {areas.filter(a => a.estado).map(a => (
+                  <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               label="Nombre" value={formEditOferta.nombre} fullWidth required autoFocus
               onChange={e => setFormEditOferta(p => ({ ...p, nombre: e.target.value }))}
@@ -942,7 +1014,7 @@ export default function OfertasPage() {
                   }}>
                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main', flexShrink: 0 }} />
                     <Typography variant="subtitle1" fontWeight={600}>
-                      {viewOferta.categoriaEvento?.evento?.nombre || '—'}
+                      {viewOferta.categoriaEvento?.evento?.nombre ? `${viewOferta.categoriaEvento.evento.nombre} v${viewOferta.categoriaEvento.evento.version}` : '—'}
                     </Typography>
                   </Box>
                 </Box>

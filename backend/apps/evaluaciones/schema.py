@@ -493,11 +493,11 @@ class CrearActaEvaluacion(graphene.Mutation):
         except Exception:
             return CrearActaEvaluacion(acta=None, ok=False, error="No se pudo determinar el evento asociado al proyecto.") # type: ignore
 
-        if not get_cronograma_activo(evento, 'evaluacion'):
+        if not get_cronograma_activo(evento, 'evaluaci'):
             return CrearActaEvaluacion(acta=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo para este evento.") # type: ignore
 
-        if ActaEvaluacion.objects.filter(proyecto=proyecto, planilla_evaluativa=planilla).exists():
-            return CrearActaEvaluacion(acta=None, ok=False, error="El proyecto ya fue evaluado con esta planilla.") # type: ignore
+        if ActaEvaluacion.objects.filter(proyecto=proyecto).exists():
+            return CrearActaEvaluacion(acta=None, ok=False, error="Este proyecto ya tiene un acta de evaluación registrada.") # type: ignore
 
         acta = ActaEvaluacion.objects.create(
             planilla_evaluativa=planilla, 
@@ -538,9 +538,9 @@ class EditarActaEvaluacion(graphene.Mutation):
 
         new_planilla_id = kwargs.get('id_planilla_evaluativa', acta.planilla_evaluativa_id)
         new_proyecto_id = kwargs.get('id_proyecto', acta.proyecto_id)
-        if 'id_planilla_evaluativa' in kwargs or 'id_proyecto' in kwargs:
-            if ActaEvaluacion.objects.filter(proyecto_id=new_proyecto_id, planilla_evaluativa_id=new_planilla_id).exclude(pk=id_acta_evaluacion).exists():
-                return EditarActaEvaluacion(acta=None, ok=False, error="El proyecto ya fue evaluado con esta planilla.") # type: ignore
+        if 'id_proyecto' in kwargs:
+            if ActaEvaluacion.objects.filter(proyecto_id=new_proyecto_id).exclude(pk=id_acta_evaluacion).exists():
+                return EditarActaEvaluacion(acta=None, ok=False, error="Este proyecto ya tiene un acta de evaluación registrada.") # type: ignore
 
         if 'id_planilla_evaluativa' in kwargs and kwargs['id_planilla_evaluativa'] is not None:
             try:
@@ -710,7 +710,7 @@ class CrearPuntuacionCriterio(graphene.Mutation):
         except Exception:
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="No se pudo determinar el evento asociado a este detalle.") # type: ignore
 
-        if not get_cronograma_activo(evento, 'evaluacion'):
+        if not get_cronograma_activo(evento, 'evaluaci'):
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo.") # type: ignore
 
         try:

@@ -13,6 +13,10 @@ const GET_DASHBOARD_STATS = gql`
     todosLosGanadoresPremios {
       idGanadorPremio
     }
+    todosLosEventos {
+      idEvento
+      estado
+    }
   }
 `;
 
@@ -81,6 +85,7 @@ export default function DashboardDefault() {
   const totalProyectosAprobados = data?.todosLosProyectos?.filter(p => p.estado === 'aprobado').length || 0;
   const totalParticipantes = data?.todosLosParticipantes?.length || 0;
   const totalProyectosPremiados = data?.todosLosGanadoresPremios?.length || 0;
+  const totalEventosActivos = data?.todosLosEventos?.filter(e => e.estado).length || 0;
 
   const handleOrderMenuClick = (event) => {
     setOrderMenuAnchor(event.currentTarget);
@@ -103,16 +108,16 @@ export default function DashboardDefault() {
         <Typography variant="h5">Dashboard</Typography>
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total de Proyectos Aprobados" count={loading ? "..." : totalProyectosAprobados.toString()} percentage={100} extra="0" />
+        <AnalyticEcommerce title="Total de Proyectos Aprobados" count={loading ? "..." : totalProyectosAprobados.toString()} percentage={100} />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total de Participantes Registrados" count={loading ? "..." : totalParticipantes.toString()} percentage={100} extra="0" />
+        <AnalyticEcommerce title="Total de Participantes Registrados" count={loading ? "..." : totalParticipantes.toString()} percentage={100} />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Eventos Activos" count="18,800" percentage={27.4} isLoss color="warning" extra="1,943" />
+        <AnalyticEcommerce title="Eventos Activos" count={loading ? "..." : totalEventosActivos.toString()} percentage={100} color="warning" />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Proyectos Premiados" count={loading ? "..." : totalProyectosPremiados.toString()} percentage={100} color="warning" extra="0" />
+        <AnalyticEcommerce title="Proyectos Premiados" count={loading ? "..." : totalProyectosPremiados.toString()} percentage={100} color="warning" />
       </Grid>
       <Grid sx={{ display: { sm: 'none', md: 'block', lg: 'none' } }} size={{ md: 8 }} />
       {/* row 2 */}

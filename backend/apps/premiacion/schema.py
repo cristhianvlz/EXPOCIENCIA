@@ -6,7 +6,7 @@ from apps.premiacion.models import (
     CandidatoPremio, GanadorPremio, Plantilla, Certificado
 )
 from apps.eventos.models import Evento
-from apps.academico.models import Area
+from apps.academico.models import Area, Oferta
 from apps.proyectos.models import Proyecto
 from apps.evaluaciones.models import ActaEvaluacion
 
@@ -282,29 +282,43 @@ class EliminarDescriptor(graphene.Mutation):
 # ================= MUTACIONES Premio =================
 class CrearPremio(graphene.Mutation):
     class Arguments:
-        id_evento = graphene.ID(required=True)
-        id_area = graphene.ID(required=True)
-        monto = graphene.Decimal(required=True)
+        id_oferta = graphene.ID(required=True)
+        monto = graphene.Decimal()
         numero_ganadores = graphene.Int(required=True)
+        id_descriptores = graphene.List(graphene.ID)
 
     premio = graphene.Field(PremioType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_evento, id_area, monto, numero_ganadores):
+    def mutate(root, info, id_oferta, numero_ganadores, monto=None, id_descriptores=None):
         try:
-            evento = Evento.objects.get(pk=id_evento)
-        except Evento.DoesNotExist:
-            return CrearPremio(premio=None, ok=False, error="El evento no existe.") # type: ignore
+            oferta = Oferta.objects.select_related(
+                'categoria_evento__evento',
+                'modalidad_area__area'
+            ).get(pk=id_oferta)
+        except Oferta.DoesNotExist:
+            return CrearPremio(premio=None, ok=False, error="La oferta no existe.") # type: ignore
+
         try:
-            area = Area.objects.get(pk=id_area)
-        except Area.DoesNotExist:
-            return CrearPremio(premio=None, ok=False, error="El área no existe.") # type: ignore
+            evento = oferta.categoria_evento.evento
+            area = oferta.modalidad_area.area
+        except Exception:
+            return CrearPremio(premio=None, ok=False, error="No se pudo obtener el evento o área de la oferta.") # type: ignore
 
         premio = Premio.objects.create(
             evento=evento, area=area, monto=monto, numero_ganadores=numero_ganadores
         )
+
+        if id_descriptores:
+            for id_desc in id_descriptores:
+                try:
+                    desc = Descriptor.objects.get(pk=id_desc)
+                    PremioDescriptor.objects.create(premio=premio, descriptor=desc)
+                except Exception:
+                    pass
+
         return CrearPremio(premio=premio, ok=True, error=None) # type: ignore
 
 class EditarPremio(graphene.Mutation):
