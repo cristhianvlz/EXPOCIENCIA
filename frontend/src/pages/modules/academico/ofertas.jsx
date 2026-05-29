@@ -5,11 +5,12 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Switch,
   FormControlLabel, Snackbar, Alert, CircularProgress, Tabs, Tab, Chip,
   FormControl, InputLabel, Select, MenuItem, Stepper, Step, StepLabel,
-  Typography, Divider, Avatar
+  Typography, Divider, Avatar, Pagination, Grid
 } from '@mui/material';
 import {
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined,
-  SolutionOutlined, IdcardOutlined, CheckCircleOutlined
+  SolutionOutlined, IdcardOutlined, CheckCircleOutlined,
+  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -107,9 +108,86 @@ const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Datos de la
 const INIT_EDIT_OFERTA = { nombre: '', descripcion: '', estado: true };
 const INIT_OEC         = { idOferta: '', idEntidadAcademica: '', carrera: '', plan: '' };
 
+function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPageChange }) {
+  const totalPages = Math.ceil(count / rowsPerPage);
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="body2" color="text.secondary">Mostrar</Typography>
+        <Select
+          size="small"
+          value={rowsPerPage}
+          onChange={onRowsPerPageChange}
+          sx={{
+            minWidth: 65, height: 32, borderRadius: '6px', bgcolor: 'transparent',
+            '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+            '.MuiSelect-select': { py: 0.5, px: 1.5, fontSize: '0.875rem', color: 'text.primary' }
+          }}
+        >
+          <MenuItem value={5}>5</MenuItem>
+          <MenuItem value={10}>10</MenuItem>
+          <MenuItem value={25}>25</MenuItem>
+        </Select>
+        <Typography variant="body2" color="text.secondary">registros</Typography>
+      </Box>
+      <Pagination 
+        count={totalPages} page={page + 1} onChange={(e, value) => onPageChange(e, value - 1)}
+        shape="rounded" color="primary"
+        sx={{
+          '& .MuiPaginationItem-root': { bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'text.secondary', borderRadius: '6px', minWidth: 32, height: 32 },
+          '& .Mui-selected': { bgcolor: '#1677ff !important', color: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(22, 119, 255, 0.4)' }
+        }}
+      />
+    </Box>
+  );
+}
+
+function StatusIcon({ type }) {
+  if (type === 'error') return <StopOutlined style={{ fontSize: 50, color: '#ff4d4f' }} />;
+  return <RedoOutlined style={{ fontSize: 50, color: '#52c41a' }} />;
+}
+
+function ConfirmDialog({ open, title, message, onConfirm, onClose, loading, type = 'error' }) {
+  const isError = type === 'error';
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.12)' } }}>
+      <Box sx={{ pt: 5, pb: 1, textAlign: 'center', position: 'relative' }}>
+        <Box sx={{
+          position: 'absolute', left: '50%', top: 16, transform: 'translateX(-50%)',
+          width: 130, height: 130, borderRadius: '50%',
+          background: isError ? 'radial-gradient(circle, rgba(255,77,79,0.1) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(82,196,26,0.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <StatusIcon type={type} />
+      </Box>
+      <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>{title}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>{message}</Typography>
+      </Box>
+      <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+        <Button onClick={onClose} disabled={loading} variant="outlined" sx={{ minWidth: 100, borderRadius: 2 }}>Cancelar</Button>
+        <Button onClick={onConfirm} disabled={loading} variant="contained"
+          sx={{
+            minWidth: 100, borderRadius: 2,
+            background: isError ? 'linear-gradient(135deg, #ff4d4f, #b91c1c)' : 'linear-gradient(135deg, #52c41a, #237804)',
+            boxShadow: isError ? '0 4px 14px rgba(255,77,79,0.4)' : '0 4px 14px rgba(82,196,26,0.4)',
+          }}>
+          {loading ? <CircularProgress size={20} color="inherit" /> : (isError ? 'Desactivar' : 'Restaurar')}
+        </Button>
+      </Box>
+    </Dialog>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function OfertasPage() {
   const [tab, setTab] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [searchNombre, setSearchNombre] = useState('');
+  const [searchEstado, setSearchEstado] = useState('Todos');
   const { data, loading, error, refetch } = useQuery(GET_ALL, { fetchPolicy: 'network-only' });
 
   const [crearOferta]    = useMutation(CREATE_OFERTA);
@@ -323,13 +401,36 @@ export default function OfertasPage() {
     setSaving(false);
   };
 
-  const handleDeleteOferta = async (id) => {
-    if (!window.confirm('¿Desactivar esta oferta?')) return;
-    try {
-      const res = await eliminarOferta({ variables: { idOferta: id } });
-      if (res.data?.eliminarOferta?.ok) { showNotif('Oferta desactivada'); refetch(); }
-      else showNotif(res.data?.eliminarOferta?.error || 'Error', 'error');
-    } catch { showNotif('Error de conexión', 'error'); }
+  const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: async () => {}, type: 'error' });
+  const [confirming, setConfirming] = useState(false);
+
+  const handleToggleEstadoOferta = (row) => {
+    const isActiva = row.estado;
+    setConfirmDlg({
+      open: true,
+      title: isActiva ? `¿Desactivar Oferta?` : `¿Restaurar Oferta?`,
+      message: isActiva 
+        ? `¿Deseas desactivar la oferta "${row.nombre}"? Esta acción la marcará como inactiva.` 
+        : `¿Deseas restaurar la oferta "${row.nombre}"? Volverá a estar activa.`,
+      type: isActiva ? 'error' : 'success',
+      onConfirm: async () => {
+        setConfirming(true);
+        try {
+          const res = isActiva
+            ? await eliminarOferta({ variables: { idOferta: row.idOferta } })
+            : await editarOferta({ variables: { idOferta: row.idOferta, estado: true } });
+          const result = isActiva ? res.data?.eliminarOferta : res.data?.editarOferta;
+          if (result?.ok) {
+            showNotif(`Oferta ${isActiva ? 'desactivada' : 'restaurada'}`);
+            refetch();
+          } else {
+            showNotif(result?.error || 'Error en la operación', 'error');
+          }
+        } catch { showNotif('Error de conexión', 'error'); }
+        setConfirming(false);
+        setConfirmDlg(p => ({ ...p, open: false }));
+      }
+    });
   };
 
   // ── OfertaEaCarrera ───────────────────────────────────────────────────────
@@ -366,13 +467,34 @@ export default function OfertasPage() {
     setSaving(false);
   };
 
-  const handleDeleteOEC = async (id) => {
-    if (!window.confirm('¿Desactivar esta asignación?')) return;
-    try {
-      const res = await eliminarOEC({ variables: { idOfertaEaCarrera: id } });
-      if (res.data?.eliminarOfertaEaCarrera?.ok) { showNotif('Asignación desactivada'); refetch(); }
-      else showNotif(res.data?.eliminarOfertaEaCarrera?.error || 'Error', 'error');
-    } catch { showNotif('Error de conexión', 'error'); }
+  const handleToggleEstadoOEC = (row) => {
+    const isActiva = row.estado;
+    const nombreCarrera = row.carrera;
+    setConfirmDlg({
+      open: true,
+      title: isActiva ? `¿Desactivar Asignación?` : `¿Restaurar Asignación?`,
+      message: isActiva 
+        ? `¿Deseas desactivar la asignación de la carrera "${nombreCarrera}"?` 
+        : `¿Deseas restaurar la asignación de la carrera "${nombreCarrera}"?`,
+      type: isActiva ? 'error' : 'success',
+      onConfirm: async () => {
+        setConfirming(true);
+        try {
+          const res = isActiva
+            ? await eliminarOEC({ variables: { idOfertaEaCarrera: row.id } })
+            : await editarOEC({ variables: { idOfertaEaCarrera: row.id, estado: true } });
+          const result = isActiva ? res.data?.eliminarOfertaEaCarrera : res.data?.editarOfertaEaCarrera;
+          if (result?.ok) {
+            showNotif(`Asignación ${isActiva ? 'desactivada' : 'restaurada'}`);
+            refetch();
+          } else {
+            showNotif(result?.error || 'Error en la operación', 'error');
+          }
+        } catch { showNotif('Error de conexión', 'error'); }
+        setConfirming(false);
+        setConfirmDlg(p => ({ ...p, open: false }));
+      }
+    });
   };
 
   const oecFormValid = !editingOEC
@@ -499,13 +621,51 @@ export default function OfertasPage() {
     null,
   ];
 
+  const filteredOfertas = ofertas.filter((item) => {
+    const matchNombre = searchNombre ? item.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) : true;
+    const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
+    return matchNombre && matchEstado;
+  });
+  const paginatedOfertas = filteredOfertas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  const filteredOec = oecList.filter((item) => {
+    const matchNombre = searchNombre ? (item.carrera?.toLowerCase().includes(searchNombre.toLowerCase()) || item.oferta?.nombre?.toLowerCase().includes(searchNombre.toLowerCase())) : true;
+    const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
+    return matchNombre && matchEstado;
+  });
+  const paginatedOec = filteredOec.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
   return (
     <MainCard title="Ofertas Académicas" secondary={tabActions[tab]}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(0); setSearchNombre(''); setSearchEstado('Todos'); }}>
           <Tab label="Gestión de Ofertas"   icon={<SolutionOutlined />} iconPosition="start" />
           <Tab label="Carreras Autorizadas" icon={<IdcardOutlined />}   iconPosition="start" />
         </Tabs>
+      </Box>
+
+      <Box sx={{ px: 2, mb: 2 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              size="small" fullWidth
+              placeholder="Buscar por nombre..."
+              value={searchNombre}
+              onChange={(e) => { setSearchNombre(e.target.value); setPage(0); }}
+              InputProps={{ startAdornment: <SearchOutlined style={{ color: '#888', marginRight: 8 }} /> }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <TextField 
+              fullWidth size="small" select label="Estado" 
+              value={searchEstado} onChange={e => { setSearchEstado(e.target.value); setPage(0); }}
+            >
+              <MenuItem value="Todos">Todos</MenuItem>
+              <MenuItem value="Activo">Activo</MenuItem>
+              <MenuItem value="Inactivo">Inactivo</MenuItem>
+            </TextField>
+          </Grid>
+        </Grid>
       </Box>
 
       {loading ? (
@@ -516,6 +676,7 @@ export default function OfertasPage() {
         <>
           {/* ── Tab 0: Ofertas ── */}
           {tab === 0 && (
+            <>
             <TableContainer component={Paper} elevation={0}>
               <Table size="small">
                 <TableHead>
@@ -529,7 +690,7 @@ export default function OfertasPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {ofertas.map(of => (
+                  {paginatedOfertas.map(of => (
                     <TableRow key={of.idOferta} hover>
                       <TableCell>{of.idOferta}</TableCell>
                       <TableCell sx={{ fontWeight: 500 }}>{of.nombre}</TableCell>
@@ -548,15 +709,17 @@ export default function OfertasPage() {
                         <Chip label={of.estado ? 'Activa' : 'Inactiva'} color={of.estado ? 'success' : 'default'} size="small" />
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton color="info" size="small" onClick={() => { setViewOferta(of); setOpenViewOferta(true); }}>
-                          <EyeOutlined />
-                        </IconButton>
-                        <IconButton color="primary" size="small" onClick={() => handleOpenEditOferta(of)}>
-                          <EditOutlined />
-                        </IconButton>
-                        <IconButton color="error" size="small" onClick={() => handleDeleteOferta(of.idOferta)}>
-                          <DeleteOutlined />
-                        </IconButton>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                          <IconButton color="info" size="small" onClick={() => { setViewOferta(of); setOpenViewOferta(true); }}>
+                            <EyeOutlined />
+                          </IconButton>
+                          <IconButton color="primary" size="small" onClick={() => handleOpenEditOferta(of)}>
+                            <EditOutlined />
+                          </IconButton>
+                          <IconButton color={of.estado ? "error" : "success"} size="small" onClick={() => handleToggleEstadoOferta(of)}>
+                            {of.estado ? <DeleteOutlined /> : <ReloadOutlined />}
+                          </IconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -570,10 +733,18 @@ export default function OfertasPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            {filteredOfertas.length > 0 && (
+              <CustomPagination 
+                count={filteredOfertas.length} rowsPerPage={rowsPerPage} page={page} 
+                onPageChange={(_, p) => setPage(p)} onRowsPerPageChange={e => { setRowsPerPage(e.target.value); setPage(0); }} 
+              />
+            )}
+            </>
           )}
 
           {/* ── Tab 1: Carreras Autorizadas ── */}
           {tab === 1 && (
+            <>
             <TableContainer component={Paper} elevation={0}>
               <Table size="small">
                 <TableHead>
@@ -588,7 +759,7 @@ export default function OfertasPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {oecList.map(oec => (
+                  {paginatedOec.map(oec => (
                     <TableRow key={oec.id} hover>
                       <TableCell>{oec.id}</TableCell>
                       <TableCell>
@@ -601,12 +772,14 @@ export default function OfertasPage() {
                         <Chip label={oec.estado ? 'Activo' : 'Inactivo'} color={oec.estado ? 'success' : 'default'} size="small" />
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" size="small" onClick={() => handleOpenOEC(oec)}>
-                          <EditOutlined />
-                        </IconButton>
-                        <IconButton color="error" size="small" onClick={() => handleDeleteOEC(oec.id)}>
-                          <DeleteOutlined />
-                        </IconButton>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                          <IconButton color="primary" size="small" onClick={() => handleOpenOEC(oec)}>
+                            <EditOutlined />
+                          </IconButton>
+                          <IconButton color={oec.estado ? "error" : "success"} size="small" onClick={() => handleToggleEstadoOEC(oec)}>
+                            {oec.estado ? <DeleteOutlined /> : <ReloadOutlined />}
+                          </IconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -620,6 +793,13 @@ export default function OfertasPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            {filteredOec.length > 0 && (
+              <CustomPagination 
+                count={filteredOec.length} rowsPerPage={rowsPerPage} page={page} 
+                onPageChange={(_, p) => setPage(p)} onRowsPerPageChange={e => { setRowsPerPage(e.target.value); setPage(0); }} 
+              />
+            )}
+            </>
           )}
         </>
       )}
@@ -938,6 +1118,16 @@ export default function OfertasPage() {
       >
         <Alert severity={notification.severity} variant="filled">{notification.message}</Alert>
       </Snackbar>
+
+      <ConfirmDialog 
+        open={confirmDlg.open} 
+        title={confirmDlg.title} 
+        message={confirmDlg.message} 
+        type={confirmDlg.type}
+        loading={confirming}
+        onClose={() => setConfirmDlg(p => ({ ...p, open: false }))}
+        onConfirm={confirmDlg.onConfirm}
+      />
     </MainCard>
   );
 }

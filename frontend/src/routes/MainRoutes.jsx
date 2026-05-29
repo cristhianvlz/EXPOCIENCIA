@@ -18,7 +18,7 @@ const Shadow = Loadable(lazy(() => import('pages/component-overview/shadows')));
 const UsuariosGestion = Loadable(lazy(() => import('pages/modules/usuarios')));
 const UsuariosRoles = Loadable(lazy(() => import('pages/modules/usuarios/roles')));
 const UsuariosPerfiles = Loadable(lazy(() => import('pages/modules/usuarios/perfiles')));
-const AcademicoCatalogos  = Loadable(lazy(() => import('pages/modules/academico/facultades')));
+const AcademicoCatalogos  = Loadable(lazy(() => import('pages/modules/academico/facultades'))); // trigger reload
 const AcademicoEstructuras = Loadable(lazy(() => import('pages/modules/academico/areas')));
 const AcademicoOfertas    = Loadable(lazy(() => import('pages/modules/academico/ofertas')));
 const GestionEventos = Loadable(lazy(() => import('pages/modules/eventos/gestion')));

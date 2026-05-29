@@ -5,12 +5,12 @@ import {
   IconButton, Dialog, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Chip, FormControl, InputLabel, Select, MenuItem,
   Typography, Divider, Avatar, Card, CardActionArea, Tabs, Tab,
-  ToggleButton, ToggleButtonGroup, Stack
+  ToggleButton, ToggleButtonGroup, Stack, Pagination, InputAdornment
 } from '@mui/material';
 import {
   EyeOutlined, TableOutlined, AppstoreOutlined, UserOutlined, TeamOutlined,
   FileProtectOutlined, InfoCircleOutlined, BankOutlined, FilePdfOutlined,
-  CalendarOutlined, DownloadOutlined
+  CalendarOutlined, DownloadOutlined, SearchOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -119,6 +119,9 @@ function PersonRow({ nombre, apellido, sub, color = 'primary' }) {
 export default function RevisionPage() {
   const [view, setView]                     = useState('table');
   const [filtroEstado, setFiltroEstado]     = useState('');
+  const [searchTitulo, setSearchTitulo]     = useState('');
+  const [page, setPage]                     = useState(0);
+  const [rowsPerPage, setRowsPerPage]       = useState(10);
   const [selected, setSelected]             = useState(null);
   const [openModal, setOpenModal]           = useState(false);
   const [nuevoEstado, setNuevoEstado]       = useState('');
@@ -134,9 +137,13 @@ export default function RevisionPage() {
   const participantes = data?.todosLosParticipantes || [];
   const tutores       = data?.todosLosTutores       || [];
 
-  const proyectosFiltrados = filtroEstado
-    ? proyectos.filter(p => p.estado === filtroEstado)
-    : proyectos;
+  const proyectosFiltrados = proyectos.filter(p => {
+    const matchEstado = filtroEstado ? p.estado === filtroEstado : true;
+    const matchTitulo = searchTitulo ? p.titulo?.toLowerCase().includes(searchTitulo.toLowerCase()) : true;
+    return matchEstado && matchTitulo;
+  });
+  const totalPages = Math.ceil(proyectosFiltrados.length / rowsPerPage);
+  const paginatedProyectos = proyectosFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
@@ -173,7 +180,9 @@ export default function RevisionPage() {
   };
 
   // ── Table view ────────────────────────────────────────────────────────────
-  const renderTable = () => (
+  const renderTable = () => {
+  return (
+    <>
     <TableContainer component={Paper} elevation={0}>
       <Table size="small">
         <TableHead>
@@ -187,7 +196,7 @@ export default function RevisionPage() {
           </TableRow>
         </TableHead>
         <TableBody>
-          {proyectosFiltrados.map(p => (
+          {paginatedProyectos.map(p => (
             <TableRow key={p.idProyecto} hover>
               <TableCell>{p.idProyecto}</TableCell>
               <TableCell sx={{ maxWidth: 260 }}>
@@ -224,7 +233,39 @@ export default function RevisionPage() {
         </TableBody>
       </Table>
     </TableContainer>
+    {proyectosFiltrados.length > 0 && (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">Mostrar</Typography>
+          <Select
+            size="small" value={rowsPerPage}
+            onChange={e => { setRowsPerPage(e.target.value); setPage(0); }}
+            sx={{
+              minWidth: 65, height: 32, borderRadius: '6px', bgcolor: 'transparent',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+              '.MuiSelect-select': { py: 0.5, px: 1.5, fontSize: '0.875rem', color: 'text.primary' }
+            }}
+          >
+            <MenuItem value={5}>5</MenuItem>
+            <MenuItem value={10}>10</MenuItem>
+            <MenuItem value={25}>25</MenuItem>
+          </Select>
+          <Typography variant="body2" color="text.secondary">registros</Typography>
+        </Box>
+        <Pagination
+          count={totalPages} page={page + 1} onChange={(_, v) => setPage(v - 1)}
+          shape="rounded" color="primary"
+          sx={{
+            '& .MuiPaginationItem-root': { bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'text.secondary', borderRadius: '6px', minWidth: 32, height: 32 },
+            '& .Mui-selected': { bgcolor: '#1677ff !important', color: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(22, 119, 255, 0.4)' }
+          }}
+        />
+      </Box>
+    )}
+    </>
   );
+  };
 
   // ── Kanban view ───────────────────────────────────────────────────────────
   const renderKanban = () => (
@@ -281,10 +322,24 @@ export default function RevisionPage() {
       title="Revisión y Aprobación"
       secondary={
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            size="small"
+            placeholder="Buscar por título..."
+            value={searchTitulo}
+            onChange={e => { setSearchTitulo(e.target.value); setPage(0); }}
+            sx={{ minWidth: 200 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchOutlined style={{ color: '#888', fontSize: 14 }} />
+                </InputAdornment>
+              )
+            }}
+          />
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Estado</InputLabel>
             <Select value={filtroEstado} label="Estado"
-              onChange={e => setFiltroEstado(e.target.value)}>
+              onChange={e => { setFiltroEstado(e.target.value); setPage(0); }}>
               <MenuItem value="">Todos</MenuItem>
               {ESTADOS.map(e => (
                 <MenuItem key={e} value={e}>{ESTADO_CONFIG[e].label}</MenuItem>

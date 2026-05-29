@@ -311,7 +311,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={5}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h6">Tipos de Descriptor</Typography>
+            <Typography variant="h6">Tipo de Premio</Typography>
             <Button size="small" variant="outlined" startIcon={<PlusOutlined />} onClick={() => openTipoDialog()}>Nuevo</Button>
           </Box>
           <TableContainer component={Paper} elevation={0} variant="outlined">
@@ -350,7 +350,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, eventos, areas, refet
 
         <Grid item xs={12} md={7}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h6">Descriptores</Typography>
+            <Typography variant="h6">Premios</Typography>
             <Button size="small" variant="outlined" startIcon={<PlusOutlined />} onClick={() => openDescDialog()}>Nuevo</Button>
           </Box>
           <TableContainer component={Paper} elevation={0} variant="outlined">

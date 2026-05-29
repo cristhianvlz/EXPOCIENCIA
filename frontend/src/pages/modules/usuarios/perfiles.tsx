@@ -25,9 +25,13 @@ import {
   Chip,
   Alert,
   Snackbar,
-  useTheme
+  useTheme,
+  TablePagination,
+  CircularProgress,
+  Pagination,
+  Select
 } from '@mui/material';
-import { EditOutlined, DeleteOutlined, UserOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, UserOutlined, ReloadOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 import { useMutation, useQuery, gql } from '@apollo/client';
 import Swal from 'sweetalert2';
@@ -162,6 +166,7 @@ const EDITAR_PARTICIPANTE = gql`
     $institucion: String
     $idProyecto: ID
     $idTutor: ID
+    $estado: Boolean
   ) {
     editarParticipante(
       idParticipante: $idParticipante
@@ -175,6 +180,7 @@ const EDITAR_PARTICIPANTE = gql`
       institucion: $institucion
       idProyecto: $idProyecto
       idTutor: $idTutor
+      estado: $estado
     ) {
       ok
       error
@@ -234,6 +240,7 @@ const EDITAR_TUTOR = gql`
     $ci: String
     $expedicion: String
     $idProyecto: ID
+    $estado: Boolean
   ) {
     editarTutor(
       idTutor: $idTutor
@@ -245,6 +252,7 @@ const EDITAR_TUTOR = gql`
       ci: $ci
       expedicion: $expedicion
       idProyecto: $idProyecto
+      estado: $estado
     ) {
       ok
       error
@@ -301,6 +309,7 @@ const EDITAR_TRIBUNAL = gql`
     $ci: String
     $expedicion: String
     $direccion: String
+    $estado: Boolean
   ) {
     editarTribunal(
       idTribunal: $idTribunal
@@ -311,6 +320,7 @@ const EDITAR_TRIBUNAL = gql`
       ci: $ci
       expedicion: $expedicion
       direccion: $direccion
+      estado: $estado
     ) {
       ok
       error
@@ -386,6 +396,7 @@ const EDITAR_PERSONAL = gql`
     $cargo: String
     $direccion: String
     $celular: String
+    $estado: Boolean
   ) {
     editarPersonal(
       idPersonal: $idPersonal
@@ -396,6 +407,7 @@ const EDITAR_PERSONAL = gql`
       cargo: $cargo
       direccion: $direccion
       celular: $celular
+      estado: $estado
     ) {
       ok
       error
@@ -515,9 +527,120 @@ function detectField(msg: string): string {
   return '';
 }
 
+function StatusIcon({ type }: { type: string }) {
+  if (type === 'error') return <StopOutlined style={{ fontSize: 50, color: '#ff4d4f' }} />;
+  return <RedoOutlined style={{ fontSize: 50, color: '#52c41a' }} />;
+}
+
+function ConfirmDialog({ open, title, message, onConfirm, onClose, loading, type = 'error' }: any) {
+  const isError = type === 'error';
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
+      PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.12)' } }}>
+      <Box sx={{ pt: 5, pb: 1, textAlign: 'center', position: 'relative' }}>
+        <Box sx={{
+          position: 'absolute', left: '50%', top: 16, transform: 'translateX(-50%)',
+          width: 130, height: 130, borderRadius: '50%',
+          background: isError 
+            ? 'radial-gradient(circle, rgba(255,77,79,0.1) 0%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(82,196,26,0.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <StatusIcon type={type} />
+      </Box>
+      <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>{title}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>{message}</Typography>
+      </Box>
+      <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+        <Button onClick={onClose} disabled={loading} variant="outlined" sx={{ minWidth: 100, borderRadius: 2 }}>Cancelar</Button>
+        <Button onClick={onConfirm} disabled={loading} variant="contained"
+          sx={{
+            minWidth: 100, borderRadius: 2,
+            background: isError ? 'linear-gradient(135deg, #ff4d4f, #b91c1c)' : 'linear-gradient(135deg, #52c41a, #237804)',
+            boxShadow: isError ? '0 4px 14px rgba(255,77,79,0.4)' : '0 4px 14px rgba(82,196,26,0.4)',
+          }}>
+          {loading ? <CircularProgress size={20} color="inherit" /> : (isError ? 'Eliminar' : 'Restaurar')}
+        </Button>
+      </Box>
+    </Dialog>
+  );
+}
+
+function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPageChange }: any) {
+  const totalPages = Math.ceil(count / rowsPerPage);
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="body2" color="text.secondary">Mostrar</Typography>
+        <Select
+          size="small"
+          value={rowsPerPage}
+          onChange={onRowsPerPageChange}
+          sx={{
+            minWidth: 65,
+            height: 32,
+            borderRadius: '6px',
+            bgcolor: 'transparent',
+            '.MuiOutlinedInput-notchedOutline': {
+              borderColor: 'rgba(255,255,255,0.1)',
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'rgba(255,255,255,0.2)',
+            },
+            '.MuiSelect-select': {
+              py: 0.5,
+              px: 1.5,
+              fontSize: '0.875rem',
+              color: 'text.primary',
+            }
+          }}
+        >
+          <MenuItem value={5}>5</MenuItem>
+          <MenuItem value={10}>10</MenuItem>
+          <MenuItem value={25}>25</MenuItem>
+        </Select>
+        <Typography variant="body2" color="text.secondary">registros</Typography>
+      </Box>
+      <Pagination 
+        count={totalPages} 
+        page={page + 1} 
+        onChange={(e, value) => onPageChange(e, value - 1)}
+        shape="rounded"
+        color="primary"
+        sx={{
+          '& .MuiPaginationItem-root': {
+            bgcolor: 'transparent',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: 'text.secondary',
+            borderRadius: '6px',
+            minWidth: 32,
+            height: 32,
+          },
+          '& .Mui-selected': {
+            bgcolor: '#1677ff !important',
+            color: '#fff',
+            border: 'none',
+            boxShadow: '0 2px 8px rgba(22, 119, 255, 0.4)',
+          }
+        }}
+      />
+    </Box>
+  );
+}
+
 const PerfilesPage: React.FC = () => {
   const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
+
+  // Filters & Pagination states
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [searchNombre, setSearchNombre] = useState('');
+  const [searchApellido, setSearchApellido] = useState('');
+  const [searchCI, setSearchCI] = useState('');
+  const [searchEstado, setSearchEstado] = useState('Todos');
 
   // Modal states
   const [openParticipante, setOpenParticipante] = useState(false);
@@ -589,7 +712,79 @@ const PerfilesPage: React.FC = () => {
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    setPage(0);
+    setSearchNombre('');
+    setSearchApellido('');
+    setSearchCI('');
+    setSearchEstado('Todos');
   };
+
+  const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: async () => {}, type: 'error' });
+  const [confirming, setConfirming] = useState(false);
+
+  const handleToggleEstado = (row: any, tipo: string, idKey: string, eliminarMutation: any, editarMutation: any, refetchFn: any) => {
+    const isActiva = row.estado;
+    const nombre = `${row.nombre || ''} ${row.apellido || ''}`.trim() || `el ${tipo.toLowerCase()}`;
+    setConfirmDlg({
+      open: true,
+      title: isActiva ? `¿Eliminar ${tipo}?` : `¿Restaurar ${tipo}?`,
+      message: isActiva 
+        ? `¿Deseas eliminar a ${nombre}? Esta acción lo marcará como inactivo.` 
+        : `¿Deseas restaurar a ${nombre}? Volverá a estar activo en el sistema.`,
+      type: isActiva ? 'error' : 'success',
+      onConfirm: async () => {
+        setConfirming(true);
+        try {
+          const res = isActiva
+            ? await eliminarMutation({ variables: { [idKey]: row[idKey] } })
+            : await editarMutation({ variables: { [idKey]: row[idKey], estado: true } });
+          const key = isActiva ? `eliminar${tipo}` : `editar${tipo}`;
+          if (res.data[key]?.ok) {
+            setSnackErr({ open: true, msg: `${tipo} ${isActiva ? 'eliminado' : 'restaurado'} exitosamente.` });
+            refetchFn();
+          } else {
+            setSnackErr({ open: true, msg: res.data[key]?.error || 'Error en la operación' });
+          }
+        } catch (err: any) {
+          setSnackErr({ open: true, msg: err.message });
+        }
+        setConfirming(false);
+        setConfirmDlg(p => ({ ...p, open: false }));
+      }
+    });
+  };
+
+  const applyFilters = (data: any[]) => {
+    if (!data) return [];
+    return data.filter((item: any) => {
+      const matchNombre = searchNombre ? item.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) : true;
+      const matchApellido = searchApellido ? item.apellido?.toLowerCase().includes(searchApellido.toLowerCase()) : true;
+      const matchCI = searchCI ? item.ci?.toLowerCase().includes(searchCI.toLowerCase()) : true;
+      const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
+      return matchNombre && matchApellido && matchCI && matchEstado;
+    });
+  };
+
+  const renderFilters = () => (
+    <Grid container spacing={2} sx={{ mb: 2 }}>
+      <Grid item xs={12} sm={3}>
+        <TextField fullWidth size="small" label="Nombre" value={searchNombre} onChange={e => { setSearchNombre(e.target.value); setPage(0); }} />
+      </Grid>
+      <Grid item xs={12} sm={3}>
+        <TextField fullWidth size="small" label="Apellidos" value={searchApellido} onChange={e => { setSearchApellido(e.target.value); setPage(0); }} />
+      </Grid>
+      <Grid item xs={12} sm={3}>
+        <TextField fullWidth size="small" label="C.I." value={searchCI} onChange={e => { setSearchCI(e.target.value); setPage(0); }} />
+      </Grid>
+      <Grid item xs={12} sm={3}>
+        <TextField fullWidth size="small" select label="Estado" value={searchEstado} onChange={e => { setSearchEstado(e.target.value); setPage(0); }}>
+          <MenuItem value="Todos">Todos</MenuItem>
+          <MenuItem value="Activo">Activo</MenuItem>
+          <MenuItem value="Inactivo">Inactivo</MenuItem>
+        </TextField>
+      </Grid>
+    </Grid>
+  );
 
   const showErr = (setMsg: (s: string) => void, setField: (s: string) => void, msg: string) => {
     setMsg(msg);
@@ -610,33 +805,6 @@ const PerfilesPage: React.FC = () => {
     setErrorFieldParticipante('');
     setPendingUserParticipante(null);
     setOpenParticipante(true);
-  };
-
-  const handleDeleteParticipante = (id: string) => {
-    MySwal.fire({
-      title: '¿Eliminar Participante?',
-      text: 'Esta acción no se puede deshacer.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: theme.palette.error.main,
-      cancelButtonColor: theme.palette.text.secondary,
-      confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const res = await eliminarParticipante({ variables: { idParticipante: id } });
-          if (res.data.eliminarParticipante.ok) {
-            MySwal.fire('Eliminado', 'El participante fue eliminado.', 'success');
-            refetchParticipantes();
-          } else {
-            MySwal.fire('Error', res.data.eliminarParticipante.error, 'error');
-          }
-        } catch (err: any) {
-          MySwal.fire('Error', err.message, 'error');
-        }
-      }
-    });
   };
 
   const handleSubmitParticipante = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -739,33 +907,6 @@ const PerfilesPage: React.FC = () => {
     setOpenTutor(true);
   };
 
-  const handleDeleteTutor = (id: string) => {
-    MySwal.fire({
-      title: '¿Eliminar Tutor?',
-      text: 'Esta acción no se puede deshacer.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: theme.palette.error.main,
-      cancelButtonColor: theme.palette.text.secondary,
-      confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const res = await eliminarTutor({ variables: { idTutor: id } });
-          if (res.data.eliminarTutor.ok) {
-            MySwal.fire('Eliminado', 'El tutor fue eliminado.', 'success');
-            refetchTutores();
-          } else {
-            MySwal.fire('Error', res.data.eliminarTutor.error, 'error');
-          }
-        } catch (err: any) {
-          MySwal.fire('Error', err.message, 'error');
-        }
-      }
-    });
-  };
-
   const handleSubmitTutor = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorTutor('');
@@ -854,33 +995,6 @@ const PerfilesPage: React.FC = () => {
     setOpenTribunal(true);
   };
 
-  const handleDeleteTribunal = (id: string) => {
-    MySwal.fire({
-      title: '¿Eliminar Tribunal?',
-      text: 'Esta acción no se puede deshacer.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: theme.palette.error.main,
-      cancelButtonColor: theme.palette.text.secondary,
-      confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const res = await eliminarTribunal({ variables: { idTribunal: id } });
-          if (res.data.eliminarTribunal.ok) {
-            MySwal.fire('Eliminado', 'El tribunal fue eliminado.', 'success');
-            refetchTribunales();
-          } else {
-            MySwal.fire('Error', res.data.eliminarTribunal.error, 'error');
-          }
-        } catch (err: any) {
-          MySwal.fire('Error', err.message, 'error');
-        }
-      }
-    });
-  };
-
   const handleSubmitTribunal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorTribunal('');
@@ -965,33 +1079,6 @@ const PerfilesPage: React.FC = () => {
     setPendingUserPersonal(null);
     setSelectedRolPersonal('');
     setOpenPersonal(true);
-  };
-
-  const handleDeletePersonal = (id: string) => {
-    MySwal.fire({
-      title: '¿Eliminar Personal?',
-      text: 'Esta acción no se puede deshacer.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: theme.palette.error.main,
-      cancelButtonColor: theme.palette.text.secondary,
-      confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const res = await eliminarPersonal({ variables: { idPersonal: id } });
-          if (res.data.eliminarPersonal.ok) {
-            MySwal.fire('Eliminado', 'El registro fue eliminado.', 'success');
-            refetchPersonal();
-          } else {
-            MySwal.fire('Error', res.data.eliminarPersonal.error, 'error');
-          }
-        } catch (err: any) {
-          MySwal.fire('Error', err.message, 'error');
-        }
-      }
-    });
   };
 
   const handleSubmitPersonal = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1093,6 +1180,7 @@ const PerfilesPage: React.FC = () => {
               + Nuevo Participante
             </Button>
           </Box>
+          {renderFilters()}
           <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
             <Table>
               <TableHead>
@@ -1107,8 +1195,10 @@ const PerfilesPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dataParticipantes?.todosLosParticipantes && dataParticipantes.todosLosParticipantes.length > 0 ? (
-                  dataParticipantes.todosLosParticipantes.map((row: any) => (
+                {dataParticipantes?.todosLosParticipantes ? (
+                  applyFilters(dataParticipantes.todosLosParticipantes)
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row: any) => (
                     <TableRow key={row.idParticipante}>
                       <TableCell>{row.idParticipante}</TableCell>
                       <TableCell>
@@ -1126,9 +1216,15 @@ const PerfilesPage: React.FC = () => {
                         <IconButton color="primary" onClick={() => handleOpenParticipante(row)}>
                           <EditOutlined />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteParticipante(row.idParticipante)}>
-                          <DeleteOutlined />
-                        </IconButton>
+                        {row.estado ? (
+                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Participante', 'idParticipante', eliminarParticipante, editarParticipante, refetchParticipantes)} title="Eliminar">
+                            <DeleteOutlined />
+                          </IconButton>
+                        ) : (
+                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Participante', 'idParticipante', eliminarParticipante, editarParticipante, refetchParticipantes)} title="Restaurar">
+                            <ReloadOutlined />
+                          </IconButton>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1141,6 +1237,13 @@ const PerfilesPage: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            <CustomPagination
+              count={applyFilters(dataParticipantes?.todosLosParticipantes || []).length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(e: any, newPage: number) => setPage(newPage)}
+              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+            />
           </TableContainer>
         </CustomTabPanel>
 
@@ -1152,6 +1255,7 @@ const PerfilesPage: React.FC = () => {
               + Nuevo Tutor
             </Button>
           </Box>
+          {renderFilters()}
           <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
             <Table>
               <TableHead>
@@ -1166,8 +1270,10 @@ const PerfilesPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dataTutores?.todosLosTutores && dataTutores.todosLosTutores.length > 0 ? (
-                  dataTutores.todosLosTutores.map((row: any) => (
+                {dataTutores?.todosLosTutores ? (
+                  applyFilters(dataTutores.todosLosTutores)
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row: any) => (
                     <TableRow key={row.idTutor}>
                       <TableCell>{row.idTutor}</TableCell>
                       <TableCell>{row.codEmpleado}</TableCell>
@@ -1183,9 +1289,15 @@ const PerfilesPage: React.FC = () => {
                         <IconButton color="primary" onClick={() => handleOpenTutor(row)}>
                           <EditOutlined />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteTutor(row.idTutor)}>
-                          <DeleteOutlined />
-                        </IconButton>
+                        {row.estado ? (
+                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Tutor', 'idTutor', eliminarTutor, editarTutor, refetchTutores)} title="Eliminar">
+                            <DeleteOutlined />
+                          </IconButton>
+                        ) : (
+                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Tutor', 'idTutor', eliminarTutor, editarTutor, refetchTutores)} title="Restaurar">
+                            <ReloadOutlined />
+                          </IconButton>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1198,6 +1310,13 @@ const PerfilesPage: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            <CustomPagination
+              count={applyFilters(dataTutores?.todosLosTutores || []).length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(e: any, newPage: number) => setPage(newPage)}
+              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+            />
           </TableContainer>
         </CustomTabPanel>
 
@@ -1209,6 +1328,7 @@ const PerfilesPage: React.FC = () => {
               + Nuevo Tribunal
             </Button>
           </Box>
+          {renderFilters()}
           <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
             <Table>
               <TableHead>
@@ -1223,8 +1343,10 @@ const PerfilesPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dataTribunales?.todosLosTribunales && dataTribunales.todosLosTribunales.length > 0 ? (
-                  dataTribunales.todosLosTribunales.map((row: any) => (
+                {dataTribunales?.todosLosTribunales ? (
+                  applyFilters(dataTribunales.todosLosTribunales)
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row: any) => (
                     <TableRow key={row.idTribunal}>
                       <TableCell>{row.idTribunal}</TableCell>
                       <TableCell>
@@ -1240,9 +1362,15 @@ const PerfilesPage: React.FC = () => {
                         <IconButton color="primary" onClick={() => handleOpenTribunal(row)}>
                           <EditOutlined />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteTribunal(row.idTribunal)}>
-                          <DeleteOutlined />
-                        </IconButton>
+                        {row.estado ? (
+                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Tribunal', 'idTribunal', eliminarTribunal, editarTribunal, refetchTribunales)} title="Eliminar">
+                            <DeleteOutlined />
+                          </IconButton>
+                        ) : (
+                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Tribunal', 'idTribunal', eliminarTribunal, editarTribunal, refetchTribunales)} title="Restaurar">
+                            <ReloadOutlined />
+                          </IconButton>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1255,6 +1383,13 @@ const PerfilesPage: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            <CustomPagination
+              count={applyFilters(dataTribunales?.todosLosTribunales || []).length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(e: any, newPage: number) => setPage(newPage)}
+              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+            />
           </TableContainer>
         </CustomTabPanel>
         {/* ======================= PERSONAL ======================= */}
@@ -1265,6 +1400,7 @@ const PerfilesPage: React.FC = () => {
               + Nuevo Personal
             </Button>
           </Box>
+          {renderFilters()}
           <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
             <Table>
               <TableHead>
@@ -1279,8 +1415,10 @@ const PerfilesPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dataPersonal?.todoElPersonal && dataPersonal.todoElPersonal.length > 0 ? (
-                  dataPersonal.todoElPersonal.map((row: any) => (
+                {dataPersonal?.todoElPersonal ? (
+                  applyFilters(dataPersonal.todoElPersonal)
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row: any) => (
                     <TableRow key={row.idPersonal}>
                       <TableCell>{row.idPersonal}</TableCell>
                       <TableCell>
@@ -1296,9 +1434,15 @@ const PerfilesPage: React.FC = () => {
                         <IconButton color="primary" onClick={() => handleOpenPersonal(row)}>
                           <EditOutlined />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDeletePersonal(row.idPersonal)}>
-                          <DeleteOutlined />
-                        </IconButton>
+                        {row.estado ? (
+                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Personal', 'idPersonal', eliminarPersonal, editarPersonal, refetchPersonal)} title="Eliminar">
+                            <DeleteOutlined />
+                          </IconButton>
+                        ) : (
+                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Personal', 'idPersonal', eliminarPersonal, editarPersonal, refetchPersonal)} title="Restaurar">
+                            <ReloadOutlined />
+                          </IconButton>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1311,6 +1455,13 @@ const PerfilesPage: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            <CustomPagination
+              count={applyFilters(dataPersonal?.todoElPersonal || []).length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(e: any, newPage: number) => setPage(newPage)}
+              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+            />
           </TableContainer>
         </CustomTabPanel>
       </Box>
@@ -2229,6 +2380,7 @@ const PerfilesPage: React.FC = () => {
           {snackErr.msg}
         </Alert>
       </Snackbar>
+      <ConfirmDialog {...confirmDlg} onClose={() => setConfirmDlg(p => ({ ...p, open: false }))} loading={confirming} />
     </MainCard>
   );
 };

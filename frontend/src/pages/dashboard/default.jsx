@@ -1,4 +1,20 @@
 import { useState } from 'react';
+import { useQuery, gql } from '@apollo/client';
+
+const GET_DASHBOARD_STATS = gql`
+  query {
+    todosLosProyectos {
+      idProyecto
+      estado
+    }
+    todosLosParticipantes {
+      idParticipante
+    }
+    todosLosGanadoresPremios {
+      idGanadorPremio
+    }
+  }
+`;
 
 // material-ui
 import Avatar from '@mui/material/Avatar';
@@ -60,6 +76,12 @@ export default function DashboardDefault() {
   const [orderMenuAnchor, setOrderMenuAnchor] = useState(null);
   const [analyticsMenuAnchor, setAnalyticsMenuAnchor] = useState(null);
 
+  const { data, loading, error } = useQuery(GET_DASHBOARD_STATS, { fetchPolicy: 'network-only' });
+
+  const totalProyectosAprobados = data?.todosLosProyectos?.filter(p => p.estado === 'aprobado').length || 0;
+  const totalParticipantes = data?.todosLosParticipantes?.length || 0;
+  const totalProyectosPremiados = data?.todosLosGanadoresPremios?.length || 0;
+
   const handleOrderMenuClick = (event) => {
     setOrderMenuAnchor(event.currentTarget);
   };
@@ -81,16 +103,16 @@ export default function DashboardDefault() {
         <Typography variant="h5">Dashboard</Typography>
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total de Proyectos" count="4,42,236" percentage={59.3} extra="35,000" />
+        <AnalyticEcommerce title="Total de Proyectos Aprobados" count={loading ? "..." : totalProyectosAprobados.toString()} percentage={100} extra="0" />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total de Participantes" count="78,250" percentage={70.5} extra="8,900" />
+        <AnalyticEcommerce title="Total de Participantes Registrados" count={loading ? "..." : totalParticipantes.toString()} percentage={100} extra="0" />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
         <AnalyticEcommerce title="Eventos Activos" count="18,800" percentage={27.4} isLoss color="warning" extra="1,943" />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Proyectos Premiados" count="35,078" percentage={27.4} isLoss color="warning" extra="20,395" />
+        <AnalyticEcommerce title="Proyectos Premiados" count={loading ? "..." : totalProyectosPremiados.toString()} percentage={100} color="warning" extra="0" />
       </Grid>
       <Grid sx={{ display: { sm: 'none', md: 'block', lg: 'none' } }} size={{ md: 8 }} />
       {/* row 2 */}

@@ -4,10 +4,11 @@ import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Chip, Typography, Stack, Divider,
-  FormControl, InputLabel, Select, MenuItem, Tooltip
+  FormControl, InputLabel, Select, MenuItem, Tooltip, Pagination
 } from '@mui/material';
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, UserAddOutlined
+  PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, UserAddOutlined,
+  StopOutlined, RedoOutlined, ReloadOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -217,6 +218,11 @@ export default function ActasEvaluacionPage() {
   const [notif, setNotif] = useState({ open: false, msg: '', sev: 'success' });
   const showNotif = (msg, sev = 'success') => setNotif({ open: true, msg, sev });
 
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: async () => {}, type: 'error' });
+  const [confirming, setConfirming] = useState(false);
+
   const [actaDialog, setActaDialog]     = useState({ open: false, initial: null });
   const [juradosDialog, setJuradosDialog] = useState({ open: false, acta: null });
 
@@ -255,13 +261,31 @@ export default function ActasEvaluacionPage() {
     setSaving(false);
   };
 
-  const handleDeleteActa = async (id) => {
-    if (!window.confirm('¿Desactivar esta acta?')) return;
-    try {
-      const res = (await eliminarActa({ variables: { idActaEvaluacion: id } })).data?.eliminarActaEvaluacion;
-      if (res?.ok) { showNotif('Acta desactivada'); refetch(); }
-      else showNotif(res?.error || 'Error', 'error');
-    } catch { showNotif('Error de conexión', 'error'); }
+  const handleToggleEstadoActa = (acta) => {
+    const isActiva = acta.estado;
+    setConfirmDlg({
+      open: true,
+      title: isActiva ? '¿Desactivar Acta?' : '¿Restaurar Acta?',
+      message: isActiva
+        ? `¿Deseas desactivar el acta del proyecto "${acta.proyecto.titulo}"?`
+        : `¿Deseas restaurar el acta del proyecto "${acta.proyecto.titulo}"?`,
+      type: isActiva ? 'error' : 'success',
+      onConfirm: async () => {
+        setConfirming(true);
+        try {
+          let res;
+          if (isActiva) {
+            res = (await eliminarActa({ variables: { idActaEvaluacion: acta.idActaEvaluacion } })).data?.eliminarActaEvaluacion;
+          } else {
+            res = (await editarActa({ variables: { idActaEvaluacion: acta.idActaEvaluacion, estado: true } })).data?.editarActaEvaluacion;
+          }
+          if (res?.ok) { showNotif(`Acta ${isActiva ? 'desactivada' : 'restaurada'}`); refetch(); }
+          else showNotif(res?.error || 'Error', 'error');
+        } catch { showNotif('Error de conexión', 'error'); }
+        setConfirming(false);
+        setConfirmDlg(p => ({ ...p, open: false }));
+      }
+    });
   };
 
   const handleAddJurado = async (idTribunal) => {
@@ -311,6 +335,7 @@ export default function ActasEvaluacionPage() {
       ) : error ? (
         <Alert severity="error">Error al cargar: {error.message}</Alert>
       ) : (
+        <>
         <TableContainer component={Paper} elevation={0}>
           <Table size="small">
             <TableHead>
@@ -323,11 +348,11 @@ export default function ActasEvaluacionPage() {
                 <TableCell align="center">Jurados</TableCell>
                 <TableCell align="center">Nota Final</TableCell>
                 <TableCell width={80}>Estado</TableCell>
-                <TableCell align="right" width={120}>Acciones</TableCell>
+                <TableCell align="right" width={130}>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {actas.map(acta => (
+              {actas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(acta => (
                 <TableRow key={acta.idActaEvaluacion} hover>
                   <TableCell>{acta.idActaEvaluacion}</TableCell>
                   <TableCell>
@@ -355,24 +380,26 @@ export default function ActasEvaluacionPage() {
                       color={acta.estado ? 'success' : 'default'} size="small" />
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="Gestionar jurados">
-                      <IconButton size="small" color="secondary"
-                        onClick={() => setJuradosDialog({ open: true, acta })}>
-                        <TeamOutlined />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Editar acta">
-                      <IconButton size="small" color="primary"
-                        onClick={() => setActaDialog({ open: true, initial: acta })}>
-                        <EditOutlined />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Desactivar acta">
-                      <IconButton size="small" color="error"
-                        onClick={() => handleDeleteActa(acta.idActaEvaluacion)}>
-                        <DeleteOutlined />
-                      </IconButton>
-                    </Tooltip>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                      <Tooltip title="Gestionar jurados">
+                        <IconButton size="small" color="secondary"
+                          onClick={() => setJuradosDialog({ open: true, acta })}>
+                          <TeamOutlined />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Editar acta">
+                        <IconButton size="small" color="primary"
+                          onClick={() => setActaDialog({ open: true, initial: acta })}>
+                          <EditOutlined />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={acta.estado ? 'Desactivar acta' : 'Restaurar acta'}>
+                        <IconButton size="small" color={acta.estado ? 'error' : 'success'}
+                          onClick={() => handleToggleEstadoActa(acta)}>
+                          {acta.estado ? <DeleteOutlined /> : <ReloadOutlined />}
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -386,6 +413,36 @@ export default function ActasEvaluacionPage() {
             </TableBody>
           </Table>
         </TableContainer>
+        {actas.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">Mostrar</Typography>
+              <Select size="small" value={rowsPerPage}
+                onChange={e => { setRowsPerPage(e.target.value); setPage(0); }}
+                sx={{
+                  minWidth: 65, height: 32, borderRadius: '6px', bgcolor: 'transparent',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+                  '.MuiSelect-select': { py: 0.5, px: 1.5, fontSize: '0.875rem', color: 'text.primary' }
+                }}
+              >
+                <MenuItem value={5}>5</MenuItem>
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+              </Select>
+              <Typography variant="body2" color="text.secondary">registros</Typography>
+            </Box>
+            <Pagination
+              count={Math.ceil(actas.length / rowsPerPage)} page={page + 1}
+              onChange={(_, v) => setPage(v - 1)} shape="rounded" color="primary"
+              sx={{
+                '& .MuiPaginationItem-root': { bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'text.secondary', borderRadius: '6px', minWidth: 32, height: 32 },
+                '& .Mui-selected': { bgcolor: '#1677ff !important', color: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.4)' }
+              }}
+            />
+          </Box>
+        )}
+        </>
       )}
 
       <ActaDialog
@@ -407,6 +464,37 @@ export default function ActasEvaluacionPage() {
         onRemove={handleRemoveJurado}
         saving={saving}
       />
+
+      {/* ConfirmDialog para desactivar/restaurar */}
+      <Dialog open={confirmDlg.open} onClose={() => setConfirmDlg(p => ({ ...p, open: false }))} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}>
+        <Box sx={{ pt: 5, pb: 1, textAlign: 'center', position: 'relative' }}>
+          <Box sx={{
+            position: 'absolute', left: '50%', top: 16, transform: 'translateX(-50%)',
+            width: 130, height: 130, borderRadius: '50%',
+            background: confirmDlg.type === 'error' ? 'radial-gradient(circle, rgba(255,77,79,0.1) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(82,196,26,0.1) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }} />
+          {confirmDlg.type === 'error'
+            ? <StopOutlined style={{ fontSize: 50, color: '#ff4d4f' }} />
+            : <RedoOutlined style={{ fontSize: 50, color: '#52c41a' }} />}
+        </Box>
+        <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>{confirmDlg.title}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>{confirmDlg.message}</Typography>
+        </Box>
+        <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+          <Button onClick={() => setConfirmDlg(p => ({ ...p, open: false }))} disabled={confirming} variant="outlined" sx={{ minWidth: 100, borderRadius: 2 }}>Cancelar</Button>
+          <Button onClick={confirmDlg.onConfirm} disabled={confirming} variant="contained"
+            sx={{
+              minWidth: 100, borderRadius: 2,
+              background: confirmDlg.type === 'error' ? 'linear-gradient(135deg, #ff4d4f, #b91c1c)' : 'linear-gradient(135deg, #52c41a, #237804)',
+              boxShadow: confirmDlg.type === 'error' ? '0 4px 14px rgba(255,77,79,0.4)' : '0 4px 14px rgba(82,196,26,0.4)',
+            }}>
+            {confirming ? <CircularProgress size={20} color="inherit" /> : (confirmDlg.type === 'error' ? 'Desactivar' : 'Restaurar')}
+          </Button>
+        </Box>
+      </Dialog>
 
       <Snackbar open={notif.open} autoHideDuration={4000}
         onClose={() => setNotif(p => ({ ...p, open: false }))}
