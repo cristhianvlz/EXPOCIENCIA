@@ -377,7 +377,7 @@ export default function CronogramaPage() {
             const getStatusInfo = (c) => {
               const inicio = new Date(c.fechaInicio);
               const fin    = new Date(c.fechaFin);
-              if (!c.estado) return { label: 'Inactivo', color: 'default' };
+              if (!c.estado) return { label: 'Inactivo', color: 'error' };
               if (now < inicio) return { label: 'Muy pronto', color: 'info' };
               return { label: 'Activo', color: 'success' };
             };
@@ -472,7 +472,7 @@ export default function CronogramaPage() {
                                     <TableCell>{formatDate(c.fechaInicio)}</TableCell>
                                     <TableCell>{formatDate(c.fechaFin)}</TableCell>
                                     <TableCell>
-                                      <Chip label={status.label} color={status.color} size="small" />
+                                      <Chip label={status.label} color={status.color} size="small" variant="outlined" />
                                     </TableCell>
                                     <TableCell align="right">
                                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -528,7 +528,7 @@ export default function CronogramaPage() {
                         <TableCell>{a.nombreActividad}</TableCell>
                         <TableCell>{a.grupo?.descripcion || '-'}</TableCell>
                         <TableCell>
-                          <Chip label={a.estado ? 'Activo' : 'Inactivo'} color={a.estado ? 'success' : 'default'} size="small" />
+                          <Chip label={a.estado ? 'Activo' : 'Inactivo'} color={a.estado ? 'success' : 'error'} size="small" variant="outlined" />
                         </TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -572,7 +572,7 @@ export default function CronogramaPage() {
                         <TableCell>{g.idGrupo}</TableCell>
                         <TableCell>{g.descripcion}</TableCell>
                         <TableCell>
-                          <Chip label={g.estado ? 'Activo' : 'Inactivo'} color={g.estado ? 'success' : 'default'} size="small" />
+                          <Chip label={g.estado ? 'Activo' : 'Inactivo'} color={g.estado ? 'success' : 'error'} size="small" variant="outlined" />
                         </TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -735,7 +735,7 @@ export default function CronogramaPage() {
           {viewItem?.estado !== undefined && (
             <Chip 
               label={viewItem.estado ? 'ACTIVO' : 'INACTIVO'} 
-              color={viewItem.estado ? 'success' : 'default'} 
+              color={viewItem.estado ? 'success' : 'error'} variant="outlined"
               variant="outlined"
             />
           )}

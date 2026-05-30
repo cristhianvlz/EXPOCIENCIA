@@ -1025,12 +1025,19 @@ class LoginConTotp(graphene.Mutation):
     @staticmethod
     def mutate(root, info, username, password):
         import graphql_jwt
-        from django.contrib.auth import authenticate
-        user = authenticate(username=username, password=password)
-        if user is None:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
             return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Credenciales incorrectas.")  # type: ignore
+
+        if not user.check_password(password):
+            return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Credenciales incorrectas.")  # type: ignore
+            
         if not user.is_active:
-            return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Usuario inactivo.")  # type: ignore
+            return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Cuenta inactiva, apersónese con el administrador.")  # type: ignore
         if user.is_2fa_enabled:
             return LoginConTotp(token=None, requires2fa=True, needs_setup=False, ok=True, error=None)  # type: ignore
         # 2FA es opcional: si no está habilitado, login directo
@@ -1258,10 +1265,20 @@ class LoginTribunalMovil(graphene.Mutation):
 
     @staticmethod
     def mutate(root, info, username, password):
-        from django.contrib.auth import authenticate
-        user = authenticate(username=username, password=password)
-        if user is None:
+        import graphql_jwt
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
             return LoginTribunalMovil(token=None, tribunal=None, ok=False, error="Credenciales incorrectas.")  # type: ignore
+
+        if not user.check_password(password):
+            return LoginTribunalMovil(token=None, tribunal=None, ok=False, error="Credenciales incorrectas.")  # type: ignore
+
+        if not user.is_active:
+            return LoginTribunalMovil(token=None, tribunal=None, ok=False, error="Cuenta inactiva, apersónese con el administrador.")  # type: ignore
         try:
             tribunal_obj = user.tribunal
         except Exception:

@@ -163,8 +163,9 @@ function CatalogTable({ rows, idKey, onEdit, onToggleEstado }: any) {
               <TableCell>
                 <Chip
                   label={row.estado ? 'Activo' : 'Inactivo'}
-                  color={row.estado ? 'success' : 'default'}
+                  color={row.estado ? 'success' : 'error'}
                   size="small"
+                  variant="outlined"
                 />
               </TableCell>
               <TableCell align="right">

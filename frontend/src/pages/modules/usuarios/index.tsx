@@ -29,7 +29,7 @@ import {
 } from '@mui/material';
 import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { MenuItem, Select, InputLabel, FormControl, Grid, Chip, Avatar, Tooltip } from '@mui/material';
-import { UserOutlined, MailOutlined, CheckCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { UserOutlined, MailOutlined, CheckCircleOutlined, StopOutlined, RedoOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
 const GET_USUARIOS = gql`
@@ -79,6 +79,16 @@ const DELETE_USUARIO = gql`
   }
 `;
 
+interface Usuario {
+  idUsuario: string;
+  username: string;
+  email: string;
+  estado: boolean;
+  participante?: { idParticipante: string };
+  tutor?: { idTutor: string };
+  tribunal?: { idTribunal: string };
+}
+
 export default function UsuariosPage() {
   const theme = useTheme();
   const { data, loading, error, refetch } = useQuery(GET_USUARIOS, { fetchPolicy: 'network-only' });
@@ -89,12 +99,12 @@ export default function UsuariosPage() {
   console.log('GraphQL Data:', data);
   console.log('GraphQL Error:', error);
 
-  const usuarios = data?.todosLosUsuarios || [];
+  const usuarios: Usuario[] = data?.todosLosUsuarios || [];
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUser, setEditingUser] = useState<Usuario | null>(null);
   const [formData, setFormData] = useState({ username: '', email: '', password: '', estado: true });
-  const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'success' });
   const [saving, setSaving] = useState(false);
 
   // Filtros
@@ -106,17 +116,22 @@ export default function UsuariosPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
 
-  const getTipoUsuario = (user) => {
+  // Diálogo de confirmación inactivar/restaurar
+  const [confirmDlg, setConfirmDlg] = useState<{ open: boolean; user: Usuario | null }>({ open: false, user: null });
+  const [confirming, setConfirming] = useState(false);
+
+  const getTipoUsuario = (user: Usuario) => {
     if (user.participante) return 'Participante';
     if (user.tutor) return 'Tutor';
     if (user.tribunal) return 'Tribunal';
     return 'Administrador';
   };
 
-  const usuariosFiltrados = usuarios.filter((user) => {
+  const usuariosFiltrados = usuarios.filter((user: Usuario) => {
     const tipo = getTipoUsuario(user);
     const matchesTipo = filterTipo === 'todos' || tipo === filterTipo;
-    const matchesEmail = (user.email || '').toLowerCase().includes(filterEmail.toLowerCase());
+    const matchesEmail = (user.email || '').toLowerCase().includes(filterEmail.toLowerCase()) || 
+                         (user.username || '').toLowerCase().includes(filterEmail.toLowerCase());
     const matchesEstado =
       filterEstado === 'todos' || (filterEstado === 'activo' && user.estado) || (filterEstado === 'inactivo' && !user.estado);
 
@@ -125,16 +140,16 @@ export default function UsuariosPage() {
 
   const paginatedUsers = usuariosFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  const handleChangePage = (event, newPage) => {
+  const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event) => {
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  const handleOpenDialog = (user = null) => {
+  const handleOpenDialog = (user: Usuario | null = null) => {
     if (user) {
       setEditingUser(user);
       setFormData({ username: user.username, email: user.email, password: '', estado: user.estado });
@@ -149,7 +164,7 @@ export default function UsuariosPage() {
     setOpenDialog(false);
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: any) => {
     const { name, value, checked, type } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -189,25 +204,30 @@ export default function UsuariosPage() {
     setSaving(false);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar este usuario?')) return;
-
+  const handleConfirmToggle = async () => {
+    if (!confirmDlg.user) return;
+    setConfirming(true);
+    const user = confirmDlg.user;
     try {
-      const response = await eliminarUsuario({ variables: { idUsuario: id } });
-      const result = response.data?.eliminarUsuario;
-
-      if (result?.ok) {
-        showNotification('Usuario eliminado exitosamente', 'success');
-        refetch();
+      if (user.estado) {
+        // Inactivar
+        const response = await eliminarUsuario({ variables: { idUsuario: user.idUsuario } });
+        const result = response.data?.eliminarUsuario;
+        if (result?.ok) { showNotification('Cuenta inactivada correctamente', 'success'); refetch(); }
+        else showNotification(result?.error || 'Error al inactivar', 'error');
       } else {
-        showNotification(result?.error || 'Error al eliminar', 'error');
+        // Restaurar
+        const response = await editarUsuario({ variables: { idUsuario: user.idUsuario, estado: true } });
+        const result = response.data?.editarUsuario;
+        if (result?.ok) { showNotification('Cuenta restaurada correctamente', 'success'); refetch(); }
+        else showNotification(result?.error || 'Error al restaurar', 'error');
       }
-    } catch (error) {
-      showNotification('Error de conexión', 'error');
-    }
+    } catch { showNotification('Error de conexión', 'error'); }
+    setConfirming(false);
+    setConfirmDlg({ open: false, user: null });
   };
 
-  const showNotification = (message, severity) => {
+  const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setNotification({ open: true, message, severity });
   };
 
@@ -295,8 +315,8 @@ export default function UsuariosPage() {
                 <TextField
                   fullWidth
                   size="medium"
-                  label="Buscar por Email o Nombre"
-                  placeholder="Ej: juan.perez@uagrm.edu.bo"
+                  label="Buscar por Email o Usuario"
+                  placeholder="Ej: juan.perez@uagrm.edu.bo o jperez"
                   value={filterEmail}
                   onChange={(e) => {
                     setFilterEmail(e.target.value);
@@ -378,7 +398,7 @@ export default function UsuariosPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paginatedUsers.map((row) => (
+                  {paginatedUsers.map((row: Usuario) => (
                     <TableRow
                       key={row.idUsuario}
                       hover
@@ -414,7 +434,7 @@ export default function UsuariosPage() {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'text.secondary' }}>
-                          <Box sx={{ p: 0.8, borderRadius: 2, bgcolor: 'grey.100', display: 'flex' }}>
+                          <Box sx={{ p: 0.8, borderRadius: 2, bgcolor: 'action.hover', display: 'flex' }}>
                             <MailOutlined style={{ fontSize: 14 }} />
                           </Box>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -426,28 +446,14 @@ export default function UsuariosPage() {
                         <Chip
                           label={getTipoUsuario(row)}
                           size="small"
-                          sx={{
-                            fontWeight: 700,
-                            borderRadius: '8px',
-                            px: 1.5,
-                            py: 2,
-                            bgcolor: row.participante
-                              ? 'info.lighter'
-                              : row.tutor
-                                ? 'success.lighter'
-                                : row.tribunal
-                                  ? 'warning.lighter'
-                                  : 'secondary.lighter',
-                            color: row.participante
-                              ? 'info.main'
-                              : row.tutor
-                                ? 'success.main'
-                                : row.tribunal
-                                  ? 'warning.main'
-                                  : 'secondary.main',
-                            border: '1px solid',
-                            borderColor: 'transparent'
-                          }}
+                          variant="outlined"
+                          color={
+                            row.participante ? 'info'
+                            : row.tutor ? 'success'
+                            : row.tribunal ? 'warning'
+                            : 'secondary'
+                          }
+                          sx={{ fontWeight: 700, borderRadius: '8px' }}
                         />
                       </TableCell>
                       <TableCell>
@@ -456,15 +462,8 @@ export default function UsuariosPage() {
                           icon={row.estado ? <CheckCircleOutlined style={{ fontSize: 14 }} /> : <StopOutlined style={{ fontSize: 14 }} />}
                           color={row.estado ? 'success' : 'error'}
                           size="small"
-                          variant={row.estado ? 'filled' : 'outlined'}
-                          sx={{
-                            fontWeight: 600,
-                            borderRadius: '8px',
-                            px: 1,
-                            py: 1.5,
-                            bgcolor: row.estado ? 'success.main' : 'transparent',
-                            color: row.estado ? 'white' : 'error.main'
-                          }}
+                          variant="outlined"
+                          sx={{ fontWeight: 600, borderRadius: '8px' }}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -484,19 +483,25 @@ export default function UsuariosPage() {
                               <EditOutlined style={{ fontSize: '1.1rem' }} />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Eliminar" arrow placement="top">
+                          <Tooltip title={row.estado ? 'Inactivar cuenta' : 'Restaurar cuenta'} arrow placement="top">
                             <IconButton
-                              color="error"
-                              onClick={() => handleDelete(row.idUsuario)}
+                              color={row.estado ? 'error' : 'success'}
+                              onClick={() => setConfirmDlg({ open: true, user: row })}
                               size="medium"
                               sx={{
-                                bgcolor: 'error.lighter',
+                                bgcolor: row.estado ? 'error.lighter' : 'success.lighter',
                                 borderRadius: 2,
                                 transition: 'all 0.2s',
-                                '&:hover': { bgcolor: 'error.main', color: 'white', transform: 'scale(1.05)' }
+                                '&:hover': {
+                                  bgcolor: row.estado ? 'error.main' : 'success.main',
+                                  color: 'white',
+                                  transform: 'scale(1.05)'
+                                }
                               }}
                             >
-                              <DeleteOutlined style={{ fontSize: '1.1rem' }} />
+                              {row.estado
+                                ? <StopOutlined style={{ fontSize: '1.1rem' }} />
+                                : <RedoOutlined style={{ fontSize: '1.1rem' }} />}
                             </IconButton>
                           </Tooltip>
                         </Stack>
@@ -507,7 +512,7 @@ export default function UsuariosPage() {
                     <TableRow>
                       <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                          <Avatar sx={{ width: 64, height: 64, bgcolor: 'grey.100' }}>
+                          <Avatar sx={{ width: 64, height: 64, bgcolor: 'action.hover' }}>
                             <UserOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />
                           </Avatar>
                           <Typography variant="h6" color="text.secondary">
@@ -583,7 +588,7 @@ export default function UsuariosPage() {
                       }
                     },
                     '&:hover:not(.Mui-selected)': {
-                      bgcolor: 'grey.100'
+                      bgcolor: 'action.hover'
                     }
                   }
                 }}
@@ -607,7 +612,7 @@ export default function UsuariosPage() {
           }
         }}
       >
-        <DialogTitle sx={{ p: 3, pb: 2, borderBottom: '1px solid', borderColor: 'grey.100' }}>
+        <DialogTitle sx={{ p: 3, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
           <Typography variant="h4" sx={{ fontWeight: 600, color: 'text.primary' }}>
             {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
           </Typography>
@@ -624,15 +629,7 @@ export default function UsuariosPage() {
               onChange={handleChange}
               fullWidth
               required
-              InputProps={{
-                sx: {
-                  borderRadius: '8px',
-                  bgcolor: '#F8FAFC',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { bgcolor: '#F1F5F9' },
-                  '&.Mui-focused': { bgcolor: '#FFF' }
-                }
-              }}
+              sx={{ mt: 1 }}
             />
             <TextField
               label="Correo Electrónico"
@@ -642,15 +639,7 @@ export default function UsuariosPage() {
               onChange={handleChange}
               fullWidth
               required
-              InputProps={{
-                sx: {
-                  borderRadius: '8px',
-                  bgcolor: '#F8FAFC',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { bgcolor: '#F1F5F9' },
-                  '&.Mui-focused': { bgcolor: '#FFF' }
-                }
-              }}
+              sx={{ mt: 1 }}
             />
             <TextField
               label={editingUser ? 'Contraseña (dejar en blanco para no cambiar)' : 'Contraseña'}
@@ -660,15 +649,7 @@ export default function UsuariosPage() {
               onChange={handleChange}
               fullWidth
               required={!editingUser}
-              InputProps={{
-                sx: {
-                  borderRadius: '8px',
-                  bgcolor: '#F8FAFC',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { bgcolor: '#F1F5F9' },
-                  '&.Mui-focused': { bgcolor: '#FFF' }
-                }
-              }}
+              sx={{ mt: 1 }}
             />
             {editingUser && (
               <Box
@@ -707,18 +688,16 @@ export default function UsuariosPage() {
             )}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 2, borderTop: '1px solid', borderColor: 'grey.100' }}>
+        <DialogActions sx={{ p: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
           <Button
             onClick={handleCloseDialog}
-            color="inherit"
+            color="secondary"
             sx={{
               fontWeight: 500,
               borderRadius: '6px',
               px: 3,
               py: 0.8,
               textTransform: 'none',
-              color: 'text.secondary',
-              '&:hover': { bgcolor: '#F1F5F9' }
             }}
           >
             Cancelar
@@ -733,13 +712,8 @@ export default function UsuariosPage() {
               px: 4,
               py: 0.8,
               textTransform: 'none',
-              bgcolor: '#0F172A',
-              color: '#FFF',
               boxShadow: 'none',
-              '&:hover': {
-                bgcolor: '#1E293B',
-                boxShadow: 'none'
-              },
+              '&:hover': { boxShadow: 'none' },
               '&.Mui-disabled': {
                 bgcolor: 'action.disabledBackground',
                 color: 'action.disabled'
@@ -761,6 +735,60 @@ export default function UsuariosPage() {
           {notification.message}
         </Alert>
       </Snackbar>
+
+      {/* ── Diálogo de confirmación inactivar / restaurar ── */}
+      <Dialog
+        open={confirmDlg.open}
+        onClose={() => setConfirmDlg({ open: false, user: null })}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' } }}
+      >
+        <Box sx={{ pt: 5, pb: 1, textAlign: 'center', position: 'relative' }}>
+          <Box sx={{
+            position: 'absolute', left: '50%', top: 16, transform: 'translateX(-50%)',
+            width: 130, height: 130, borderRadius: '50%', pointerEvents: 'none',
+            background: confirmDlg.user?.estado
+              ? 'radial-gradient(circle, rgba(255,77,79,0.12) 0%, transparent 70%)'
+              : 'radial-gradient(circle, rgba(82,196,26,0.12) 0%, transparent 70%)',
+          }} />
+          {confirmDlg.user?.estado
+            ? <StopOutlined style={{ fontSize: 50, color: '#ff4d4f' }} />
+            : <RedoOutlined style={{ fontSize: 50, color: '#52c41a' }} />}
+        </Box>
+        <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>
+            {confirmDlg.user?.estado ? '¿Inactivar esta cuenta?' : '¿Restaurar esta cuenta?'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+            {confirmDlg.user?.estado
+              ? <>El usuario <strong>{confirmDlg.user?.username}</strong> perderá acceso al sistema. Podrás restaurarlo en cualquier momento.</>
+              : <>El usuario <strong>{confirmDlg.user?.username}</strong> recuperará acceso al sistema.</>}
+          </Typography>
+        </Box>
+        <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+          <Button
+            onClick={() => setConfirmDlg({ open: false, user: null })}
+            disabled={confirming}
+            variant="outlined"
+            color="secondary"
+            sx={{ minWidth: 100, borderRadius: 2 }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirmToggle}
+            disabled={confirming}
+            variant="contained"
+            color={confirmDlg.user?.estado ? 'error' : 'success'}
+            sx={{ minWidth: 120, borderRadius: 2, boxShadow: 'none' }}
+          >
+            {confirming
+              ? <CircularProgress size={20} color="inherit" />
+              : confirmDlg.user?.estado ? 'Inactivar' : 'Restaurar'}
+          </Button>
+        </Box>
+      </Dialog>
     </Box>
   );
 }

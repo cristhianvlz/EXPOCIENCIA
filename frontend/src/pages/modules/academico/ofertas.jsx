@@ -753,7 +753,7 @@ export default function OfertasPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip label={of.estado ? 'Activa' : 'Inactiva'} color={of.estado ? 'success' : 'default'} size="small" />
+                        <Chip label={of.estado ? 'Activa' : 'Inactiva'} color={of.estado ? 'success' : 'error'} size="small" variant="outlined" />
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -816,7 +816,7 @@ export default function OfertasPage() {
                       <TableCell sx={{ fontWeight: 500 }}>{oec.carrera}</TableCell>
                       <TableCell>{oec.plan}</TableCell>
                       <TableCell>
-                        <Chip label={oec.estado ? 'Activo' : 'Inactivo'} color={oec.estado ? 'success' : 'default'} size="small" />
+                        <Chip label={oec.estado ? 'Activo' : 'Inactivo'} color={oec.estado ? 'success' : 'error'} size="small" variant="outlined" />
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -994,8 +994,8 @@ export default function OfertasPage() {
                   </Box>
                   <Chip
                     label={viewOferta.estado ? 'ACTIVA' : 'INACTIVA'}
-                    color={viewOferta.estado ? 'success' : 'default'}
-                    variant="filled" size="small"
+                    color={viewOferta.estado ? 'success' : 'error'}
+                    variant="outlined" size="small"
                     sx={{ fontWeight: 700, letterSpacing: 0.5 }}
                   />
                 </Box>
@@ -1090,7 +1090,7 @@ export default function OfertasPage() {
                           </Box>
                           <Chip
                             label={oec.estado ? 'Activo' : 'Inactivo'}
-                            color={oec.estado ? 'success' : 'default'}
+                            color={oec.estado ? 'success' : 'error'}
                             size="small" variant="outlined"
                           />
                         </Box>

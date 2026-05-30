@@ -510,7 +510,7 @@ export default function GestionEventosPage() {
                         <TableCell>{ev.nivelEvento?.nombre}</TableCell>
                         <TableCell>{ev.membrete?.titulo}</TableCell>
                         <TableCell>
-                          <Chip label={ev.estado ? 'Activo' : 'Inactivo'} color={ev.estado ? 'success' : 'default'} size="small" />
+                          <Chip label={ev.estado ? 'Activo' : 'Inactivo'} color={ev.estado ? 'success' : 'error'} size="small" variant="outlined" />
                         </TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -554,7 +554,7 @@ export default function GestionEventosPage() {
                         <TableCell>{t.idTipoEvento}</TableCell>
                         <TableCell>{t.nombre}</TableCell>
                         <TableCell>
-                          <Chip label={t.estado ? 'Activo' : 'Inactivo'} color={t.estado ? 'success' : 'default'} size="small" />
+                          <Chip label={t.estado ? 'Activo' : 'Inactivo'} color={t.estado ? 'success' : 'error'} size="small" variant="outlined" />
                         </TableCell>
                          <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -598,7 +598,7 @@ export default function GestionEventosPage() {
                         <TableCell>{n.idNivelEvento}</TableCell>
                         <TableCell>{n.nombre}</TableCell>
                         <TableCell>
-                          <Chip label={n.estado ? 'Activo' : 'Inactivo'} color={n.estado ? 'success' : 'default'} size="small" />
+                          <Chip label={n.estado ? 'Activo' : 'Inactivo'} color={n.estado ? 'success' : 'error'} size="small" variant="outlined" />
                         </TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
@@ -761,7 +761,7 @@ export default function GestionEventosPage() {
           {viewItem?.estado !== undefined && (
             <Chip 
               label={viewItem.estado ? 'ACTIVO' : 'INACTIVO'} 
-              color={viewItem.estado ? 'success' : 'default'} 
+              color={viewItem.estado ? 'success' : 'error'} variant="outlined"
               variant="outlined"
             />
           )}

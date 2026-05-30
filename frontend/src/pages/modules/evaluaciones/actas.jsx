@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, UserAddOutlined,
-  StopOutlined, RedoOutlined, ReloadOutlined
+  StopOutlined, RedoOutlined, ReloadOutlined, BankOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -22,7 +22,10 @@ const GET_DATA = gql`
       horaFin
       notaFinal
       estado
-      proyecto { idProyecto titulo estado }
+      proyecto {
+        idProyecto titulo estado
+        ofertaEaCarrera { oferta { idOferta nombre } }
+      }
       planillaEvaluativa { idPlanillaEvaluativa nombre notaMaxima }
       detallesEvaluacion {
         id
@@ -31,7 +34,10 @@ const GET_DATA = gql`
         tribunal { idTribunal nombre apellido especialidad }
       }
     }
-    todosLosProyectos { idProyecto titulo estado }
+    todosLosProyectos {
+      idProyecto titulo estado
+      ofertaEaCarrera { oferta { idOferta nombre estado } }
+    }
     todasLasPlanillas { idPlanillaEvaluativa nombre notaMaxima }
     todosLosTribunales { idTribunal nombre apellido especialidad }
   }
@@ -63,6 +69,7 @@ const INIT_ACTA = { idProyecto: '', idPlanillaEvaluativa: '', fecha: '', horaIni
 function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planillas, evaluatedIds }) {
   const editing = !!initial;
   const [form, setForm] = useState(INIT_ACTA);
+  const [filtroOferta, setFiltroOferta] = useState('');
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleEnter = () => {
@@ -75,10 +82,24 @@ function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planill
         horaFin: initial.horaFin,
         notaFinal: initial.notaFinal,
       });
+      setFiltroOferta(initial.proyecto?.ofertaEaCarrera?.oferta?.idOferta || '');
     } else {
       setForm(INIT_ACTA);
+      setFiltroOferta('');
     }
   };
+
+  // Ofertas únicas activas de los proyectos aprobados
+  const ofertasUnicas = [...new Map(
+    proyectos
+      .map(p => [p.ofertaEaCarrera?.oferta?.idOferta, p.ofertaEaCarrera?.oferta])
+      .filter(([id, oferta]) => id && oferta?.estado === true)
+  ).values()];
+
+  // Proyectos filtrados por oferta seleccionada
+  const proyectosFiltrados = filtroOferta
+    ? proyectos.filter(p => p.ofertaEaCarrera?.oferta?.idOferta === filtroOferta)
+    : proyectos;
 
   const valid = form.idProyecto && form.idPlanillaEvaluativa && form.fecha && form.horaInicio && form.horaFin;
 
@@ -87,23 +108,50 @@ function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planill
       <DialogTitle>{editing ? 'Editar Acta' : 'Nueva Acta de Evaluación'}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 1 }}>
+
+          {/* Paso 1: Filtrar por oferta (solo en creación) */}
+          {!editing && (
+            <FormControl fullWidth>
+              <InputLabel>Filtrar por Oferta</InputLabel>
+              <Select
+                value={filtroOferta}
+                label="Filtrar por Oferta"
+                onChange={e => { setFiltroOferta(e.target.value); set('idProyecto', ''); }}
+              >
+                <MenuItem value=""><em>Todas las ofertas</em></MenuItem>
+                {ofertasUnicas.map(o => (
+                  <MenuItem key={o.idOferta} value={o.idOferta}>{o.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {/* Paso 2: Seleccionar proyecto */}
           <FormControl fullWidth required>
             <InputLabel>Proyecto</InputLabel>
             <Select value={form.idProyecto} label="Proyecto" onChange={e => set('idProyecto', e.target.value)}>
-              {proyectos.length === 0 && (
-                <MenuItem disabled>No hay proyectos aprobados disponibles</MenuItem>
+              {proyectosFiltrados.length === 0 && (
+                <MenuItem disabled>
+                  {filtroOferta ? 'Sin proyectos aprobados en esta oferta' : 'No hay proyectos aprobados disponibles'}
+                </MenuItem>
               )}
-              {proyectos.map(p => {
+              {proyectosFiltrados.map(p => {
                 const isEvaluated = evaluatedIds.has(p.idProyecto);
                 const isCurrent = initial && initial.proyecto.idProyecto === p.idProyecto;
                 return (
                   <MenuItem key={p.idProyecto} value={p.idProyecto} disabled={isEvaluated && !isCurrent}>
-                    {p.titulo} {isEvaluated && !isCurrent && "(Ya evaluado)"}
+                    <Box>
+                      <Typography variant="body2">{p.titulo}</Typography>
+                      {isEvaluated && !isCurrent && (
+                        <Typography variant="caption" color="text.secondary">Ya tiene acta registrada</Typography>
+                      )}
+                    </Box>
                   </MenuItem>
                 );
               })}
             </Select>
           </FormControl>
+
           <FormControl fullWidth required>
             <InputLabel>Planilla Evaluativa</InputLabel>
             <Select value={form.idPlanillaEvaluativa} label="Planilla Evaluativa"
@@ -171,7 +219,7 @@ function JuradosDialog({ open, onClose, acta, tribunales, onAdd, onRemove, savin
                   <Typography variant="caption" color="text.secondary">{d.tribunal.especialidad}</Typography>
                 </Box>
                 <Chip label={d.estado ? 'Activo' : 'Inactivo'} size="small"
-                  color={d.estado ? 'success' : 'default'} />
+                  color={d.estado ? 'success' : 'error'} variant="outlined" />
                 <Tooltip title="Quitar jurado">
                   <IconButton size="small" color="error" onClick={() => onRemove(d.id)}>
                     <DeleteOutlined style={{ fontSize: 13 }} />
@@ -231,6 +279,10 @@ export default function ActasEvaluacionPage() {
 
   const [actaDialog, setActaDialog]     = useState({ open: false, initial: null });
   const [juradosDialog, setJuradosDialog] = useState({ open: false, acta: null });
+  const [expandidos, setExpandidos] = useState(new Set());
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
+  });
 
   const actas      = data?.todasLasActas || [];
   const proyectos  = (data?.todosLosProyectos || []).filter(p => p.estado?.toLowerCase() === 'aprobado');
@@ -343,112 +395,121 @@ export default function ActasEvaluacionPage() {
         <Alert severity="error">Error al cargar: {error.message}</Alert>
       ) : (
         <>
-        <TableContainer component={Paper} elevation={0}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell width={60}>ID</TableCell>
-                <TableCell>Proyecto</TableCell>
-                <TableCell>Planilla</TableCell>
-                <TableCell>Fecha</TableCell>
-                <TableCell>Horario</TableCell>
-                <TableCell align="center">Jurados</TableCell>
-                <TableCell align="center">Nota Final</TableCell>
-                <TableCell width={80}>Estado</TableCell>
-                <TableCell align="right" width={130}>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {actas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(acta => (
-                <TableRow key={acta.idActaEvaluacion} hover>
-                  <TableCell>{acta.idActaEvaluacion}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
-                    <Chip label={acta.proyecto.estado} size="small"
-                      color={estadoColor[acta.proyecto.estado] || 'default'} sx={{ mt: 0.3 }} />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{acta.planillaEvaluativa.nombre}</Typography>
-                    <Typography variant="caption" color="text.secondary">máx. {acta.planillaEvaluativa.notaMaxima}</Typography>
-                  </TableCell>
-                  <TableCell>{acta.fecha}</TableCell>
-                  <TableCell>
-                    <Typography variant="caption">{acta.horaInicio} – {acta.horaFin}</Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip label={(acta.detallesEvaluacion || []).length} size="small" color="secondary"
-                      icon={<TeamOutlined style={{ fontSize: 12 }} />} />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography fontWeight={600}>{acta.notaFinal}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={acta.estado ? 'Activa' : 'Inactiva'}
-                      color={acta.estado ? 'success' : 'default'} size="small" />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                      <Tooltip title="Gestionar jurados">
-                        <IconButton size="small" color="secondary"
-                          onClick={() => setJuradosDialog({ open: true, acta })}>
-                          <TeamOutlined />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Editar acta">
-                        <IconButton size="small" color="primary"
-                          onClick={() => setActaDialog({ open: true, initial: acta })}>
-                          <EditOutlined />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={acta.estado ? 'Desactivar acta' : 'Restaurar acta'}>
-                        <IconButton size="small" color={acta.estado ? 'error' : 'success'}
-                          onClick={() => handleToggleEstadoActa(acta)}>
-                          {acta.estado ? <DeleteOutlined /> : <ReloadOutlined />}
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {actas.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                    Sin actas registradas.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {actas.length > 0 && (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" color="text.secondary">Mostrar</Typography>
-              <Select size="small" value={rowsPerPage}
-                onChange={e => { setRowsPerPage(e.target.value); setPage(0); }}
-                sx={{
-                  minWidth: 65, height: 32, borderRadius: '6px', bgcolor: 'transparent',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                  '.MuiSelect-select': { py: 0.5, px: 1.5, fontSize: '0.875rem', color: 'text.primary' }
-                }}
-              >
-                <MenuItem value={5}>5</MenuItem>
-                <MenuItem value={10}>10</MenuItem>
-                <MenuItem value={25}>25</MenuItem>
-              </Select>
-              <Typography variant="body2" color="text.secondary">registros</Typography>
-            </Box>
-            <Pagination
-              count={Math.ceil(actas.length / rowsPerPage)} page={page + 1}
-              onChange={(_, v) => setPage(v - 1)} shape="rounded" color="primary"
-              sx={{
-                '& .MuiPaginationItem-root': { bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'text.secondary', borderRadius: '6px', minWidth: 32, height: 32 },
-                '& .Mui-selected': { bgcolor: '#1677ff !important', color: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.4)' }
-              }}
-            />
-          </Box>
-        )}
+        {actas.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>Sin actas registradas.</Box>
+        ) : (() => {
+          // Agrupar por oferta
+          const grupos = actas.reduce((acc, acta) => {
+            const oferta = acta.proyecto?.ofertaEaCarrera?.oferta;
+            const key = oferta?.idOferta || 'sin_oferta';
+            if (!acc[key]) acc[key] = { oferta, actas: [] };
+            acc[key].actas.push(acta);
+            return acc;
+          }, {});
+
+          return Object.entries(grupos).map(([key, grupo]) => {
+            const isOpen = expandidos.has(key);
+            return (
+              <Box key={key} sx={{ mb: 2 }}>
+                {/* Cabecera colapsable */}
+                <Box sx={{
+                  px: 2, py: 1.25,
+                  borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                  background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+                  border: '1px solid rgba(24,144,255,0.25)',
+                  display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default',
+                }}>
+                  <BankOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                  <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
+                    {grupo.oferta?.nombre || 'Sin Oferta'}
+                  </Typography>
+                  <Chip
+                    label={isOpen ? `▲ ${grupo.actas.length} acta(s)` : `▼ ${grupo.actas.length} acta(s)`}
+                    size="small" color="primary"
+                    variant={isOpen ? 'filled' : 'outlined'}
+                    onClick={() => toggleExpandido(key)}
+                    sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                  />
+                </Box>
+
+                {/* Tabla colapsable */}
+                {isOpen && (
+                  <TableContainer component={Paper} elevation={0}
+                    sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell width={60}>ID</TableCell>
+                          <TableCell>Proyecto</TableCell>
+                          <TableCell>Planilla</TableCell>
+                          <TableCell>Fecha</TableCell>
+                          <TableCell>Horario</TableCell>
+                          <TableCell align="center">Jurados</TableCell>
+                          <TableCell align="center">Nota Final</TableCell>
+                          <TableCell width={80}>Estado</TableCell>
+                          <TableCell align="right" width={130}>Acciones</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {grupo.actas.map(acta => (
+                          <TableRow key={acta.idActaEvaluacion} hover>
+                            <TableCell>{acta.idActaEvaluacion}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
+                              <Chip label={acta.proyecto.estado} size="small"
+                                color={estadoColor[acta.proyecto.estado] || 'default'} variant="outlined" sx={{ mt: 0.3 }} />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">{acta.planillaEvaluativa.nombre}</Typography>
+                              <Typography variant="caption" color="text.secondary">máx. {acta.planillaEvaluativa.notaMaxima}</Typography>
+                            </TableCell>
+                            <TableCell>{acta.fecha}</TableCell>
+                            <TableCell>
+                              <Typography variant="caption">{acta.horaInicio} – {acta.horaFin}</Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip label={(acta.detallesEvaluacion || []).length} size="small" color="secondary"
+                                icon={<TeamOutlined style={{ fontSize: 12 }} />} />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Typography fontWeight={600}>{acta.notaFinal}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={acta.estado ? 'Activa' : 'Inactiva'}
+                                color={acta.estado ? 'success' : 'error'} size="small" variant="outlined" />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                <Tooltip title="Gestionar jurados">
+                                  <IconButton size="small" color="secondary"
+                                    onClick={() => setJuradosDialog({ open: true, acta })}>
+                                    <TeamOutlined />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Editar acta">
+                                  <IconButton size="small" color="primary"
+                                    onClick={() => setActaDialog({ open: true, initial: acta })}>
+                                    <EditOutlined />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title={acta.estado ? 'Desactivar acta' : 'Restaurar acta'}>
+                                  <IconButton size="small" color={acta.estado ? 'error' : 'success'}
+                                    onClick={() => handleToggleEstadoActa(acta)}>
+                                    {acta.estado ? <DeleteOutlined /> : <ReloadOutlined />}
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+            );
+          });
+        })()}
         </>
       )}
 

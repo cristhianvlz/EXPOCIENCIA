@@ -60,6 +60,9 @@ const OBTENER_PARTICIPANTES = gql`
       celular
       estado
       codigoEspecifico
+      usuario {
+        username
+      }
       tutor {
         idTutor
       }
@@ -84,6 +87,9 @@ const OBTENER_TUTORES = gql`
       celular
       direccion
       estado
+      usuario {
+        username
+      }
     }
   }
 `;
@@ -100,6 +106,9 @@ const OBTENER_TRIBUNALES = gql`
       celular
       direccion
       estado
+      usuario {
+        username
+      }
     }
   }
 `;
@@ -351,6 +360,7 @@ const OBTENER_PERSONAL = gql`
       estado
       usuario {
         idUsuario
+        username
       }
     }
   }
@@ -491,7 +501,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
         sx={{
           fontSize: '0.72rem',
           fontWeight: 600,
-          color: '#475569',
+          color: 'text.secondary',
           textTransform: 'uppercase',
           letterSpacing: 0.8,
           whiteSpace: 'nowrap',
@@ -503,14 +513,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
             display: 'inline-block',
             width: '3px',
             height: '11px',
-            bgcolor: '#0F172A',
+            bgcolor: 'text.primary',
             borderRadius: '2px'
           }
         }}
       >
         {children}
       </Typography>
-      <Box sx={{ flex: 1, height: '1px', bgcolor: '#F1F5F9' }} />
+      <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
     </Box>
   );
 }
@@ -1202,7 +1212,12 @@ const PerfilesPage: React.FC = () => {
                     <TableRow key={row.idParticipante}>
                       <TableCell>{row.idParticipante}</TableCell>
                       <TableCell>
-                        {row.nombre} {row.apellido}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         {row.ci} {row.expedicion}
@@ -1278,7 +1293,12 @@ const PerfilesPage: React.FC = () => {
                       <TableCell>{row.idTutor}</TableCell>
                       <TableCell>{row.codEmpleado}</TableCell>
                       <TableCell>
-                        {row.nombre} {row.apellido}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         {row.ci} {row.expedicion}
@@ -1350,7 +1370,12 @@ const PerfilesPage: React.FC = () => {
                     <TableRow key={row.idTribunal}>
                       <TableCell>{row.idTribunal}</TableCell>
                       <TableCell>
-                        {row.nombre} {row.apellido}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>{row.especialidad}</TableCell>
                       <TableCell>
@@ -1422,7 +1447,12 @@ const PerfilesPage: React.FC = () => {
                     <TableRow key={row.idPersonal}>
                       <TableCell>{row.idPersonal}</TableCell>
                       <TableCell>
-                        {row.nombre} {row.apellido}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         {row.ci} {row.expedicion}
@@ -1877,14 +1907,14 @@ const PerfilesPage: React.FC = () => {
           {/* Header minimalista y formal */}
           <Box
             sx={{
-              bgcolor: '#ffffff',
+              bgcolor: 'background.paper',
               px: 3,
               py: 2.5,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               borderBottom: '1px solid',
-              borderColor: '#F1F5F9'
+              borderColor: 'divider'
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1893,20 +1923,20 @@ const PerfilesPage: React.FC = () => {
                   width: 32,
                   height: 32,
                   borderRadius: '6px',
-                  bgcolor: '#F1F5F9',
+                  bgcolor: 'action.hover',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <UserOutlined style={{ color: '#475569', fontSize: 15 }} />
+                <UserOutlined style={{ fontSize: 15 }} />
               </Box>
               <Box>
-                <Typography sx={{ color: '#0F172A', fontWeight: 600, fontSize: '1.05rem', lineHeight: 1.2 }}>
+                <Typography sx={{ color: 'text.primary', fontWeight: 600, fontSize: '1.05rem', lineHeight: 1.2 }}>
                   {activeTribunal ? 'Editar Miembro del Tribunal' : 'Registrar Miembro del Tribunal'}
                 </Typography>
-                <Typography sx={{ color: '#64748B', fontSize: '0.72rem', mt: 0.2 }}>Directorio Académico</Typography>
+                <Typography sx={{ color: 'text.secondary', fontSize: '0.72rem', mt: 0.2 }}>Directorio Académico</Typography>
               </Box>
             </Box>
             <Chip
@@ -1917,14 +1947,13 @@ const PerfilesPage: React.FC = () => {
                 borderRadius: '6px',
                 fontWeight: 500,
                 fontSize: '0.72rem',
-                color: '#475569',
-                borderColor: '#E2E8F0',
-                bgcolor: '#F8FAFC'
+                color: 'text.secondary',
+                borderColor: 'divider',
               }}
             />
           </Box>
 
-          <DialogContent sx={{ bgcolor: '#fff', px: 3, pt: 2, pb: 2 }}>
+          <DialogContent sx={{ bgcolor: 'background.paper', px: 3, pt: 2, pb: 2 }}>
             {!activeTribunal && (
               <>
                 <SectionLabel>Credenciales de acceso</SectionLabel>
@@ -1941,10 +1970,10 @@ const PerfilesPage: React.FC = () => {
                       InputProps={{
                         sx: {
                           borderRadius: '6px',
-                          bgcolor: '#F8FAFC',
+                          bgcolor: 'action.hover',
                           transition: 'all 0.15s ease',
-                          '&:hover': { bgcolor: '#F1F5F9' },
-                          '&.Mui-focused': { bgcolor: '#FFF' }
+                          '&:hover': { bgcolor: 'action.selected' },
+                          '&.Mui-focused': { bgcolor: 'background.paper' }
                         }
                       }}
                     />
@@ -1962,10 +1991,10 @@ const PerfilesPage: React.FC = () => {
                       InputProps={{
                         sx: {
                           borderRadius: '6px',
-                          bgcolor: '#F8FAFC',
+                          bgcolor: 'action.hover',
                           transition: 'all 0.15s ease',
-                          '&:hover': { bgcolor: '#F1F5F9' },
-                          '&.Mui-focused': { bgcolor: '#FFF' }
+                          '&:hover': { bgcolor: 'action.selected' },
+                          '&.Mui-focused': { bgcolor: 'background.paper' }
                         }
                       }}
                     />
@@ -1983,10 +2012,10 @@ const PerfilesPage: React.FC = () => {
                       InputProps={{
                         sx: {
                           borderRadius: '6px',
-                          bgcolor: '#F8FAFC',
+                          bgcolor: 'action.hover',
                           transition: 'all 0.15s ease',
-                          '&:hover': { bgcolor: '#F1F5F9' },
-                          '&.Mui-focused': { bgcolor: '#FFF' }
+                          '&:hover': { bgcolor: 'action.selected' },
+                          '&.Mui-focused': { bgcolor: 'background.paper' }
                         }
                       }}
                     />
@@ -2008,10 +2037,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 />
@@ -2027,10 +2056,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 />
@@ -2048,10 +2077,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 />
@@ -2067,10 +2096,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 >
@@ -2094,10 +2123,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 />
@@ -2119,10 +2148,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 />
@@ -2137,10 +2166,10 @@ const PerfilesPage: React.FC = () => {
                   InputProps={{
                     sx: {
                       borderRadius: '6px',
-                      bgcolor: '#F8FAFC',
+                      bgcolor: 'action.hover',
                       transition: 'all 0.15s ease',
-                      '&:hover': { bgcolor: '#F1F5F9' },
-                      '&.Mui-focused': { bgcolor: '#FFF' }
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
                     }
                   }}
                 />
@@ -2148,17 +2177,16 @@ const PerfilesPage: React.FC = () => {
             </Grid>
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2.5, bgcolor: '#FCFCFD', borderTop: '1px solid', borderColor: '#F1F5F9' }}>
+          <DialogActions sx={{ px: 3, py: 2.5, bgcolor: 'background.paper', borderTop: '1px solid', borderColor: 'divider' }}>
             <Button
               onClick={() => setOpenTribunal(false)}
               variant="text"
+              color="secondary"
               sx={{
-                color: '#475569',
                 textTransform: 'none',
                 fontWeight: 500,
                 fontSize: '0.85rem',
                 mr: 1,
-                '&:hover': { bgcolor: '#F1F5F9' }
               }}
             >
               Cancelar
@@ -2169,14 +2197,11 @@ const PerfilesPage: React.FC = () => {
               sx={{
                 px: 3.5,
                 py: 0.8,
-                bgcolor: '#0F172A',
-                color: '#FFF',
                 textTransform: 'none',
                 fontWeight: 500,
                 fontSize: '0.85rem',
                 borderRadius: '6px',
                 boxShadow: 'none',
-                '&:hover': { bgcolor: '#1E293B', boxShadow: 'none' }
               }}
             >
               {activeTribunal ? 'Guardar Cambios' : 'Registrar Miembro'}

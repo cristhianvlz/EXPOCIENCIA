@@ -10,7 +10,8 @@ import {
 import {
   EyeOutlined, TableOutlined, AppstoreOutlined, UserOutlined, TeamOutlined,
   FileProtectOutlined, InfoCircleOutlined, BankOutlined, FilePdfOutlined,
-  CalendarOutlined, DownloadOutlined, SearchOutlined
+  CalendarOutlined, DownloadOutlined, SearchOutlined, LockOutlined,
+  ExclamationCircleOutlined, CheckCircleOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -85,7 +86,7 @@ function SectionCard({ title, icon, children }) {
   return (
     <Box sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
                borderRadius: 2, overflow: 'hidden' }}>
-      <Box sx={{ px: 2, py: 1.25, bgcolor: 'grey.50', borderBottom: '1px solid',
+      <Box sx={{ px: 2, py: 1.25, bgcolor: 'action.hover', borderBottom: '1px solid',
                  borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
         <Box sx={{ color: 'primary.main', fontSize: 14 }}>{icon}</Box>
         <Typography variant="caption" fontWeight={700} color="text.secondary"
@@ -119,6 +120,7 @@ function PersonRow({ nombre, apellido, sub, color = 'primary' }) {
 export default function RevisionPage() {
   const [view, setView]                     = useState('table');
   const [filtroEstado, setFiltroEstado]     = useState('');
+  const [filtroOferta, setFiltroOferta]     = useState('');
   const [searchTitulo, setSearchTitulo]     = useState('');
   const [page, setPage]                     = useState(0);
   const [rowsPerPage, setRowsPerPage]       = useState(10);
@@ -130,6 +132,12 @@ export default function RevisionPage() {
   const [tab, setTab]                       = useState(0);
   const [notification, setNotification]     = useState({ open: false, message: '', severity: 'success' });
 
+  const [expandidos, setExpandidos] = useState(new Set());
+  const [confirmSave, setConfirmSave] = useState(false);
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
+  });
+
   const { data, loading, error, refetch } = useQuery(GET_ALL, { fetchPolicy: 'network-only' });
   const [editarProyecto] = useMutation(EDITAR_PROYECTO);
 
@@ -137,10 +145,16 @@ export default function RevisionPage() {
   const participantes = data?.todosLosParticipantes || [];
   const tutores       = data?.todosLosTutores       || [];
 
+  // Ofertas únicas para el selector de filtro
+  const ofertasUnicas = [...new Map(
+    proyectos.map(p => [p.ofertaEaCarrera?.oferta?.nombre, p.ofertaEaCarrera?.oferta?.nombre])
+  ).entries()].map(([v]) => v).filter(Boolean).sort();
+
   const proyectosFiltrados = proyectos.filter(p => {
     const matchEstado = filtroEstado ? p.estado === filtroEstado : true;
     const matchTitulo = searchTitulo ? p.titulo?.toLowerCase().includes(searchTitulo.toLowerCase()) : true;
-    return matchEstado && matchTitulo;
+    const matchOferta = filtroOferta ? p.ofertaEaCarrera?.oferta?.nombre === filtroOferta : true;
+    return matchEstado && matchTitulo && matchOferta;
   });
   const totalPages = Math.ceil(proyectosFiltrados.length / rowsPerPage);
   const paginatedProyectos = proyectosFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
@@ -159,7 +173,19 @@ export default function RevisionPage() {
     setOpenModal(true);
   };
 
+  const estadoFinalizado = (estado) => estado === 'aprobado' || estado === 'rechazado';
+  const estadoCambiado   = nuevoEstado !== selected?.estado;
+
+  const handleSaveClick = () => {
+    if (estadoCambiado && estadoFinalizado(nuevoEstado)) {
+      setConfirmSave(true);
+    } else {
+      handleSave();
+    }
+  };
+
   const handleSave = async () => {
+    setConfirmSave(false);
     setSaving(true);
     try {
       const res    = await editarProyecto({
@@ -179,92 +205,118 @@ export default function RevisionPage() {
     setSaving(false);
   };
 
-  // ── Table view ────────────────────────────────────────────────────────────
+  // ── Table view — agrupado por oferta/carrera ────────────────────────────────
   const renderTable = () => {
-  return (
-    <>
-    <TableContainer component={Paper} elevation={0}>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell width={60}>ID</TableCell>
-            <TableCell>Título</TableCell>
-            <TableCell>Oferta / Carrera</TableCell>
-            <TableCell>Facultad</TableCell>
-            <TableCell width={130}>Estado</TableCell>
-            <TableCell align="right" width={70}>Ver</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {paginatedProyectos.map(p => (
-            <TableRow key={p.idProyecto} hover>
-              <TableCell>{p.idProyecto}</TableCell>
-              <TableCell sx={{ maxWidth: 260 }}>
-                <Typography variant="body2" fontWeight={500} noWrap>{p.titulo}</Typography>
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2">{p.ofertaEaCarrera?.oferta?.nombre}</Typography>
-                <Typography variant="caption" color="text.secondary">{p.ofertaEaCarrera?.carrera}</Typography>
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2">{p.ofertaEaCarrera?.entidadAcademica?.nombre}</Typography>
-              </TableCell>
-              <TableCell>
-                <Chip
-                  label={ESTADO_CONFIG[p.estado]?.label || p.estado}
-                  color={ESTADO_CONFIG[p.estado]?.color || 'default'}
-                  size="small"
-                />
-              </TableCell>
-              <TableCell align="right">
-                <IconButton color="primary" size="small" onClick={() => handleOpenProject(p)}>
-                  <EyeOutlined />
-                </IconButton>
-              </TableCell>
-            </TableRow>
-          ))}
-          {proyectosFiltrados.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                Sin proyectos{filtroEstado ? ` con estado "${ESTADO_CONFIG[filtroEstado]?.label}"` : ''}.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-    {proyectosFiltrados.length > 0 && (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2" color="text.secondary">Mostrar</Typography>
-          <Select
-            size="small" value={rowsPerPage}
-            onChange={e => { setRowsPerPage(e.target.value); setPage(0); }}
-            sx={{
-              minWidth: 65, height: 32, borderRadius: '6px', bgcolor: 'transparent',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-              '.MuiSelect-select': { py: 0.5, px: 1.5, fontSize: '0.875rem', color: 'text.primary' }
-            }}
-          >
-            <MenuItem value={5}>5</MenuItem>
-            <MenuItem value={10}>10</MenuItem>
-            <MenuItem value={25}>25</MenuItem>
-          </Select>
-          <Typography variant="body2" color="text.secondary">registros</Typography>
+    if (proyectosFiltrados.length === 0) {
+      return (
+        <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+          Sin proyectos{filtroEstado ? ` con estado "${ESTADO_CONFIG[filtroEstado]?.label}"` : ''}.
         </Box>
-        <Pagination
-          count={totalPages} page={page + 1} onChange={(_, v) => setPage(v - 1)}
-          shape="rounded" color="primary"
-          sx={{
-            '& .MuiPaginationItem-root': { bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'text.secondary', borderRadius: '6px', minWidth: 32, height: 32 },
-            '& .Mui-selected': { bgcolor: '#1677ff !important', color: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(22, 119, 255, 0.4)' }
-          }}
-        />
+      );
+    }
+
+    // Agrupar por oferta + carrera
+    const grupos = proyectosFiltrados.reduce((acc, p) => {
+      const key = `${p.ofertaEaCarrera?.id || 'sin'}`;
+      if (!acc[key]) acc[key] = {
+        oferta: p.ofertaEaCarrera?.oferta?.nombre || 'Sin Oferta',
+        carrera: p.ofertaEaCarrera?.carrera || '',
+        facultad: p.ofertaEaCarrera?.entidadAcademica?.nombre || '',
+        proyectos: []
+      };
+      acc[key].proyectos.push(p);
+      return acc;
+    }, {});
+
+    return (
+      <Box>
+        {Object.entries(grupos).map(([key, grupo]) => {
+          const isOpen = expandidos.has(key);
+          const pendientes = grupo.proyectos.filter(p => p.estado === 'revision').length;
+          return (
+            <Box key={key} sx={{ mb: 2 }}>
+              {/* Cabecera colapsable del grupo */}
+              <Box sx={{
+                px: 2, py: 1.25,
+                borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+                border: '1px solid rgba(24,144,255,0.25)',
+                display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'default',
+              }}>
+                <BankOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary.main" noWrap>
+                    {grupo.oferta}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {grupo.carrera}{grupo.facultad ? ` · ${grupo.facultad}` : ''}
+                  </Typography>
+                </Box>
+                {pendientes > 0 ? (
+                  <Chip
+                    label={`⏳ ${pendientes} en revisión`}
+                    size="small" color="warning" variant="filled"
+                    sx={{ fontWeight: 600, mr: 0.5 }}
+                  />
+                ) : (
+                  <Chip
+                    label="✓ Revisados"
+                    size="small" color="success" variant="outlined"
+                    sx={{ fontWeight: 600, mr: 0.5 }}
+                  />
+                )}
+                <Chip
+                  label={isOpen ? `▲ ${grupo.proyectos.length} proyecto(s)` : `▼ ${grupo.proyectos.length} proyecto(s)`}
+                  size="small" color="primary"
+                  variant={isOpen ? 'filled' : 'outlined'}
+                  onClick={() => toggleExpandido(key)}
+                  sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                />
+              </Box>
+
+              {/* Tabla colapsable */}
+              {isOpen && (
+                <TableContainer component={Paper} elevation={0}
+                  sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width={60}>ID</TableCell>
+                        <TableCell>Título</TableCell>
+                        <TableCell width={130}>Estado</TableCell>
+                        <TableCell align="right" width={70}>Ver</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {grupo.proyectos.map(p => (
+                        <TableRow key={p.idProyecto} hover>
+                          <TableCell>{p.idProyecto}</TableCell>
+                          <TableCell sx={{ maxWidth: 400 }}>
+                            <Typography variant="body2" fontWeight={500} noWrap>{p.titulo}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={ESTADO_CONFIG[p.estado]?.label || p.estado}
+                              color={ESTADO_CONFIG[p.estado]?.color || 'default'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton color="primary" size="small" onClick={() => handleOpenProject(p)}>
+                              <EyeOutlined />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          );
+        })}
       </Box>
-    )}
-    </>
-  );
+    );
   };
 
   // ── Kanban view ───────────────────────────────────────────────────────────
@@ -336,6 +388,16 @@ export default function RevisionPage() {
               )
             }}
           />
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel>Oferta</InputLabel>
+            <Select value={filtroOferta} label="Oferta"
+              onChange={e => { setFiltroOferta(e.target.value); setPage(0); }}>
+              <MenuItem value="">Todas</MenuItem>
+              {ofertasUnicas.map(o => (
+                <MenuItem key={o} value={o}>{o}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Estado</InputLabel>
             <Select value={filtroEstado} label="Estado"
@@ -361,7 +423,9 @@ export default function RevisionPage() {
       ) : error ? (
         <Alert severity="error">Error al cargar los proyectos: {error.message}</Alert>
       ) : (
-        view === 'table' ? renderTable() : renderKanban()
+        <>
+          {view === 'table' ? renderTable() : renderKanban()}
+        </>
       )}
 
       {/* ── Modal de detalle ── */}
@@ -539,43 +603,97 @@ export default function RevisionPage() {
                   sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
                   Acción del comité
                 </Typography>
-                <Stack gap={1.5}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Cambiar Estado</InputLabel>
-                    <Select value={nuevoEstado} label="Cambiar Estado"
-                      onChange={e => setNuevoEstado(e.target.value)}>
-                      {ESTADOS.map(e => (
-                        <MenuItem key={e} value={e}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Chip label={ESTADO_CONFIG[e].label}
-                              color={ESTADO_CONFIG[e].color} size="small" />
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <TextField
-                    label="Observación / Retroalimentación"
-                    value={nuevaObservacion}
-                    onChange={e => setNuevaObservacion(e.target.value)}
-                    multiline rows={3} fullWidth size="small"
-                    placeholder="Escribe correcciones o comentarios para el equipo..."
-                  />
-                </Stack>
+                {estadoFinalizado(selected?.estado) ? (
+                  <Alert
+                    severity={selected?.estado === 'aprobado' ? 'success' : 'error'}
+                    icon={<LockOutlined />}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Este proyecto ya fue <strong>{ESTADO_CONFIG[selected?.estado]?.label}</strong>.
+                    El estado no puede modificarse una vez finalizado.
+                  </Alert>
+                ) : (
+                  <Stack gap={1.5}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Cambiar Estado</InputLabel>
+                      <Select value={nuevoEstado} label="Cambiar Estado"
+                        onChange={e => setNuevoEstado(e.target.value)}>
+                        {ESTADOS.map(e => (
+                          <MenuItem key={e} value={e}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip label={ESTADO_CONFIG[e].label}
+                                color={ESTADO_CONFIG[e].color} size="small" />
+                            </Box>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      label="Observación / Retroalimentación"
+                      value={nuevaObservacion}
+                      onChange={e => setNuevaObservacion(e.target.value)}
+                      multiline rows={3} fullWidth size="small"
+                      placeholder="Escribe correcciones o comentarios para el equipo..."
+                    />
+                  </Stack>
+                )}
               </Box>
             </>
           )}
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-          <Button onClick={() => setOpenModal(false)} color="inherit" size="small">
+          <Button onClick={() => setOpenModal(false)} color="secondary" size="small">
+            {estadoFinalizado(selected?.estado) ? 'Cerrar' : 'Cancelar'}
+          </Button>
+          {!estadoFinalizado(selected?.estado) && (
+            <Button onClick={handleSaveClick} variant="contained" size="small" disabled={saving}
+              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}>
+              {saving ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Diálogo de confirmación de estado final ── */}
+      <Dialog open={confirmSave} onClose={() => setConfirmSave(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}>
+        <Box sx={{ pt: 4, pb: 1, textAlign: 'center', position: 'relative' }}>
+          <Box sx={{
+            position: 'absolute', left: '50%', top: 12, transform: 'translateX(-50%)',
+            width: 120, height: 120, borderRadius: '50%', pointerEvents: 'none',
+            background: nuevoEstado === 'aprobado'
+              ? 'radial-gradient(circle, rgba(82,196,26,0.12) 0%, transparent 70%)'
+              : 'radial-gradient(circle, rgba(255,77,79,0.12) 0%, transparent 70%)',
+          }} />
+          {nuevoEstado === 'aprobado'
+            ? <CheckCircleOutlined style={{ fontSize: 46, color: '#52c41a' }} />
+            : <ExclamationCircleOutlined style={{ fontSize: 46, color: '#ff4d4f' }} />}
+        </Box>
+        <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>
+            {nuevoEstado === 'aprobado' ? '¿Aprobar este proyecto?' : '¿Rechazar este proyecto?'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+            <strong>{selected?.titulo}</strong> quedará marcado como{' '}
+            <Chip label={ESTADO_CONFIG[nuevoEstado]?.label} color={ESTADO_CONFIG[nuevoEstado]?.color} size="small" />.{' '}
+            Esta acción <strong>no podrá revertirse</strong>.
+          </Typography>
+        </Box>
+        <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+          <Button onClick={() => setConfirmSave(false)} variant="outlined" color="secondary"
+            sx={{ minWidth: 100, borderRadius: 2 }}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} variant="contained" size="small" disabled={saving}
-            startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}>
-            {saving ? 'Guardando...' : 'Guardar cambios'}
+          <Button onClick={handleSave} variant="contained"
+            color={nuevoEstado === 'aprobado' ? 'success' : 'error'}
+            disabled={saving}
+            sx={{ minWidth: 120, borderRadius: 2, boxShadow: 'none' }}>
+            {saving
+              ? <CircularProgress size={20} color="inherit" />
+              : nuevoEstado === 'aprobado' ? 'Sí, Aprobar' : 'Sí, Rechazar'}
           </Button>
-        </DialogActions>
+        </Box>
       </Dialog>
 
       <Snackbar open={notification.open} autoHideDuration={4000}

@@ -544,7 +544,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell align="center" width={110}>Lugar</TableCell>
+                        <TableCell align="center" width={140}>Lugar</TableCell>
                         <TableCell>Descriptores</TableCell>
                         <TableCell align="center">Monto (Bs.)</TableCell>
                         <TableCell align="right" width={120}>Acciones</TableCell>
@@ -556,7 +556,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
                         .sort((a, b) => a.numeroGanadores - b.numeroGanadores)
                         .map(p => (
                           <TableRow key={p.idPremio} hover>
-                            <TableCell align="center">
+                            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                               <Typography fontWeight={700} fontSize={14}>
                                 {posLabel(p.numeroGanadores)}
                               </Typography>
@@ -794,6 +794,10 @@ function RankingTab({ actas, premios, ganadores, refetch, showNotif }) {
   const [cerrarActa] = useMutation(CERRAR_ACTA_RESULTADOS);
   const [saving, setSaving] = useState(false);
   const [cerrarDialog, setCerrarDialog] = useState({ open: false, oferta: null });
+  const [expandidos, setExpandidos] = useState(new Set());
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
+  });
 
   const handleCerrarActa = async () => {
     if (!cerrarDialog.oferta) return;
@@ -867,74 +871,101 @@ function RankingTab({ actas, premios, ganadores, refetch, showNotif }) {
       {gruposOferta.length === 0 ? (
         <Alert severity="info">No hay actas con nota final registrada.</Alert>
       ) : gruposOferta.map(grupo => {
+        const key = grupo.oferta?.idOferta || 'sin_oferta';
+        const isOpen = expandidos.has(key);
         const maxNotaGrupo = parseFloat(grupo.actas[0]?.notaFinal) || 1;
+        const actaCerrada = ofertasConGanador.has(grupo.oferta?.idOferta);
         return (
-          <Box key={grupo.oferta?.idOferta || 'sin_oferta'} sx={{ mb: 4 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: 'primary.lighter', borderRadius: 1, mb: 1 }}>
-              <Stack direction="row" alignItems="center" gap={1}>
-                <TrophyOutlined style={{ fontSize: 18, color: '#1677ff' }} />
-                <Typography fontWeight={700}>{grupo.oferta?.nombre || 'Sin Oferta'}</Typography>
-                <Chip label={`${grupo.actas.length} proyecto(s)`} size="small" variant="outlined" />
-              </Stack>
-              {ofertasConGanador.has(grupo.oferta?.idOferta) ? (
+          <Box key={key} sx={{ mb: 2 }}>
+            {/* Cabecera colapsable */}
+            <Box sx={{
+              px: 2, py: 1.25,
+              borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+              background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+              border: '1px solid rgba(24,144,255,0.25)',
+              display: 'flex', alignItems: 'center', gap: 1.5,
+              cursor: 'default',
+            }}>
+              <TrophyOutlined style={{ color: '#1677ff', fontSize: 17 }} />
+              <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
+                {grupo.oferta?.nombre || 'Sin Oferta'}
+              </Typography>
+              {actaCerrada ? (
                 <Chip
                   label="Acta cerrada"
                   color="success"
                   icon={<CheckCircleOutlined style={{ fontSize: 13 }} />}
                   size="small"
+                  sx={{ mr: 1 }}
                 />
               ) : (
                 <Button
                   size="small" variant="contained" color="warning"
                   startIcon={<CheckCircleOutlined />}
                   onClick={() => setCerrarDialog({ open: true, oferta: grupo.oferta })}
+                  sx={{ mr: 1 }}
                 >
                   Cerrar Acta
                 </Button>
               )}
+              <Chip
+                label={isOpen
+                  ? `▲ ${grupo.actas.length} proyecto(s)`
+                  : `▼ ${grupo.actas.length} proyecto(s)`}
+                size="small"
+                color="primary"
+                variant={isOpen ? 'filled' : 'outlined'}
+                onClick={() => toggleExpandido(key)}
+                sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none', flexShrink: 0 }}
+              />
             </Box>
-            <TableContainer component={Paper} elevation={0}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell width={60} align="center">Pos.</TableCell>
-                    <TableCell>Proyecto</TableCell>
-                    <TableCell>Fecha Evaluación</TableCell>
-                    <TableCell align="center">Nota Final</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {grupo.actas.map((acta, idx) => {
-                    const nota = parseFloat(acta.notaFinal);
-                    const pct = maxNotaGrupo > 0 ? (nota / maxNotaGrupo) * 100 : 0;
-                    const medalColor = idx === 0 ? '#faad14' : idx === 1 ? '#bfbfbf' : idx === 2 ? '#d46b08' : 'inherit';
-                    return (
-                      <TableRow key={acta.idActaEvaluacion} hover sx={{ bgcolor: idx < 3 ? 'action.hover' : 'inherit' }}>
-                        <TableCell align="center">
-                          <Typography fontWeight={700} sx={{ color: medalColor, fontSize: idx < 3 ? 18 : 14 }}>
-                            {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
-                          <Chip label={acta.proyecto.estado} size="small" sx={{ mt: 0.3 }}
-                            color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
-                        </TableCell>
-                        <TableCell><Typography variant="body2">{acta.fecha}</Typography></TableCell>
-                        <TableCell align="center">
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
-                            <Box sx={{ width: 80, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
-                              <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: idx === 0 ? 'warning.main' : 'primary.main', borderRadius: 3 }} />
+
+            {/* Tabla colapsable */}
+            {isOpen && (
+              <TableContainer component={Paper} elevation={0}
+                sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell width={60} align="center">Pos.</TableCell>
+                      <TableCell>Proyecto</TableCell>
+                      <TableCell>Fecha Evaluación</TableCell>
+                      <TableCell align="center">Nota Final</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {grupo.actas.map((acta, idx) => {
+                      const nota = parseFloat(acta.notaFinal);
+                      const pct = maxNotaGrupo > 0 ? (nota / maxNotaGrupo) * 100 : 0;
+                      const medalColor = idx === 0 ? '#faad14' : idx === 1 ? '#bfbfbf' : idx === 2 ? '#d46b08' : 'inherit';
+                      return (
+                        <TableRow key={acta.idActaEvaluacion} hover sx={{ bgcolor: idx < 3 ? 'action.hover' : 'inherit' }}>
+                          <TableCell align="center">
+                            <Typography fontWeight={700} sx={{ color: medalColor, fontSize: idx < 3 ? 18 : 14 }}>
+                              {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>{acta.proyecto.titulo}</Typography>
+                            <Chip label={acta.proyecto.estado} size="small" sx={{ mt: 0.3 }}
+                              color={{ aprobado: 'success', inscrito: 'info', revision: 'warning', rechazado: 'error' }[acta.proyecto.estado] || 'default'} />
+                          </TableCell>
+                          <TableCell><Typography variant="body2">{acta.fecha}</Typography></TableCell>
+                          <TableCell align="center">
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
+                              <Box sx={{ width: 80, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
+                                <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: idx === 0 ? 'warning.main' : 'primary.main', borderRadius: 3 }} />
+                              </Box>
+                              <Typography fontWeight={700} color={idx === 0 ? 'warning.main' : 'primary.main'}>{nota}</Typography>
                             </Box>
-                            <Typography fontWeight={700} color={idx === 0 ? 'warning.main' : 'primary.main'}>{nota}</Typography>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </Box>
         );
       })}
@@ -1119,7 +1150,7 @@ function GanadoresTab({ ganadores, empates, refetch, showNotif }) {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell width={130} align="center">Lugar</TableCell>
+                        <TableCell width={160} align="center">Lugar</TableCell>
                         <TableCell>Proyecto</TableCell>
                         <TableCell align="center">Nota</TableCell>
                         <TableCell>Premio</TableCell>
@@ -1131,7 +1162,7 @@ function GanadoresTab({ ganadores, empates, refetch, showNotif }) {
                         const pos = cp?.premio?.numeroGanadores;
                         return (
                           <TableRow key={g.idGanadorPremio} hover>
-                            <TableCell align="center">
+                            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                               <Typography fontWeight={700} fontSize={pos <= 3 ? 16 : 14}>
                                 {posLabel(pos)}
                               </Typography>

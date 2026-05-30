@@ -436,7 +436,7 @@ export default function MembretesFirmasPage() {
                       <Thumb path={m.selloAutoridad} label="Sello Autoridad" />
                     </TableCell>
                     <TableCell>
-                      <Chip label={m.estado ? 'Activo' : 'Inactivo'} color={m.estado ? 'success' : 'default'} size="small" />
+                      <Chip label={m.estado ? 'Activo' : 'Inactivo'} color={m.estado ? 'success' : 'error'} size="small" variant="outlined" />
                     </TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'nowrap', gap: 0.5 }}>
@@ -891,7 +891,7 @@ export default function MembretesFirmasPage() {
           {viewItem?.estado !== undefined && (
             <Chip
               label={viewItem.estado ? 'ACTIVO' : 'INACTIVO'}
-              color={viewItem.estado ? 'success' : 'default'}
+              color={viewItem.estado ? 'success' : 'error'} variant="outlined"
               variant="outlined"
               size="small"
             />
