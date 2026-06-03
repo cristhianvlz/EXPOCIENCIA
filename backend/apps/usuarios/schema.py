@@ -1024,7 +1024,7 @@ class LoginConTotp(graphene.Mutation):
 
     @staticmethod
     def mutate(root, info, username, password):
-        import graphql_jwt
+        from graphql_jwt.shortcuts import get_token
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
@@ -1041,7 +1041,7 @@ class LoginConTotp(graphene.Mutation):
         if user.is_2fa_enabled:
             return LoginConTotp(token=None, requires2fa=True, needs_setup=False, ok=True, error=None)  # type: ignore
         # 2FA es opcional: si no está habilitado, login directo
-        token = graphql_jwt.shortcuts.get_token(user)
+        token = get_token(user)
         return LoginConTotp(token=token, requires2fa=False, needs_setup=False, ok=True, error=None)  # type: ignore
 
 
@@ -1060,7 +1060,7 @@ class VerificarTotp(graphene.Mutation):
 
     @staticmethod
     def mutate(root, info, username, totp_code):
-        import graphql_jwt
+        from graphql_jwt.shortcuts import get_token
         try:
             user = Usuario.objects.get(username=username)
         except Usuario.DoesNotExist:
@@ -1073,7 +1073,7 @@ class VerificarTotp(graphene.Mutation):
         if not totp.verify(totp_code, valid_window=1):
             return VerificarTotp(token=None, ok=False, error="Código incorrecto o expirado.")  # type: ignore
 
-        token = graphql_jwt.shortcuts.get_token(user)
+        token = get_token(user)
         return VerificarTotp(token=token, ok=True, error=None)  # type: ignore
 
 
@@ -1229,7 +1229,7 @@ class ConfirmarSetupYLogin(graphene.Mutation):
 
     @staticmethod
     def mutate(root, info, username, totp_code):
-        import graphql_jwt
+        from graphql_jwt.shortcuts import get_token
         try:
             user = Usuario.objects.get(username=username)
         except Usuario.DoesNotExist:
@@ -1245,7 +1245,7 @@ class ConfirmarSetupYLogin(graphene.Mutation):
         user.is_2fa_enabled = True
         user.save()
 
-        token = graphql_jwt.shortcuts.get_token(user)
+        token = get_token(user)
         return ConfirmarSetupYLogin(token=token, ok=True, error=None)  # type: ignore
 
 
@@ -1265,7 +1265,7 @@ class LoginTribunalMovil(graphene.Mutation):
 
     @staticmethod
     def mutate(root, info, username, password):
-        import graphql_jwt
+        from graphql_jwt.shortcuts import get_token
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
@@ -1285,7 +1285,7 @@ class LoginTribunalMovil(graphene.Mutation):
             return LoginTribunalMovil(token=None, tribunal=None, ok=False, error="Acceso no autorizado. Este usuario no es un tribunal.")  # type: ignore
         if not tribunal_obj.estado:
             return LoginTribunalMovil(token=None, tribunal=None, ok=False, error="Tribunal inactivo. Contacte al administrador.")  # type: ignore
-        token = graphql_jwt.shortcuts.get_token(user)
+        token = get_token(user)
         return LoginTribunalMovil(token=token, tribunal=tribunal_obj, ok=True, error=None)  # type: ignore
 
 

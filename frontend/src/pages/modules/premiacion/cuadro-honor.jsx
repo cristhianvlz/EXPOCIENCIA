@@ -634,99 +634,133 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
       </Dialog>
 
       {/* Premio Dialog — mismo formulario para crear y editar */}
-      <Dialog open={premioDialog.open} onClose={() => setPremioDialog({ open: false, item: null })} maxWidth="sm" fullWidth>
-        <DialogTitle>{premioDialog.item ? 'Editar Premio' : 'Nuevo Premio'}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            {/* Oferta */}
-            <FormControl fullWidth required>
-              <InputLabel>Oferta académica</InputLabel>
-              <Select
-                value={premioForm.idOferta}
-                label="Oferta académica"
-                onChange={e => setPremioForm(p => ({ ...p, idOferta: e.target.value }))}
+      {(() => {
+        // Validar si el lugar ya está ocupado para la oferta seleccionada
+        const ofertaSel = ofertas.find(o => o.idOferta === premioForm.idOferta);
+        const lugarOcupado = !!(
+          ofertaSel &&
+          premioForm.numeroGanadores &&
+          premios.some(p =>
+            p.evento?.idEvento === ofertaSel.categoriaEvento?.evento?.idEvento &&
+            p.area?.idArea    === ofertaSel.modalidadArea?.area?.idArea &&
+            parseInt(p.numeroGanadores) === parseInt(premioForm.numeroGanadores) &&
+            (!premioDialog.item || p.idPremio !== premioDialog.item.idPremio)
+          )
+        );
+
+        return (
+          <Dialog open={premioDialog.open} onClose={() => setPremioDialog({ open: false, item: null })} maxWidth="sm" fullWidth>
+            <DialogTitle>{premioDialog.item ? 'Editar Premio' : 'Nuevo Premio'}</DialogTitle>
+            <DialogContent dividers>
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                {/* Oferta */}
+                <FormControl fullWidth required>
+                  <InputLabel>Oferta académica</InputLabel>
+                  <Select
+                    value={premioForm.idOferta}
+                    label="Oferta académica"
+                    onChange={e => setPremioForm(p => ({ ...p, idOferta: e.target.value }))}
+                  >
+                    {ofertas.filter(o => o.estado).map(o => (
+                      <MenuItem key={o.idOferta} value={o.idOferta}>
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>{o.nombre}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {o.categoriaEvento?.evento?.nombre}
+                            {o.categoriaEvento?.evento?.version ? ` — v${o.categoriaEvento.evento.version}` : ''}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {/* Tipo de Premio */}
+                <FormControl fullWidth>
+                  <InputLabel>Tipo de Premio</InputLabel>
+                  <Select
+                    value={premioForm.idTipoDescriptor}
+                    label="Tipo de Premio"
+                    onChange={e => setPremioForm(p => ({ ...p, idTipoDescriptor: e.target.value, idDescriptor: '' }))}
+                  >
+                    <MenuItem value=""><em>Sin tipo</em></MenuItem>
+                    {tipos.filter(t => t.estado).map(t => (
+                      <MenuItem key={t.idTipoDescriptor} value={t.idTipoDescriptor}>{t.nombre}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {/* Descriptor / Premio */}
+                <FormControl fullWidth disabled={!premioForm.idTipoDescriptor}>
+                  <InputLabel>Premio</InputLabel>
+                  <Select
+                    value={premioForm.idDescriptor}
+                    label="Premio"
+                    onChange={e => setPremioForm(p => ({ ...p, idDescriptor: e.target.value }))}
+                  >
+                    <MenuItem value=""><em>Sin premio</em></MenuItem>
+                    {descriptores
+                      .filter(d => d.estado && d.tipoDescriptor.idTipoDescriptor === premioForm.idTipoDescriptor)
+                      .map(d => (
+                        <MenuItem key={d.idDescriptor} value={d.idDescriptor}>{d.descripcion}</MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+
+                {/* Monto */}
+                <TextField
+                  label="Monto (Bs.)"
+                  type="number"
+                  fullWidth
+                  value={premioForm.monto}
+                  helperText="Opcional — dejar vacío si el premio no es monetario"
+                  inputProps={{ min: 0, step: 0.01 }}
+                  onChange={e => setPremioForm(p => ({ ...p, monto: e.target.value }))}
+                />
+
+                {/* Lugar */}
+                <TextField
+                  label="Lugar (posición)"
+                  type="number"
+                  fullWidth
+                  required
+                  error={lugarOcupado}
+                  value={premioForm.numeroGanadores}
+                  helperText={
+                    lugarOcupado
+                      ? `⚠ Ya existe un premio para el ${positionLabel(premioForm.numeroGanadores)} en esta oferta`
+                      : `Este premio es para el ${positionLabel(premioForm.numeroGanadores)}`
+                  }
+                  inputProps={{ min: 1, max: 3 }}
+                  onChange={e => setPremioForm(p => ({ ...p, numeroGanadores: e.target.value }))}
+                  FormHelperTextProps={{ sx: lugarOcupado ? { color: 'error.main', fontWeight: 600 } : {} }}
+                />
+
+                {/* Alerta visible cuando el lugar está ocupado */}
+                {lugarOcupado && (
+                  <Alert
+                    severity="error"
+                    icon={<ExclamationCircleOutlined style={{ fontSize: 18 }} />}
+                  >
+                    El <strong>{positionLabel(premioForm.numeroGanadores)}</strong> ya tiene un premio registrado
+                    en la oferta <strong>{ofertaSel?.nombre}</strong>. Elige otro lugar o edita el premio existente.
+                  </Alert>
+                )}
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setPremioDialog({ open: false, item: null })} color="secondary">Cancelar</Button>
+              <Button
+                variant="contained"
+                disabled={!premioForm.idOferta || !premioForm.numeroGanadores || lugarOcupado || saving}
+                onClick={handleSavePremio}
               >
-                {ofertas.filter(o => o.estado).map(o => (
-                  <MenuItem key={o.idOferta} value={o.idOferta}>
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>{o.nombre}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {o.categoriaEvento?.evento?.nombre}
-                        {o.categoriaEvento?.evento?.version ? ` — v${o.categoriaEvento.evento.version}` : ''}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Tipo de Premio */}
-            <FormControl fullWidth>
-              <InputLabel>Tipo de Premio</InputLabel>
-              <Select
-                value={premioForm.idTipoDescriptor}
-                label="Tipo de Premio"
-                onChange={e => setPremioForm(p => ({ ...p, idTipoDescriptor: e.target.value, idDescriptor: '' }))}
-              >
-                <MenuItem value=""><em>Sin tipo</em></MenuItem>
-                {tipos.filter(t => t.estado).map(t => (
-                  <MenuItem key={t.idTipoDescriptor} value={t.idTipoDescriptor}>{t.nombre}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Descriptor / Premio */}
-            <FormControl fullWidth disabled={!premioForm.idTipoDescriptor}>
-              <InputLabel>Premio</InputLabel>
-              <Select
-                value={premioForm.idDescriptor}
-                label="Premio"
-                onChange={e => setPremioForm(p => ({ ...p, idDescriptor: e.target.value }))}
-              >
-                <MenuItem value=""><em>Sin premio</em></MenuItem>
-                {descriptores
-                  .filter(d => d.estado && d.tipoDescriptor.idTipoDescriptor === premioForm.idTipoDescriptor)
-                  .map(d => (
-                    <MenuItem key={d.idDescriptor} value={d.idDescriptor}>{d.descripcion}</MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
-
-            {/* Monto */}
-            <TextField
-              label="Monto (Bs.)"
-              type="number"
-              fullWidth
-              value={premioForm.monto}
-              helperText="Opcional — dejar vacío si el premio no es monetario"
-              inputProps={{ min: 0, step: 0.01 }}
-              onChange={e => setPremioForm(p => ({ ...p, monto: e.target.value }))}
-            />
-
-            {/* Lugar */}
-            <TextField
-              label="Lugar (posición)"
-              type="number"
-              fullWidth
-              required
-              value={premioForm.numeroGanadores}
-              helperText={`Este premio es para el ${positionLabel(premioForm.numeroGanadores)}`}
-              inputProps={{ min: 1, max: 3 }}
-              onChange={e => setPremioForm(p => ({ ...p, numeroGanadores: e.target.value }))}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPremioDialog({ open: false, item: null })} color="secondary">Cancelar</Button>
-          <Button
-            variant="contained"
-            disabled={!premioForm.idOferta || !premioForm.numeroGanadores || saving}
-            onClick={handleSavePremio}
-          >
-            {saving ? <CircularProgress size={22} color="inherit" /> : 'Guardar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+                {saving ? <CircularProgress size={22} color="inherit" /> : 'Guardar'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        );
+      })()}
 
       <ConfirmDialog
         open={confirm.open}

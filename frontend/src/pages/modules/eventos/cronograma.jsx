@@ -607,7 +607,7 @@ export default function CronogramaPage() {
             <FormControl fullWidth required>
               <InputLabel>Evento</InputLabel>
               <Select value={formCronograma.idEvento} label="Evento"
-                onChange={e => setFormCronograma(p => ({ ...p, idEvento: e.target.value }))}>
+                onChange={e => setFormCronograma(p => ({ ...p, idEvento: e.target.value, idActividad: '' }))}>
                 {eventos.filter(ev => ev.estado).map(ev => (
                   <MenuItem key={ev.idEvento} value={ev.idEvento}>
                     {ev.nombre} v{ev.version} ({ev.gestion})
@@ -615,17 +615,50 @@ export default function CronogramaPage() {
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>Actividad</InputLabel>
-              <Select value={formCronograma.idActividad} label="Actividad"
-                onChange={e => setFormCronograma(p => ({ ...p, idActividad: e.target.value }))}>
-                {actividades.filter(a => a.estado).map(a => (
-                  <MenuItem key={a.idActividad} value={a.idActividad}>
-                    {a.nombreActividad} ({a.grupo?.descripcion})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            {/* Actividades: excluir las ya asignadas al evento seleccionado (solo al crear) */}
+            {(() => {
+              const yaAsignadas = new Set(
+                cronogramas
+                  .filter(c => c.evento?.idEvento === formCronograma.idEvento)
+                  .map(c => c.actividad?.idActividad)
+                  .filter(Boolean)
+              );
+
+              const disponibles = actividades.filter(a => {
+                if (!a.estado) return false;
+                if (editingCronograma) return true; // al editar, mostrar todas
+                if (!formCronograma.idEvento) return true; // sin evento seleccionado, mostrar todas
+                return !yaAsignadas.has(a.idActividad);
+              });
+
+              return (
+                <FormControl fullWidth required>
+                  <InputLabel>Actividad</InputLabel>
+                  <Select
+                    value={formCronograma.idActividad}
+                    label="Actividad"
+                    disabled={!formCronograma.idEvento}
+                    onChange={e => setFormCronograma(p => ({ ...p, idActividad: e.target.value }))}
+                  >
+                    {!formCronograma.idEvento && (
+                      <MenuItem disabled value="">
+                        <em>Primero selecciona un evento</em>
+                      </MenuItem>
+                    )}
+                    {formCronograma.idEvento && disponibles.length === 0 && (
+                      <MenuItem disabled value="">
+                        <em>Todas las actividades ya están asignadas a este evento</em>
+                      </MenuItem>
+                    )}
+                    {disponibles.map(a => (
+                      <MenuItem key={a.idActividad} value={a.idActividad}>
+                        {a.nombreActividad} ({a.grupo?.descripcion})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              );
+            })()}
             <TextField
               label="Fecha de Inicio" type="datetime-local" fullWidth required
               value={formCronograma.fechaInicio}

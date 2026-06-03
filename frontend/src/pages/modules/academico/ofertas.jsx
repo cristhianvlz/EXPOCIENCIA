@@ -14,6 +14,10 @@ import {
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const MEDIA_BASE = 'http://localhost:8000/media/';
+const imgUrl = (path) => (path ? `${MEDIA_BASE}${path}` : null);
+
 // ── GQL ──────────────────────────────────────────────────────────────────────
 const GET_ALL = gql`
   query {
@@ -22,7 +26,14 @@ const GET_ALL = gql`
       categoriaEvento {
         id
         categoria { idCategoria nombre }
-        evento    { idEvento nombre version }
+        evento    {
+          idEvento nombre version gestion
+          membrete {
+            idMembrete titulo subtitulo direccion
+            piePagina1 piePagina2 piePagina3
+            logoUnidad logoInstitucion firma selloAutoridad
+          }
+        }
       }
       modalidadArea {
         id
@@ -1098,6 +1109,93 @@ export default function OfertasPage() {
                     </Box>
                   )}
                 </Box>
+
+                {/* ── Bloque 5: Membrete del Evento ── */}
+                {(() => {
+                  const membrete = viewOferta.categoriaEvento?.evento?.membrete;
+                  if (!membrete) return null;
+
+                  const pies = [membrete.piePagina1, membrete.piePagina2, membrete.piePagina3].filter(Boolean);
+
+                  return (
+                    <Box sx={{ mt: 2.5 }}>
+                      <Divider sx={{ mb: 2 }} />
+                      <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                        Membrete del Evento
+                      </Typography>
+
+                      {/* Vista previa — solo texto */}
+                      <Box sx={{
+                        mt: 1, border: '1px solid', borderColor: 'primary.light',
+                        borderRadius: 2, overflow: 'hidden',
+                        background: 'linear-gradient(135deg, rgba(24,144,255,0.03) 0%, transparent 60%)',
+                      }}>
+                        {/* Cabecera: título central */}
+                        <Box sx={{
+                          px: 2.5, py: 1.5, textAlign: 'center',
+                          borderBottom: '2px solid', borderColor: 'primary.main',
+                        }}>
+                          <Typography variant="subtitle2" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+                            {membrete.titulo}
+                          </Typography>
+                          {membrete.subtitulo && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {membrete.subtitulo}
+                            </Typography>
+                          )}
+                          {membrete.direccion && (
+                            <Typography variant="caption" color="text.disabled" display="block">
+                              {membrete.direccion}
+                            </Typography>
+                          )}
+                        </Box>
+
+                        {/* Pie de página — solo texto */}
+                        {pies.length > 0 && (
+                          <Box sx={{ px: 2.5, py: 1, textAlign: 'center', bgcolor: 'action.hover' }}>
+                            {pies.map((p, i) => (
+                              <Typography key={i} variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9, lineHeight: 1.4 }}>
+                                {p}
+                              </Typography>
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Galería de imágenes — 4 en fila */}
+                      {(() => {
+                        const imgs = [
+                          { label: 'Logo Unidad',      src: imgUrl(membrete.logoUnidad) },
+                          { label: 'Logo Institución', src: imgUrl(membrete.logoInstitucion) },
+                          { label: 'Firma',            src: imgUrl(membrete.firma) },
+                          { label: 'Sello Autoridad',  src: imgUrl(membrete.selloAutoridad) },
+                        ].filter(i => i.src);
+                        if (imgs.length === 0) return null;
+                        return (
+                          <Box sx={{ mt: 1.5, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                            {imgs.map(({ label, src }) => (
+                              <Box key={label} sx={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5,
+                                p: 1, bgcolor: 'background.paper', borderRadius: 1.5,
+                                border: '1px solid', borderColor: 'divider', minWidth: 80,
+                              }}>
+                                <Box component="img" src={src} alt={label}
+                                  sx={{ height: 52, maxWidth: 90, objectFit: 'contain', borderRadius: 1 }}
+                                  onError={e => { e.target.style.display = 'none'; }}
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                                  {label}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                        );
+                      })()}
+
+                    </Box>
+                  );
+                })()}
+
               </DialogContent>
 
               <DialogActions sx={{ px: 3, py: 2 }}>

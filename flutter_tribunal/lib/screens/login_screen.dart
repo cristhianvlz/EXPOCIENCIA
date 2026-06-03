@@ -79,11 +79,18 @@ class _LoginScreenState extends State<LoginScreen>
         final ex = result.exception!;
         String msg;
         if (ex.linkException != null) {
-          msg = 'Sin conexión al servidor (${ex.linkException.runtimeType}): ${ex.linkException.toString()}';
+          final raw = ex.linkException.toString();
+          if (raw.contains('TimeoutException') || raw.contains('timeout')) {
+            msg = 'No se puede conectar al servidor. Verifica que el servidor esté encendido y que el celular esté conectado a la misma red WiFi.';
+          } else if (raw.contains('SocketException') || raw.contains('Connection refused')) {
+            msg = 'Servidor no disponible. Asegúrate de que el backend esté ejecutándose.';
+          } else {
+            msg = 'Error de conexión. Verifica tu red e intenta nuevamente.';
+          }
         } else if (ex.graphqlErrors.isNotEmpty) {
-          msg = 'Error del servidor: ${ex.graphqlErrors.map((e) => e.message).join(', ')}';
+          msg = ex.graphqlErrors.map((e) => e.message).join(', ');
         } else {
-          msg = 'Error desconocido: $ex';
+          msg = 'Error desconocido. Intenta nuevamente.';
         }
         setState(() => _errorMsg = msg);
         return;

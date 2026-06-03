@@ -1,11 +1,49 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, gql } from '@apollo/client';
 
+// material-ui
+import Button from '@mui/material/Button';
+import FormControl from '@mui/material/FormControl';
+import Grid from '@mui/material/Grid';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
+import Divider from '@mui/material/Divider';
+
+// project imports
+import MainCard from 'components/MainCard';
+import AnalyticEcommerce from 'components/cards/statistics/AnalyticEcommerce';
+import RankingProyectosTable from 'sections/dashboard/default/RankingProyectosTable';
+import EstadoProyectosChart from 'sections/dashboard/default/EstadoProyectosChart';
+import DistribucionAreaChart from 'sections/dashboard/default/DistribucionAreaChart';
+
+// assets
+import FilterOutlined from '@ant-design/icons/FilterOutlined';
+import TrophyOutlined from '@ant-design/icons/TrophyOutlined';
+import BarChartOutlined from '@ant-design/icons/BarChartOutlined';
+import PieChartOutlined from '@ant-design/icons/PieChartOutlined';
+
+// ── GraphQL ──────────────────────────────────────────────────────────────────
 const GET_DASHBOARD_STATS = gql`
   query {
     todosLosProyectos {
       idProyecto
+      titulo
       estado
+      fechaInscripcion
+      ofertaEaCarrera {
+        oferta {
+          idOferta
+          nombre
+          modalidadArea {
+            area { nombre }
+          }
+        }
+      }
     }
     todosLosParticipantes {
       idParticipante
@@ -17,320 +55,262 @@ const GET_DASHBOARD_STATS = gql`
       idEvento
       estado
     }
+    todasLasActas {
+      idActaEvaluacion
+      notaFinal
+      fecha
+      proyecto {
+        titulo
+        fechaInscripcion
+        ofertaEaCarrera {
+          oferta {
+            idOferta
+            nombre
+          }
+        }
+      }
+      detallesEvaluacion {
+        tribunal {
+          nombre
+          apellido
+        }
+      }
+    }
   }
 `;
-
-// material-ui
-import Avatar from '@mui/material/Avatar';
-import AvatarGroup from '@mui/material/AvatarGroup';
-import Button from '@mui/material/Button';
-import Grid from '@mui/material/Grid';
-import IconButton from '@mui/material/IconButton';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-
-// project imports
-import MainCard from 'components/MainCard';
-import AnalyticEcommerce from 'components/cards/statistics/AnalyticEcommerce';
-import MonthlyBarChart from 'sections/dashboard/default/MonthlyBarChart';
-import ReportAreaChart from 'sections/dashboard/default/ReportAreaChart';
-import UniqueVisitorCard from 'sections/dashboard/default/UniqueVisitorCard';
-import SaleReportCard from 'sections/dashboard/default/SaleReportCard';
-import OrdersTable from 'sections/dashboard/default/OrdersTable';
-
-// assets
-import EllipsisOutlined from '@ant-design/icons/EllipsisOutlined';
-import GiftOutlined from '@ant-design/icons/GiftOutlined';
-import MessageOutlined from '@ant-design/icons/MessageOutlined';
-import SettingOutlined from '@ant-design/icons/SettingOutlined';
-
-import avatar1 from 'assets/images/users/avatar-1.png';
-import avatar2 from 'assets/images/users/avatar-2.png';
-import avatar3 from 'assets/images/users/avatar-3.png';
-import avatar4 from 'assets/images/users/avatar-4.png';
-
-// avatar style
-const avatarSX = {
-  width: 36,
-  height: 36,
-  fontSize: '1rem'
-};
-
-// action style
-const actionSX = {
-  mt: 0.75,
-  ml: 1,
-  top: 'auto',
-  right: 'auto',
-  alignSelf: 'flex-start',
-  transform: 'none'
-};
 
 // ==============================|| DASHBOARD - DEFAULT ||============================== //
 
 export default function DashboardDefault() {
-  const [orderMenuAnchor, setOrderMenuAnchor] = useState(null);
-  const [analyticsMenuAnchor, setAnalyticsMenuAnchor] = useState(null);
+  const [selectedOferta, setSelectedOferta] = useState('');
+  const [selectedYear,   setSelectedYear]   = useState('');
 
-  const { data, loading, error } = useQuery(GET_DASHBOARD_STATS, { fetchPolicy: 'network-only' });
+  const { data, loading } = useQuery(GET_DASHBOARD_STATS, {
+    fetchPolicy: 'network-only'
+  });
 
-  const totalProyectosAprobados = data?.todosLosProyectos?.filter(p => p.estado === 'aprobado').length || 0;
+  // ── Ofertas únicas (para el selector) ──────────────────────────────────────
+  const ofertas = useMemo(() => {
+    const map = new Map();
+    (data?.todosLosProyectos || []).forEach((p) => {
+      const o = p.ofertaEaCarrera?.oferta;
+      if (o?.idOferta && !map.has(o.idOferta)) map.set(o.idOferta, o.nombre);
+    });
+    return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
+  }, [data]);
+
+  // ── Gestiones (años) únicas ─────────────────────────────────────────────────
+  const years = useMemo(() => {
+    const set = new Set();
+    (data?.todosLosProyectos || []).forEach((p) => {
+      if (p.fechaInscripcion) set.add(new Date(p.fechaInscripcion).getFullYear());
+    });
+    return Array.from(set).sort((a, b) => b - a);
+  }, [data]);
+
+  // ── Proyectos filtrados ─────────────────────────────────────────────────────
+  const filteredProyectos = useMemo(() => {
+    return (data?.todosLosProyectos || []).filter((p) => {
+      const matchOferta = !selectedOferta || p.ofertaEaCarrera?.oferta?.idOferta === selectedOferta;
+      const matchYear   = !selectedYear   || (p.fechaInscripcion && new Date(p.fechaInscripcion).getFullYear() === Number(selectedYear));
+      return matchOferta && matchYear;
+    });
+  }, [data, selectedOferta, selectedYear]);
+
+  // ── Actas filtradas ─────────────────────────────────────────────────────────
+  const filteredActas = useMemo(() => {
+    return (data?.todasLasActas || []).filter((a) => {
+      const matchOferta = !selectedOferta || a.proyecto?.ofertaEaCarrera?.oferta?.idOferta === selectedOferta;
+      const matchYear   = !selectedYear   || (a.fecha && new Date(a.fecha).getFullYear() === Number(selectedYear));
+      return matchOferta && matchYear;
+    });
+  }, [data, selectedOferta, selectedYear]);
+
+  // ── Stat cards (sobre datos filtrados) ─────────────────────────────────────
+  const totalAprobados    = filteredProyectos.filter((p) => p.estado === 'aprobado').length;
   const totalParticipantes = data?.todosLosParticipantes?.length || 0;
-  const totalProyectosPremiados = data?.todosLosGanadoresPremios?.length || 0;
-  const totalEventosActivos = data?.todosLosEventos?.filter(e => e.estado).length || 0;
+  const totalPremiados    = data?.todosLosGanadoresPremios?.length || 0;
+  const totalEvaluaciones = filteredActas.reduce((acc, a) => acc + (a.detallesEvaluacion?.length || 0), 0);
 
-  const handleOrderMenuClick = (event) => {
-    setOrderMenuAnchor(event.currentTarget);
-  };
-  const handleOrderMenuClose = () => {
-    setOrderMenuAnchor(null);
-  };
-
-  const handleAnalyticsMenuClick = (event) => {
-    setAnalyticsMenuAnchor(event.currentTarget);
-  };
-  const handleAnalyticsMenuClose = () => {
-    setAnalyticsMenuAnchor(null);
-  };
+  const hayFiltros = selectedOferta || selectedYear;
 
   return (
     <Grid container rowSpacing={4.5} columnSpacing={2.75}>
-      {/* row 1 */}
+
+      {/* ── Row 1 · Título ──────────────────────────────────────────────── */}
       <Grid sx={{ mb: -2.25 }} size={12}>
         <Typography variant="h5">Dashboard</Typography>
       </Grid>
+
+      {/* ── Row 2 · Tarjetas de estadísticas ────────────────────────────── */}
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total de Proyectos Aprobados" count={loading ? "..." : totalProyectosAprobados.toString()} percentage={100} />
+        <AnalyticEcommerce
+          title="Proyectos Aprobados"
+          count={loading ? '...' : totalAprobados.toString()}
+          percentage={100}
+        />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Total de Participantes Registrados" count={loading ? "..." : totalParticipantes.toString()} percentage={100} />
+        <AnalyticEcommerce
+          title="Participantes Registrados"
+          count={loading ? '...' : totalParticipantes.toString()}
+          percentage={100}
+        />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Eventos Activos" count={loading ? "..." : totalEventosActivos.toString()} percentage={100} color="warning" />
+        <AnalyticEcommerce
+          title="Evaluaciones Realizadas"
+          count={loading ? '...' : totalEvaluaciones.toString()}
+          percentage={100}
+          color="warning"
+        />
       </Grid>
       <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-        <AnalyticEcommerce title="Proyectos Premiados" count={loading ? "..." : totalProyectosPremiados.toString()} percentage={100} color="warning" />
+        <AnalyticEcommerce
+          title="Proyectos Premiados"
+          count={loading ? '...' : totalPremiados.toString()}
+          percentage={100}
+          color="warning"
+        />
       </Grid>
-      <Grid sx={{ display: { sm: 'none', md: 'block', lg: 'none' } }} size={{ md: 8 }} />
-      {/* row 2 */}
-      <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-        <UniqueVisitorCard />
-      </Grid>
-      <Grid size={{ xs: 12, md: 5, lg: 4 }}>
-        <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <Grid>
-            <Typography variant="h5">Evaluaciones por Semana</Typography>
-          </Grid>
-          <Grid />
-        </Grid>
-        <MainCard sx={{ mt: 2 }} content={false}>
-          <Box sx={{ p: 3, pb: 0 }}>
-            <Stack sx={{ gap: 2 }}>
-              <Typography variant="h6" color="text.secondary">
-                Actividad Esta Semana
-              </Typography>
-              <Typography variant="h3">48 evaluaciones</Typography>
-            </Stack>
-          </Box>
-          <MonthlyBarChart />
-        </MainCard>
-      </Grid>
-      {/* row 3 */}
-      <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-        <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <Grid>
-            <Typography variant="h5">Proyectos Recientes</Typography>
-          </Grid>
-          <Grid>
-            <IconButton onClick={handleOrderMenuClick}>
-              <EllipsisOutlined style={{ fontSize: '1.25rem' }} />
-            </IconButton>
-            <Menu
-              id="fade-menu"
-              slotProps={{ list: { 'aria-labelledby': 'fade-button' } }}
-              anchorEl={orderMenuAnchor}
-              onClose={handleOrderMenuClose}
-              open={Boolean(orderMenuAnchor)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-              <MenuItem onClick={handleOrderMenuClose}>Exportar como CSV</MenuItem>
-              <MenuItem onClick={handleOrderMenuClose}>Exportar como Excel</MenuItem>
-              <MenuItem onClick={handleOrderMenuClose}>Imprimir tabla</MenuItem>
-            </Menu>
-          </Grid>
-        </Grid>
-        <MainCard sx={{ mt: 2 }} content={false}>
-          <OrdersTable />
-        </MainCard>
-      </Grid>
-      <Grid size={{ xs: 12, md: 5, lg: 4 }}>
-        <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <Grid>
-            <Typography variant="h5">Reporte de Actividad</Typography>
-          </Grid>
-          <Grid>
-            <IconButton onClick={handleAnalyticsMenuClick}>
-              <EllipsisOutlined style={{ fontSize: '1.25rem' }} />
-            </IconButton>
-            <Menu
-              id="fade-menu"
-              slotProps={{ list: { 'aria-labelledby': 'fade-button' } }}
-              anchorEl={analyticsMenuAnchor}
-              open={Boolean(analyticsMenuAnchor)}
-              onClose={handleAnalyticsMenuClose}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-              <MenuItem onClick={handleAnalyticsMenuClose}>Semanal</MenuItem>
-              <MenuItem onClick={handleAnalyticsMenuClose}>Mensual</MenuItem>
-              <MenuItem onClick={handleAnalyticsMenuClose}>Anual</MenuItem>
-            </Menu>
-          </Grid>
-        </Grid>
-        <MainCard sx={{ mt: 2 }} content={false}>
-          <List sx={{ p: 0, '& .MuiListItemButton-root': { py: 2 } }}>
-            <ListItemButton divider>
-              <ListItemText primary="Tasa de aprobación de proyectos" />
-              <Typography variant="h5">+45.14%</Typography>
-            </ListItemButton>
-            <ListItemButton divider>
-              <ListItemText primary="Ratio de rechazo de proyectos" />
-              <Typography variant="h5">0.58%</Typography>
-            </ListItemButton>
-            <ListItemButton>
-              <ListItemText primary="Proyectos en observación" />
-              <Typography variant="h5">Bajo</Typography>
-            </ListItemButton>
-          </List>
-          <ReportAreaChart />
-        </MainCard>
-      </Grid>
-      {/* row 4 */}
-      <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-        <SaleReportCard />
-      </Grid>
-      <Grid size={{ xs: 12, md: 5, lg: 4 }}>
-        <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <Grid>
-            <Typography variant="h5">Actividad Reciente</Typography>
-          </Grid>
-          <Grid />
-        </Grid>
-        <MainCard sx={{ mt: 2 }} content={false}>
-          <List
-            component="nav"
-            sx={{
-              px: 0,
-              py: 0,
-              '& .MuiListItemButton-root': {
-                py: 1.5,
-                px: 2,
-                '& .MuiAvatar-root': avatarSX,
-                '& .MuiListItemSecondaryAction-root': { ...actionSX, position: 'relative' }
-              }
-            }}
-          >
-            <ListItem
-              component={ListItemButton}
-              divider
-              secondaryAction={
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle1" noWrap>
-                    + $1,430
-                  </Typography>
-                  <Typography variant="h6" color="secondary" noWrap>
-                    78%
-                  </Typography>
-                </Stack>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ color: 'success.main', bgcolor: 'success.lighter' }}>
-                  <GiftOutlined />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={<Typography variant="subtitle1">Proyecto #002434</Typography>} secondary="Hoy, 2:00 AM" />
-            </ListItem>
-            <ListItem
-              component={ListItemButton}
-              divider
-              secondaryAction={
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle1" noWrap>
-                    + $302
-                  </Typography>
-                  <Typography variant="h6" color="secondary" noWrap>
-                    8%
-                  </Typography>
-                </Stack>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ color: 'primary.main', bgcolor: 'primary.lighter' }}>
-                  <MessageOutlined />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={<Typography variant="subtitle1">Proyecto #984947</Typography>} secondary="5 Agosto, 1:45 PM" />
-            </ListItem>
-            <ListItem
-              component={ListItemButton}
-              secondaryAction={
-                <Stack sx={{ alignItems: 'flex-end' }}>
-                  <Typography variant="subtitle1" noWrap>
-                    + $682
-                  </Typography>
-                  <Typography variant="h6" color="secondary" noWrap>
-                    16%
-                  </Typography>
-                </Stack>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ color: 'error.main', bgcolor: 'error.lighter' }}>
-                  <SettingOutlined />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText primary={<Typography variant="subtitle1">Proyecto #988784</Typography>} secondary="Hace 7 horas" />
-            </ListItem>
-          </List>
-        </MainCard>
-        <MainCard sx={{ mt: 2 }}>
-          <Stack sx={{ gap: 3 }}>
-            <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-              <Grid>
-                <Stack>
-                  <Typography variant="h5" noWrap>
-                    Soporte y Ayuda
-                  </Typography>
-                  <Typography variant="caption" color="secondary" noWrap>
-                    Respuesta típica en 5 min
-                  </Typography>
-                </Stack>
-              </Grid>
-              <Grid>
-                <AvatarGroup sx={{ '& .MuiAvatar-root': { width: 32, height: 32 } }}>
-                  <Avatar alt="Remy Sharp" src={avatar1} />
-                  <Avatar alt="Travis Howard" src={avatar2} />
-                  <Avatar alt="Cindy Baker" src={avatar3} />
-                  <Avatar alt="Agnes Walker" src={avatar4} />
-                </AvatarGroup>
-              </Grid>
-            </Grid>
-            <Button size="small" variant="contained" sx={{ textTransform: 'capitalize' }}>
-              ¿Necesitas ayuda?
-            </Button>
+
+      {/* ── Row 3 · Filtros ──────────────────────────────────────────────── */}
+      <Grid size={12}>
+        <MainCard>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 2 }}>
+            <FilterOutlined style={{ fontSize: '1rem', color: '#1890ff' }} />
+            <Typography variant="h6">Filtros</Typography>
+            {hayFiltros && (
+              <Chip
+                label="Limpiar filtros"
+                size="small"
+                variant="outlined"
+                color="error"
+                onDelete={() => { setSelectedOferta(''); setSelectedYear(''); }}
+                onClick={() => { setSelectedOferta(''); setSelectedYear(''); }}
+                sx={{ ml: 1 }}
+              />
+            )}
           </Stack>
+          <Divider sx={{ mb: 2 }} />
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <FormControl fullWidth size="small" disabled={loading}>
+                <InputLabel id="oferta-label">Oferta</InputLabel>
+                <Select
+                  labelId="oferta-label"
+                  value={selectedOferta}
+                  label="Oferta"
+                  onChange={(e) => setSelectedOferta(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>Todas las ofertas</em>
+                  </MenuItem>
+                  {ofertas.map((o) => (
+                    <MenuItem key={o.id} value={o.id}>
+                      {o.nombre}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <FormControl fullWidth size="small" disabled={loading}>
+                <InputLabel id="year-label">Gestión (año)</InputLabel>
+                <Select
+                  labelId="year-label"
+                  value={selectedYear}
+                  label="Gestión (año)"
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>Todas las gestiones</em>
+                  </MenuItem>
+                  {years.map((y) => (
+                    <MenuItem key={y} value={y}>
+                      {y}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            {hayFiltros && (
+              <Grid size={{ xs: 12, sm: 'auto' }} sx={{ display: 'flex', alignItems: 'center' }}>
+                <Button
+                  size="small"
+                  variant="text"
+                  color="inherit"
+                  onClick={() => { setSelectedOferta(''); setSelectedYear(''); }}
+                >
+                  Limpiar
+                </Button>
+              </Grid>
+            )}
+          </Grid>
         </MainCard>
       </Grid>
+
+      {/* ── Row 4 · Ranking de Proyectos | Estado Proyectos ─────────────── */}
+      <Grid size={{ xs: 12, md: 7, lg: 8 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1.5 }}>
+          <TrophyOutlined style={{ fontSize: '1.1rem', color: '#faad14' }} />
+          <Typography variant="h5">Ranking de Proyectos</Typography>
+          {hayFiltros && (
+            <Chip label="Filtrado" size="small" color="primary" variant="outlined" />
+          )}
+        </Stack>
+        <MainCard content={false}>
+          {loading ? (
+            <Box sx={{ p: 3 }}>
+              <Typography color="text.secondary" variant="body2">Cargando ranking...</Typography>
+            </Box>
+          ) : (
+            <RankingProyectosTable actas={filteredActas} />
+          )}
+        </MainCard>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 5, lg: 4 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1.5 }}>
+          <PieChartOutlined style={{ fontSize: '1.1rem', color: '#1890ff' }} />
+          <Typography variant="h5">Estado de Proyectos</Typography>
+          {hayFiltros && (
+            <Chip label="Filtrado" size="small" color="primary" variant="outlined" />
+          )}
+        </Stack>
+        <MainCard content={false}>
+          {loading ? (
+            <Box sx={{ p: 3 }}>
+              <Typography color="text.secondary" variant="body2">Cargando...</Typography>
+            </Box>
+          ) : (
+            <EstadoProyectosChart proyectos={filteredProyectos} />
+          )}
+        </MainCard>
+      </Grid>
+
+      {/* ── Row 5 · Distribución por Área ───────────────────────────────── */}
+      <Grid size={12}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1.5 }}>
+          <BarChartOutlined style={{ fontSize: '1.1rem', color: '#52c41a' }} />
+          <Typography variant="h5">Proyectos por Área</Typography>
+          {hayFiltros && (
+            <Chip label="Filtrado" size="small" color="primary" variant="outlined" />
+          )}
+        </Stack>
+        <MainCard content={false}>
+          {loading ? (
+            <Box sx={{ p: 3 }}>
+              <Typography color="text.secondary" variant="body2">Cargando distribución...</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ p: 2 }}>
+              <DistribucionAreaChart proyectos={filteredProyectos} />
+            </Box>
+          )}
+        </MainCard>
+      </Grid>
+
     </Grid>
   );
 }
