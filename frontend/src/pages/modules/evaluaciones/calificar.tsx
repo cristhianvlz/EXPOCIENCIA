@@ -41,6 +41,7 @@ interface DetalleEvaluacion {
   id: string;
   puntuacion: string;
   estado: string;
+  permisoCalificacionTardia?: boolean;
   tribunal: Tribunal;
   puntuacionesCriterio: PuntuacionCriterio[];
 }
@@ -114,6 +115,7 @@ const GET_DATA = gql`
         id
         puntuacion
         estado
+        permisoCalificacionTardia
         tribunal { idTribunal nombre apellido }
         puntuacionesCriterio {
           id
@@ -494,8 +496,18 @@ export default function PanelCalificacionPage() {
   });
 
   const handleCalificar = (acta: Acta, detalle: DetalleEvaluacion) => {
+    // Verificar si ya calificó y NO tiene permiso para corregir
+    const yaCalifique = parseFloat(detalle.puntuacion || '0') > 0;
+    if (yaCalifique && !detalle.permisoCalificacionTardia) {
+      setBlockAlert({
+        open: true,
+        message: 'Ya calificaste este proyecto. Si necesitas corregir tu nota o calificar nuevamente, solicita un permiso especial al administrador.'
+      });
+      return;
+    }
+
     const status = getEvaluacionStatus(acta);
-    if (!status.activa) {
+    if (!status.activa && !detalle.permisoCalificacionTardia) {
       setBlockAlert({ open: true, message: status.mensaje });
       return;
     }
@@ -514,19 +526,23 @@ export default function PanelCalificacionPage() {
         const val = parseFloat(scores[idCriterio]);
         if (isNaN(val)) continue;
         const existing = existingMap[idCriterio];
+        let res;
         if (existing) {
-          await editarPuntuacion({ variables: { idPuntuacionCriterio: existing.id, puntuacionCriterio: val } });
+          res = await editarPuntuacion({ variables: { idPuntuacionCriterio: existing.id, puntuacionCriterio: val } });
+          if (res.data?.editarPuntuacionCriterio?.ok === false) throw new Error(res.data.editarPuntuacionCriterio.error);
         } else {
-          await crearPuntuacion({ variables: { idDetalleEvaluacion: detalle!.id, idCriterio, puntuacionCriterio: val } });
+          res = await crearPuntuacion({ variables: { idDetalleEvaluacion: detalle!.id, idCriterio, puntuacionCriterio: val } });
+          if (res.data?.crearPuntuacionCriterio?.ok === false) throw new Error(res.data.crearPuntuacionCriterio.error);
         }
       }
-      await editarDetalle({ variables: { idDetalleEvaluacion: detalle!.id, puntuacion: totalPuntuacion } });
+      const finalRes = await editarDetalle({ variables: { idDetalleEvaluacion: detalle!.id, puntuacion: totalPuntuacion } });
+      if (finalRes.data?.editarDetalleEvaluacion?.ok === false) throw new Error(finalRes.data.editarDetalleEvaluacion.error);
 
       showNotif('Calificación guardada exitosamente');
       refetch();
       setScoringDialog({ open: false, acta: null, detalle: null });
-    } catch {
-      showNotif('Error al guardar calificación', 'error');
+    } catch (err: any) {
+      showNotif(err.message || 'Error al guardar calificación', 'error');
     }
     setSaving(false);
   };

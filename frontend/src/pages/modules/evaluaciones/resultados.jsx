@@ -51,7 +51,8 @@ function calcularNotaFinal(detalles) {
   const completados = detalles.filter(d => (d.puntuacionesCriterio || []).length > 0);
   if (completados.length === 0) return null;
   const suma = completados.reduce((s, d) => s + parseFloat(d.puntuacion || 0), 0);
-  return (suma / completados.length).toFixed(2);
+  // Se divide siempre por el número total de jurados asignados para que los pendientes valgan 0
+  return (suma / detalles.length).toFixed(2);
 }
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
@@ -245,10 +246,10 @@ export default function ResultadosNotasPage() {
                                     </Typography>
                                   </TableCell>
                                   <TableCell align="center">
-                                    <Tooltip title={!completa ? 'Faltan calificaciones de jurados' : yaConsolidado ? 'La nota ya está consolidada' : 'Promediar y guardar nota final'}>
+                                    <Tooltip title={yaConsolidado ? 'La nota ya está consolidada' : 'Promediar y guardar nota final (promedia solo jurados que calificaron)'}>
                                       <span>
                                         <Button size="small" variant={yaConsolidado ? "outlined" : "contained"} color={yaConsolidado ? "inherit" : "success"}
-                                          disabled={!completa || notaCalculada === null || yaConsolidado}
+                                          disabled={notaCalculada === null || yaConsolidado}
                                           onClick={() => handleConsolidar(acta)}>
                                           {yaConsolidado ? 'Consolidado' : 'Consolidar'}
                                         </Button>

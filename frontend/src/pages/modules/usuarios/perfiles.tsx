@@ -29,7 +29,10 @@ import {
   TablePagination,
   CircularProgress,
   Pagination,
-  Select
+  Select,
+  Checkbox,
+  ListItemText,
+  OutlinedInput
 } from '@mui/material';
 import { EditOutlined, DeleteOutlined, UserOutlined, ReloadOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
@@ -109,6 +112,19 @@ const OBTENER_TRIBUNALES = gql`
       usuario {
         username
       }
+      areas {
+        idArea
+        nombre
+      }
+    }
+  }
+`;
+
+const OBTENER_AREAS = gql`
+  query ObtenerAreas {
+    todasLasAreas {
+      idArea
+      nombre
     }
   }
 `;
@@ -288,6 +304,7 @@ const CREAR_TRIBUNAL = gql`
     $ci: String!
     $expedicion: String!
     $direccion: String!
+    $areasIds: [ID]
   ) {
     crearTribunal(
       idUsuario: $idUsuario
@@ -298,6 +315,7 @@ const CREAR_TRIBUNAL = gql`
       ci: $ci
       expedicion: $expedicion
       direccion: $direccion
+      areasIds: $areasIds
     ) {
       tribunal {
         idTribunal
@@ -319,6 +337,7 @@ const EDITAR_TRIBUNAL = gql`
     $expedicion: String
     $direccion: String
     $estado: Boolean
+    $areasIds: [ID]
   ) {
     editarTribunal(
       idTribunal: $idTribunal
@@ -330,6 +349,7 @@ const EDITAR_TRIBUNAL = gql`
       expedicion: $expedicion
       direccion: $direccion
       estado: $estado
+      areasIds: $areasIds
     ) {
       ok
       error
@@ -662,6 +682,7 @@ const PerfilesPage: React.FC = () => {
   const [activeTutor, setActiveTutor] = useState<any>(null);
   const [activeTribunal, setActiveTribunal] = useState<any>(null);
   const [activePersonal, setActivePersonal] = useState<any>(null);
+  const [selectedAreasTribunal, setSelectedAreasTribunal] = useState<string[]>([]);
 
   // Modal state for Personal
   const [openPersonal, setOpenPersonal] = useState(false);
@@ -699,6 +720,7 @@ const PerfilesPage: React.FC = () => {
   const { data: dataProyectos } = useQuery(OBTENER_PROYECTOS);
   const { data: dataPersonal, refetch: refetchPersonal } = useQuery(OBTENER_PERSONAL);
   const { data: dataRoles } = useQuery(OBTENER_ROLES);
+  const { data: dataAreas } = useQuery(OBTENER_AREAS);
 
   // Mutations
   const [crearUsuario] = useMutation(CREAR_USUARIO);
@@ -998,7 +1020,13 @@ const PerfilesPage: React.FC = () => {
 
   // --- HANDLERS TRIBUNAL ---
   const handleOpenTribunal = (row: any = null) => {
-    setActiveTribunal(row);
+    if (row) {
+      setActiveTribunal(row);
+      setSelectedAreasTribunal(row.areas ? row.areas.map((a: any) => a.idArea) : []);
+    } else {
+      setActiveTribunal(null);
+      setSelectedAreasTribunal([]);
+    }
     setErrorTribunal('');
     setErrorFieldTribunal('');
     setPendingUserTribunal(null);
@@ -1021,7 +1049,8 @@ const PerfilesPage: React.FC = () => {
             ci: formData.get('ci') as string,
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
-            direccion: (formData.get('direccion') as string) || ''
+            direccion: (formData.get('direccion') as string) || '',
+            areasIds: selectedAreasTribunal
           }
         });
         if (!resTribunal.data.editarTribunal.ok) {
@@ -1057,7 +1086,8 @@ const PerfilesPage: React.FC = () => {
             ci: formData.get('ci') as string,
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
-            direccion: (formData.get('direccion') as string) || ''
+            direccion: (formData.get('direccion') as string) || '',
+            areasIds: selectedAreasTribunal
           }
         });
 
@@ -2173,6 +2203,48 @@ const PerfilesPage: React.FC = () => {
                     }
                   }}
                 />
+              </Grid>
+            </Grid>
+            
+            <SectionLabel>Asignación de Áreas</SectionLabel>
+            <Grid container spacing={2} sx={{ mb: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Áreas de evaluación"
+                  size="small"
+                  SelectProps={{
+                    multiple: true,
+                    value: selectedAreasTribunal,
+                    onChange: (e: any) => setSelectedAreasTribunal(e.target.value),
+                    renderValue: (selected: any) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value: string) => {
+                          const area = dataAreas?.todasLasAreas?.find((a: any) => a.idArea === value);
+                          return <Chip key={value} label={area ? area.nombre : value} size="small" />;
+                        })}
+                      </Box>
+                    ),
+                  }}
+                  InputProps={{
+                    sx: {
+                      borderRadius: '6px',
+                      bgcolor: 'action.hover',
+                      transition: 'all 0.15s ease',
+                      '&:hover': { bgcolor: 'action.selected' },
+                      '&.Mui-focused': { bgcolor: 'background.paper' }
+                    }
+                  }}
+                  helperText="Selecciona las áreas a las que pertenece este tribunal para asignación automática"
+                >
+                  {dataAreas?.todasLasAreas?.map((area: any) => (
+                    <MenuItem key={area.idArea} value={area.idArea}>
+                      <Checkbox checked={selectedAreasTribunal.indexOf(area.idArea) > -1} />
+                      <ListItemText primary={area.nombre} />
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Grid>
             </Grid>
           </DialogContent>

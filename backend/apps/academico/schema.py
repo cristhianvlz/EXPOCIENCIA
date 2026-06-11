@@ -581,15 +581,15 @@ class CrearOfertaEaCarrera(graphene.Mutation):
     class Arguments:
         id_oferta = graphene.ID(required=True)
         id_entidad_academica = graphene.ID(required=True)
-        carrera = graphene.String(required=True)
-        plan = graphene.String(required=True)
+        carrera = graphene.String(required=False)
+        plan = graphene.String(required=False)
 
     oferta_ea_carrera = graphene.Field(OfertaEaCarreraType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_oferta, id_entidad_academica, carrera, plan):
+    def mutate(root, info, id_oferta, id_entidad_academica, carrera="", plan=""):
         try:
             oferta = Oferta.objects.get(pk=id_oferta)
         except Oferta.DoesNotExist:

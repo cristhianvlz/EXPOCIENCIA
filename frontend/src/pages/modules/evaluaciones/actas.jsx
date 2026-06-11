@@ -24,22 +24,23 @@ const GET_DATA = gql`
       estado
       proyecto {
         idProyecto titulo estado
-        ofertaEaCarrera { oferta { idOferta nombre } }
+        ofertaEaCarrera { oferta { idOferta nombre modalidadArea { area { idArea } } } }
       }
       planillaEvaluativa { idPlanillaEvaluativa nombre notaMaxima }
       detallesEvaluacion {
         id
         puntuacion
         estado
+        permisoCalificacionTardia
         tribunal { idTribunal nombre apellido especialidad }
       }
     }
     todosLosProyectos {
       idProyecto titulo estado
-      ofertaEaCarrera { oferta { idOferta nombre estado } }
+      ofertaEaCarrera { oferta { idOferta nombre estado modalidadArea { area { idArea } } } }
     }
     todasLasPlanillas { idPlanillaEvaluativa nombre notaMaxima }
-    todosLosTribunales { idTribunal nombre apellido especialidad }
+    todosLosTribunales { idTribunal nombre apellido especialidad areas { idArea } }
   }
 `;
 
@@ -58,6 +59,9 @@ const CREATE_DETALLE = gql`mutation($idActaEvaluacion: ID!, $idTribunal: ID!, $p
 }`;
 const DELETE_DETALLE = gql`mutation($idDetalleEvaluacion: ID!) {
   eliminarDetalleEvaluacion(idDetalleEvaluacion: $idDetalleEvaluacion) { ok error }
+}`;
+const EDIT_DETALLE = gql`mutation($idDetalleEvaluacion: ID!, $permisoCalificacionTardia: Boolean) {
+  editarDetalleEvaluacion(idDetalleEvaluacion: $idDetalleEvaluacion, permisoCalificacionTardia: $permisoCalificacionTardia) { ok error }
 }`;
 
 // ── Estado chip helper ────────────────────────────────────────────────────────
@@ -188,12 +192,20 @@ function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planill
 }
 
 // ── Jurados dialog ────────────────────────────────────────────────────────────
-function JuradosDialog({ open, onClose, acta, tribunales, onAdd, onRemove, saving }) {
+function JuradosDialog({ open, onClose, acta, tribunales, onAdd, onRemove, onTogglePermiso, saving }) {
   const [selectedTribunal, setSelectedTribunal] = useState('');
 
   const asignados = acta?.detallesEvaluacion || [];
   const asignadosIds = new Set(asignados.map(d => d.tribunal.idTribunal));
-  const disponibles = tribunales.filter(t => !asignadosIds.has(t.idTribunal));
+  const idAreaProyecto = acta?.proyecto?.ofertaEaCarrera?.oferta?.modalidadArea?.area?.idArea;
+  
+  const disponibles = tribunales.filter(t => {
+    if (asignadosIds.has(t.idTribunal)) return false;
+    if (idAreaProyecto) {
+      return t.areas?.some(a => a.idArea === idAreaProyecto);
+    }
+    return true;
+  });
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -220,6 +232,17 @@ function JuradosDialog({ open, onClose, acta, tribunales, onAdd, onRemove, savin
                 </Box>
                 <Chip label={d.estado ? 'Activo' : 'Inactivo'} size="small"
                   color={d.estado ? 'success' : 'error'} variant="outlined" />
+                <Tooltip title={d.permisoCalificacionTardia ? "Revocar permiso fuera de fecha" : "Permitir calificar fuera de fecha"}>
+                  <Button
+                    size="small"
+                    color={d.permisoCalificacionTardia ? "warning" : "inherit"}
+                    variant={d.permisoCalificacionTardia ? "contained" : "outlined"}
+                    onClick={() => onTogglePermiso(d.id, !d.permisoCalificacionTardia)}
+                    sx={{ minWidth: 0, px: 1, fontSize: '0.7rem' }}
+                  >
+                    {d.permisoCalificacionTardia ? 'Permiso Concedido' : 'Dar Permiso'}
+                  </Button>
+                </Tooltip>
                 <Tooltip title="Quitar jurado">
                   <IconButton size="small" color="error" onClick={() => onRemove(d.id)}>
                     <DeleteOutlined style={{ fontSize: 13 }} />
@@ -267,6 +290,7 @@ export default function ActasEvaluacionPage() {
   const [eliminarActa] = useMutation(DELETE_ACTA);
   const [crearDetalle]   = useMutation(CREATE_DETALLE);
   const [eliminarDetalle] = useMutation(DELETE_DETALLE);
+  const [editarDetalle]   = useMutation(EDIT_DETALLE);
 
   const [saving, setSaving] = useState(false);
   const [notif, setNotif] = useState({ open: false, msg: '', sev: 'success' });
@@ -371,6 +395,20 @@ export default function ActasEvaluacionPage() {
       const res = (await eliminarDetalle({ variables: { idDetalleEvaluacion: idDetalle } })).data?.eliminarDetalleEvaluacion;
       if (res?.ok) {
         showNotif('Jurado removido');
+        const updated = await refetch();
+        const updatedActa = updated.data?.todasLasActas?.find(a => a.idActaEvaluacion === juradosDialog.acta.idActaEvaluacion);
+        if (updatedActa) setJuradosDialog(p => ({ ...p, acta: updatedActa }));
+      } else showNotif(res?.error || 'Error', 'error');
+    } catch { showNotif('Error de conexión', 'error'); }
+    setSaving(false);
+  };
+
+  const handleTogglePermiso = async (idDetalle, permiso) => {
+    setSaving(true);
+    try {
+      const res = (await editarDetalle({ variables: { idDetalleEvaluacion: idDetalle, permisoCalificacionTardia: permiso } })).data?.editarDetalleEvaluacion;
+      if (res?.ok) {
+        showNotif(permiso ? 'Permiso tardío concedido' : 'Permiso revocado');
         const updated = await refetch();
         const updatedActa = updated.data?.todasLasActas?.find(a => a.idActaEvaluacion === juradosDialog.acta.idActaEvaluacion);
         if (updatedActa) setJuradosDialog(p => ({ ...p, acta: updatedActa }));
@@ -531,6 +569,7 @@ export default function ActasEvaluacionPage() {
         tribunales={tribunales}
         onAdd={handleAddJurado}
         onRemove={handleRemoveJurado}
+        onTogglePermiso={handleTogglePermiso}
         saving={saving}
       />
 

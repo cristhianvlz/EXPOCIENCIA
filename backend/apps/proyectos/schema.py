@@ -10,6 +10,7 @@ from apps.eventos.utils import get_cronograma_activo
 class ProyectoType(DjangoObjectType):
     participantes = graphene.List('apps.usuarios.schema.ParticipanteType')
     tutores = graphene.List('apps.usuarios.schema.TutorType')
+    tribunales = graphene.List('apps.usuarios.schema.TribunalType')
 
     class Meta:
         model = Proyecto
@@ -21,6 +22,9 @@ class ProyectoType(DjangoObjectType):
 
     def resolve_tutores(root, info):
         return root.tutores.filter(estado=True)
+
+    def resolve_tribunales(root, info):
+        return root.tribunales.filter(estado=True)
 
 class Query(graphene.ObjectType):
     todos_los_proyectos = graphene.List(ProyectoType)
@@ -78,6 +82,16 @@ class CrearProyecto(graphene.Mutation):
         if archivo:
             proyecto.archivo = archivo
             proyecto.save()
+            
+        # Asignación automática de tribunales basados en el área del proyecto
+        try:
+            area = oferta_ea_carrera.oferta.modalidad_area.area
+            tribunales_area = area.tribunales.filter(estado=True)
+            if tribunales_area.exists():
+                proyecto.tribunales.add(*tribunales_area)
+        except Exception:
+            pass
+            
         return CrearProyecto(proyecto=proyecto, ok=True, error=None) # type: ignore
 
 class EditarProyecto(graphene.Mutation):
@@ -90,6 +104,7 @@ class EditarProyecto(graphene.Mutation):
         estado = graphene.String()
         activo = graphene.Boolean()
         archivo = Upload()
+        tribunales_ids = graphene.List(graphene.ID)
 
     proyecto = graphene.Field(ProyectoType)
     ok = graphene.Boolean()
@@ -124,6 +139,10 @@ class EditarProyecto(graphene.Mutation):
             proyecto.fecha_confirmacion = timezone.now()
 
         proyecto.save()
+        
+        if 'tribunales_ids' in kwargs and kwargs['tribunales_ids'] is not None:
+            proyecto.tribunales.set(kwargs['tribunales_ids'])
+            
         return EditarProyecto(proyecto=proyecto, ok=True, error=None) # type: ignore
 
 class EliminarProyecto(graphene.Mutation):

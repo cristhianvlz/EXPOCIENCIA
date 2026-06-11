@@ -221,6 +221,12 @@ class Tribunal(models.Model):
     direccion = models.CharField(max_length=255)
     estado = models.BooleanField(default=True)
     fcm_token = models.TextField(blank=True, null=True)
+    
+    areas = models.ManyToManyField(
+        'academico.Area',
+        related_name='tribunales',
+        blank=True
+    )
 
     class Meta:
         db_table = 'tribunal'

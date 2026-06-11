@@ -507,6 +507,15 @@ class CrearActaEvaluacion(graphene.Mutation):
             hora_inicio=hora_inicio, 
             hora_fin=hora_fin
         )
+        
+        # Generar detalles (jurados) automáticamente desde los tribunales asignados al proyecto
+        for tribunal in proyecto.tribunales.filter(estado=True):
+            DetalleEvaluacion.objects.create(
+                acta_evaluacion=acta,
+                tribunal=tribunal,
+                puntuacion=0
+            )
+            
         return CrearActaEvaluacion(acta=acta, ok=True, error=None) # type: ignore
 
 class EditarActaEvaluacion(graphene.Mutation):
@@ -519,6 +528,7 @@ class EditarActaEvaluacion(graphene.Mutation):
         hora_inicio = graphene.Time()
         hora_fin = graphene.Time()
         estado = graphene.Boolean()
+        observacion = graphene.String()
 
     acta = graphene.Field(ActaEvaluacionType)
     ok = graphene.Boolean()
@@ -554,7 +564,7 @@ class EditarActaEvaluacion(graphene.Mutation):
             except Proyecto.DoesNotExist:
                 return EditarActaEvaluacion(acta=None, ok=False, error="El proyecto no existe.") # type: ignore
 
-        for field in ['nota_final', 'fecha', 'hora_inicio', 'hora_fin', 'estado']:
+        for field in ['nota_final', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'observacion']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(acta, field, kwargs[field])
 
@@ -629,6 +639,7 @@ class EditarDetalleEvaluacion(graphene.Mutation):
         id_acta_evaluacion = graphene.ID()
         id_tribunal = graphene.ID()
         puntuacion = graphene.Decimal()
+        permiso_calificacion_tardia = graphene.Boolean()
         estado = graphene.Boolean()
 
     detalle_evaluacion = graphene.Field(DetalleEvaluacionType)
@@ -660,7 +671,17 @@ class EditarDetalleEvaluacion(graphene.Mutation):
             except Tribunal.DoesNotExist:
                 return EditarDetalleEvaluacion(detalle_evaluacion=None, ok=False, error="El tribunal no existe.") # type: ignore
 
-        for field in ['puntuacion', 'estado']:
+        if 'puntuacion' in kwargs and kwargs['puntuacion'] is not None:
+            # Check if trying to update but already graded and no permission
+            if detalle.puntuacion and detalle.puntuacion > 0 and not detalle.permiso_calificacion_tardia:
+                # Allow admin to explicitly grant permission along with score, but flutter app won't
+                if not kwargs.get('permiso_calificacion_tardia', False):
+                    return EditarDetalleEvaluacion(detalle_evaluacion=None, ok=False, error="Ya calificaste este proyecto. Pide permiso al administrador para volver a calificar.") # type: ignore
+            # If grading with permission, revoke it automatically
+            if detalle.permiso_calificacion_tardia and kwargs['puntuacion'] > 0:
+                detalle.permiso_calificacion_tardia = False
+
+        for field in ['puntuacion', 'permiso_calificacion_tardia', 'estado']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(detalle, field, kwargs[field])
 
@@ -710,13 +731,16 @@ class CrearPuntuacionCriterio(graphene.Mutation):
         except Exception:
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="No se pudo determinar el evento asociado a este detalle.") # type: ignore
 
-        if not get_cronograma_activo(evento, 'evaluaci'):
-            return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo.") # type: ignore
+        if not get_cronograma_activo(evento, 'evaluaci') and not detalle.permiso_calificacion_tardia:
+            return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo y no se cuenta con permiso para calificación tardía.") # type: ignore
 
         try:
             criterio = Criterio.objects.get(pk=id_criterio)
         except Criterio.DoesNotExist:
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El criterio no existe.") # type: ignore
+
+        if detalle.puntuacion and detalle.puntuacion > 0 and not detalle.permiso_calificacion_tardia:
+            return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="Ya calificaste este proyecto. Pide permiso al administrador para volver a calificar.") # type: ignore
 
         if PuntuacionCriterio.objects.filter(detalle_evaluacion=detalle, criterio=criterio).exists():
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="Ya existe puntuación para este criterio en este detalle.") # type: ignore
@@ -764,6 +788,9 @@ class EditarPuntuacionCriterio(graphene.Mutation):
                 puntuacion.criterio = Criterio.objects.get(pk=kwargs['id_criterio'])
             except Criterio.DoesNotExist:
                 return EditarPuntuacionCriterio(puntuacion=None, ok=False, error="El criterio no existe.") # type: ignore
+
+        if puntuacion.detalle_evaluacion.puntuacion and puntuacion.detalle_evaluacion.puntuacion > 0 and not puntuacion.detalle_evaluacion.permiso_calificacion_tardia:
+            return EditarPuntuacionCriterio(puntuacion=None, ok=False, error="Ya calificaste este proyecto. Pide permiso al administrador para volver a calificar.") # type: ignore
 
         for field in ['puntuacion_criterio', 'estado']:
             if field in kwargs and kwargs[field] is not None:

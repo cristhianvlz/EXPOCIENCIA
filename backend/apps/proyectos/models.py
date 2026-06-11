@@ -44,6 +44,12 @@ class Proyecto(models.Model):
         related_name='proyectos_tutelados',
         blank=True
     )
+    
+    tribunales = models.ManyToManyField(
+        'usuarios.Tribunal',
+        related_name='proyectos_evaluar',
+        blank=True
+    )
 
     class Meta:
         db_table = 'proyecto'

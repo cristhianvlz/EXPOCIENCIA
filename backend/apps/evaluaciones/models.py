@@ -64,6 +64,7 @@ class ActaEvaluacion(models.Model):
         related_name='actas_evaluacion',
     )
     nota_final = models.DecimalField(max_digits=5, decimal_places=2)
+    observacion = models.TextField(blank=True, null=True)
     fecha = models.DateField()
     hora_inicio = models.TimeField()
     hora_fin = models.TimeField()
@@ -94,6 +95,7 @@ class DetalleEvaluacion(models.Model):
         related_name='detalles_evaluacion',
     )
     puntuacion = models.DecimalField(max_digits=5, decimal_places=2)
+    permiso_calificacion_tardia = models.BooleanField(default=False)
     estado = models.BooleanField(default=True)
 
     class Meta:

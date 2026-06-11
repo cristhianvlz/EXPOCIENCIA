@@ -100,7 +100,7 @@ const DELETE_OFERTA = gql`
 `;
 
 const CREATE_OEC = gql`
-  mutation($idOferta: ID!, $idEntidadAcademica: ID!, $carrera: String!, $plan: String!) {
+  mutation($idOferta: ID!, $idEntidadAcademica: ID!, $carrera: String, $plan: String) {
     crearOfertaEaCarrera(idOferta: $idOferta, idEntidadAcademica: $idEntidadAcademica, carrera: $carrera, plan: $plan) { ok error }
   }
 `;
@@ -279,7 +279,7 @@ export default function OfertasPage() {
     if (wizardStep === 1) return !wizardCategoria;
     if (wizardStep === 2) return !wizardModalidad || !wizardArea;
     if (wizardStep === 3) return !wizardNombre.trim();
-    if (wizardStep === 4) return !wizardEntidad || !wizardCarrera.trim() || !wizardPlan.trim();
+    if (wizardStep === 4) return !wizardEntidad;
     return false;
   };
 
@@ -554,8 +554,8 @@ export default function OfertasPage() {
   };
 
   const oecFormValid = !editingOEC
-    ? (formOEC.idOferta && formOEC.idEntidadAcademica && formOEC.carrera.trim() && formOEC.plan.trim())
-    : (formOEC.carrera?.trim() && formOEC.plan?.trim());
+    ? (formOEC.idOferta && formOEC.idEntidadAcademica)
+    : true;
 
   // ── Wizard step content ───────────────────────────────────────────────────
   const renderWizardStep = () => {
@@ -638,11 +638,25 @@ export default function OfertasPage() {
         );
       }
 
-      case 4:
+      case 4: {
+        const selEvento    = eventos.find(ev => ev.idEvento === wizardEvento);
+        const selCategoria = categorias.find(c => c.idCategoria === wizardCategoria);
+        const selModalidad = modalidades.find(m => m.idModalidad === wizardModalidad);
+        const selArea      = areas.find(a => a.idArea === wizardArea);
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                Resumen de selección
+              </Typography>
+              <Typography variant="body2"><strong>Evento:</strong> {selEvento?.nombre} v{selEvento?.version}</Typography>
+              <Typography variant="body2"><strong>Categoría:</strong> {selCategoria?.nombre}</Typography>
+              <Typography variant="body2"><strong>Modalidad / Área:</strong> {selModalidad?.nombre} / {selArea?.nombre}</Typography>
+              <Typography variant="body2"><strong>Oferta:</strong> {wizardNombre}</Typography>
+            </Box>
+            <Divider />
             <Alert severity="info" sx={{ mb: 0.5 }}>
-              Asigna la carrera y entidad que podrán inscribir proyectos a esta oferta.
+              Asigna la entidad que podrá inscribir proyectos a esta oferta. Seleccionar carrera y plan es opcional.
             </Alert>
             <FormControl fullWidth required>
               <InputLabel>Facultad / Entidad Académica</InputLabel>
@@ -656,15 +670,20 @@ export default function OfertasPage() {
               </Select>
             </FormControl>
             <TextField
-              label="Carrera" value={wizardCarrera} fullWidth required
+              label="Carrera (Opcional)" value={wizardCarrera} fullWidth
+              placeholder="ej. 187 - Ingeniería de Sistemas"
               onChange={e => setWizardCarrera(e.target.value)}
+              helperText="Escribe el código de la carrera seguido del nombre"
             />
             <TextField
-              label="Plan" value={wizardPlan} fullWidth required
+              label="Plan (Opcional)" value={wizardPlan} fullWidth
+              placeholder="ej. 4"
               onChange={e => setWizardPlan(e.target.value)}
+              helperText="Ingresa solo el número de plan si aplica"
             />
           </Box>
         );
+      }
 
       default: return null;
     }

@@ -342,13 +342,14 @@ class CrearTribunal(graphene.Mutation):
         ci = graphene.String(required=True)
         expedicion = graphene.String(required=True)
         direccion = graphene.String(required=True)
+        areas_ids = graphene.List(graphene.ID)
 
     tribunal = graphene.Field(TribunalType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_usuario, especialidad, nombre, apellido, celular, ci, expedicion, direccion):
+    def mutate(root, info, id_usuario, especialidad, nombre, apellido, celular, ci, expedicion, direccion, areas_ids=None):
         try:
             usuario = Usuario.objects.get(pk=id_usuario)
         except Usuario.DoesNotExist:
@@ -367,6 +368,9 @@ class CrearTribunal(graphene.Mutation):
             expedicion=expedicion,
             direccion=direccion
         )
+        if areas_ids:
+            tribunal.areas.set(areas_ids)
+            
         return CrearTribunal(tribunal=tribunal, ok=True, error=None) # type: ignore
 
 
@@ -382,6 +386,7 @@ class EditarTribunal(graphene.Mutation):
         expedicion = graphene.String()
         direccion = graphene.String()
         estado = graphene.Boolean()
+        areas_ids = graphene.List(graphene.ID)
 
     tribunal = graphene.Field(TribunalType)
     ok = graphene.Boolean()
@@ -413,6 +418,11 @@ class EditarTribunal(graphene.Mutation):
                 setattr(tribunal, field, kwargs[field])
 
         tribunal.save()
+        
+        areas_ids = kwargs.get('areas_ids')
+        if areas_ids is not None:
+            tribunal.areas.set(areas_ids)
+            
         return EditarTribunal(tribunal=tribunal, ok=True, error=None) # type: ignore
 
 

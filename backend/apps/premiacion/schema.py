@@ -776,6 +776,7 @@ class CerrarActaResultados(graphene.Mutation):
                     defaults={
                         'acta_evaluacion': acta,
                         'nota': acta.nota_final,
+                        'observacion': acta.observacion or '',
                         'estado': 'ganador',
                         'activo': True,
                     }
@@ -794,6 +795,7 @@ class CerrarActaResultados(graphene.Mutation):
                         defaults={
                             'acta_evaluacion': acta,
                             'nota': acta.nota_final,
+                            'observacion': acta.observacion or '',
                             'estado': 'candidato',
                             'activo': True,
                         }
