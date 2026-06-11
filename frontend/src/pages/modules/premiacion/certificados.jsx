@@ -4,7 +4,7 @@ import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Chip, Typography, Stack, Divider,
-  FormControl, InputLabel, Select, MenuItem, Tooltip, Tabs, Tab
+  FormControl, InputLabel, Select, MenuItem, Tooltip, Tabs, Tab, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, FilePdfOutlined,
@@ -12,15 +12,17 @@ import {
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
+const BACKEND_MEDIA = 'http://localhost:8000/media/';
+
 // ── GQL ──────────────────────────────────────────────────────────────────────
 const GET_DATA = gql`
   query {
     todasLasPlantillas {
-      idPlantilla descripcion contenido estado
+      idPlantilla descripcion contenido orientacion estado
     }
     todosLosCertificados {
       idCertificado fechaEmision estado
-      plantilla { idPlantilla descripcion contenido }
+      plantilla { idPlantilla descripcion contenido orientacion }
       ganadorPremio {
         idGanadorPremio estado
         candidatoPremio {
@@ -33,7 +35,15 @@ const GET_DATA = gql`
           }
           premio {
             monto numeroGanadores
-            evento { nombre }
+            evento {
+              nombre
+              membrete {
+                titulo subtitulo direccion
+                logoUnidad logoInstitucion firma selloAutoridad
+                piePagina1 piePagina2 piePagina3
+                firmantes { idFirmante nombre cargo firmaImagen orden estado }
+              }
+            }
             area { nombre }
             premioDescriptores { descriptor { descripcion } }
           }
@@ -52,7 +62,15 @@ const GET_DATA = gql`
         }
         premio {
           monto numeroGanadores
-          evento { nombre }
+          evento {
+            nombre
+            membrete {
+              titulo subtitulo direccion
+              logoUnidad logoInstitucion firma selloAutoridad
+              piePagina1 piePagina2 piePagina3
+              firmantes { idFirmante nombre cargo firmaImagen orden estado }
+            }
+          }
           area { nombre }
           premioDescriptores { descriptor { descripcion } }
         }
@@ -61,11 +79,11 @@ const GET_DATA = gql`
   }
 `;
 
-const CREAR_PLANTILLA = gql`mutation($descripcion: String!, $contenido: String!) {
-  crearPlantilla(descripcion: $descripcion, contenido: $contenido) { ok error }
+const CREAR_PLANTILLA = gql`mutation($descripcion: String!, $contenido: String!, $orientacion: String) {
+  crearPlantilla(descripcion: $descripcion, contenido: $contenido, orientacion: $orientacion) { ok error }
 }`;
-const EDITAR_PLANTILLA = gql`mutation($idPlantilla: ID!, $descripcion: String, $contenido: String, $estado: Boolean) {
-  editarPlantilla(idPlantilla: $idPlantilla, descripcion: $descripcion, contenido: $contenido, estado: $estado) { ok error }
+const EDITAR_PLANTILLA = gql`mutation($idPlantilla: ID!, $descripcion: String, $contenido: String, $orientacion: String, $estado: Boolean) {
+  editarPlantilla(idPlantilla: $idPlantilla, descripcion: $descripcion, contenido: $contenido, orientacion: $orientacion, estado: $estado) { ok error }
 }`;
 const ELIMINAR_PLANTILLA = gql`mutation($idPlantilla: ID!) { eliminarPlantilla(idPlantilla: $idPlantilla) { ok error } }`;
 
@@ -125,7 +143,7 @@ function resolverContenido(contenido, ganador) {
   const oferta        = cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre;
   const lugar         = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
 
-  return contenido
+  let resultado = contenido
     .replace(/\{\{Nombre_Proyecto\}\}/g, cp.proyecto.titulo)
     .replace(/\{\{Lugar\}\}/g,           lugar)
     .replace(/\{\{Descriptor\}\}/g,      descriptores || '—')
@@ -133,58 +151,260 @@ function resolverContenido(contenido, ganador) {
     .replace(/\{\{Area\}\}/g,            cp.premio.area.nombre)
     .replace(/\{\{Evento\}\}/g,          cp.premio.evento.nombre)
     .replace(/\{\{Nota\}\}/g,            cp.nota)
-    .replace(/\{\{Monto\}\}/g,           cp.premio.monto || '—')
-    .replace(/\{\{Participantes\}\}/g,   participantes || '—')
-    .replace(/\{\{Tutores\}\}/g,         tutores || '—');
+    .replace(/\{\{Monto\}\}/g,           cp.premio.monto || '—');
+
+  // Si no hay participantes/tutores, eliminar la línea completa que los contiene
+  if (participantes) {
+    resultado = resultado.replace(/\{\{Participantes\}\}/g, participantes);
+  } else {
+    resultado = resultado.replace(/[^\n]*\{\{Participantes\}\}[^\n]*/g, '');
+  }
+  if (tutores) {
+    resultado = resultado.replace(/\{\{Tutores\}\}/g, tutores);
+  } else {
+    resultado = resultado.replace(/[^\n]*\{\{Tutores\}\}[^\n]*/g, '');
+  }
+
+  // Eliminar líneas en blanco consecutivas (> 1) que queden tras eliminar tokens
+  return resultado.replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// Genera y abre la ventana de impresión para una lista de certificados
+// ── Generación de HTML del certificado ───────────────────────────────────────
 function buildCertPage(cert) {
   const texto = resolverContenido(cert.plantilla.contenido, cert.ganadorPremio);
   const cp = cert.ganadorPremio.candidatoPremio;
   const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(' · ');
-  return `
-    <div class="cert-page">
-      <div class="cert-box">
-        <div class="cert-header-line"></div>
-        <div class="cert-title">CERTIFICADO</div>
-        <div class="cert-descriptor">${descriptores || ''}</div>
-        <div class="cert-event">${cp.premio.evento.nombre}</div>
-        <div class="cert-area">Área: ${cp.premio.area.nombre}</div>
-        <div class="cert-divider"></div>
-        <div class="cert-body">${texto.replace(/\n/g, '<br/>')}</div>
-        <div class="cert-divider"></div>
-        <div class="cert-footer">Fecha de emisión: ${new Date(cert.fechaEmision).toLocaleDateString('es-BO')}</div>
-        <div class="cert-header-line"></div>
+  const membrete = cp.premio.evento?.membrete;
+  const isHorizontal = cert.plantilla.orientacion !== 'vertical';
+
+  const imgUrl = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
+  const logoUnidad      = imgUrl(membrete?.logoUnidad);
+  const logoInstitucion = imgUrl(membrete?.logoInstitucion);
+  const firmaGeneral    = imgUrl(membrete?.firma);
+  const sello           = imgUrl(membrete?.selloAutoridad);
+
+  const firmantesActivos = (membrete?.firmantes || [])
+    .filter(f => f.estado)
+    .sort((a, b) => a.orden - b.orden);
+
+  // Cabecera institucional (membrete)
+  const headerHtml = membrete ? `
+    <div class="cert-membrete-header">
+      <div class="cert-logo-box">
+        ${logoUnidad ? `<img src="${logoUnidad}" class="cert-logo" alt="Logo Unidad" />` : ''}
       </div>
+      <div class="cert-membrete-texto">
+        <div class="cert-membrete-titulo">${membrete.titulo || ''}</div>
+        ${membrete.subtitulo ? `<div class="cert-membrete-subtitulo">${membrete.subtitulo}</div>` : ''}
+        ${membrete.direccion ? `<div class="cert-membrete-dir">${membrete.direccion}</div>` : ''}
+      </div>
+      <div class="cert-logo-box">
+        ${logoInstitucion ? `<img src="${logoInstitucion}" class="cert-logo" alt="Logo Institución" />` : ''}
+      </div>
+    </div>
+    <div class="cert-membrete-line"></div>
+  ` : '';
+
+  // Firmantes
+  const firmantesHtml = (() => {
+    if (firmantesActivos.length === 0 && !firmaGeneral) return '';
+    const items = firmantesActivos.length > 0
+      ? firmantesActivos.map(f => {
+          const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+          return `
+            <div class="cert-firmante-item">
+              ${fImg ? `<img src="${fImg}" class="cert-firma-img" alt="Firma" />` : '<div class="cert-firma-espacio"></div>'}
+              <div class="cert-firmante-linea"></div>
+              <div class="cert-firmante-nombre">${f.nombre}</div>
+              <div class="cert-firmante-cargo">${f.cargo}</div>
+            </div>`;
+        }).join('')
+      : `<div class="cert-firmante-item">
+           <img src="${firmaGeneral}" class="cert-firma-img" alt="Firma" />
+           <div class="cert-firmante-linea"></div>
+         </div>`;
+    return `<div class="cert-firmantes">${items}</div>`;
+  })();
+
+  const selloHtml = sello
+    ? `<img src="${sello}" class="cert-sello" alt="Sello de autoridad" />`
+    : '';
+
+  // Pie de página institucional
+  const piePaginas = [membrete?.piePagina1, membrete?.piePagina2, membrete?.piePagina3].filter(Boolean);
+  const footerHtml = piePaginas.length > 0
+    ? `<div class="cert-pie-pagina">${piePaginas.join('  ·  ')}</div>`
+    : '';
+
+  return `
+    <div class="cert-page ${isHorizontal ? 'horizontal' : 'vertical'}">
+      ${headerHtml}
+      <div class="cert-box">
+
+        <!-- Bloque superior: título y clasificación -->
+        <div class="cert-top-block">
+          <div class="cert-deco-line"></div>
+          <div class="cert-title">CERTIFICADO</div>
+          ${descriptores ? `<div class="cert-descriptor">${descriptores}</div>` : ''}
+          <div class="cert-event">${cp.premio.evento.nombre}</div>
+          <div class="cert-area">Área: ${cp.premio.area.nombre}</div>
+          <div class="cert-deco-line"></div>
+        </div>
+
+        <!-- Bloque central: cuerpo del texto -->
+        <div class="cert-body-block">
+          <div class="cert-body">${texto.replace(/\n/g, '<br/>')}</div>
+        </div>
+
+        <!-- Bloque inferior: sello, firmas y fecha -->
+        <div class="cert-bottom-block">
+          <div class="cert-deco-line"></div>
+          <div class="cert-bottom">
+            ${selloHtml}
+            ${firmantesHtml}
+          </div>
+          <div class="cert-fecha">Fecha de emisión: ${new Date(cert.fechaEmision).toLocaleDateString('es-BO')}</div>
+        </div>
+
+      </div>
+      ${footerHtml}
     </div>`;
 }
 
 const CERT_CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: #222; }
+
+  /* ── Tamaños de página (dimensiones exactas = tamaño A4 menos márgenes @page) ── */
+  @page horizontal-page { size: A4 landscape; margin: 7mm; }
+  @page vertical-page   { size: A4 portrait;  margin: 8mm; }
+
   .cert-page {
     page-break-after: always;
-    display: flex; align-items: center; justify-content: center;
-    min-height: 100vh; padding: 30px;
+    page-break-inside: avoid;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
+  /* A4 landscape 297×210mm - 2×7mm = 283×196mm */
+  .cert-page.horizontal { page: horizontal-page; width: 283mm; height: 196mm; }
+  /* A4 portrait 210×297mm - 2×8mm = 194×281mm */
+  .cert-page.vertical   { page: vertical-page;  width: 194mm; height: 281mm; }
+
+  /* ── Cabecera institucional (membrete) ── */
+  .cert-membrete-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 4px 12px 2px; flex-shrink: 0;
+  }
+  .cert-logo-box { width: 58px; min-width: 58px; text-align: center; }
+  .cert-logo { max-width: 50px; max-height: 50px; object-fit: contain; }
+  .cert-membrete-texto { flex: 1; text-align: center; }
+  .cert-membrete-titulo {
+    font-size: 11px; font-weight: bold; color: #1a237e;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .cert-membrete-subtitulo { font-size: 9px; color: #444; margin-top: 1px; }
+  .cert-membrete-dir       { font-size: 8px; color: #888; margin-top: 1px; }
+  .cert-membrete-line {
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, #1a237e 20%, #1a237e 80%, transparent);
+    margin: 0 12px 3px;
+    flex-shrink: 0;
+  }
+
+  /* ── Caja principal del certificado ── */
   .cert-box {
-    border: 3px solid #1a237e;
-    outline: 6px double #1a237e;
-    outline-offset: -12px;
-    padding: 60px 80px;
-    max-width: 720px; width: 100%;
+    border: 2.5px solid #1a237e;
+    outline: 4px double #1a237e;
+    outline-offset: -8px;
+    margin: 0 12px;
+    /* padding-bottom >= outline-offset + outline-width/2 + clearance: 8+4+8=20px */
+    padding: 10px 40px 20px;
+    flex: 1;
+    min-height: 0;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;          /* impide que el contenido sobresalga del borde */
   }
-  .cert-header-line { height: 3px; background: linear-gradient(90deg,transparent,#1a237e,transparent); margin: 0 40px 20px; }
-  .cert-title { font-size: 38px; font-weight: bold; color: #1a237e; letter-spacing: 8px; margin-bottom: 10px; }
-  .cert-descriptor { font-size: 18px; font-weight: bold; color: #c62828; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 6px; }
-  .cert-event { font-size: 14px; color: #555; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
-  .cert-area { font-size: 13px; color: #888; margin-bottom: 24px; }
-  .cert-divider { height: 1px; background: #ccc; margin: 20px 60px; }
-  .cert-body { font-size: 15px; line-height: 2.1; color: #333; margin: 20px 0; }
-  .cert-footer { font-size: 12px; color: #999; margin-top: 20px; }
-  @media print { .cert-page { page-break-after: always; min-height: 100vh; } }
+
+  /* ── Bloque superior: título ── */
+  .cert-top-block { flex-shrink: 0; }
+
+  .cert-deco-line {
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, #1a237e 20%, #1a237e 80%, transparent);
+    margin: 0 25px 6px;
+  }
+
+  .cert-title {
+    font-size: 24px; font-weight: bold; color: #1a237e;
+    letter-spacing: 6px; margin-bottom: 4px;
+  }
+  .cert-descriptor {
+    font-size: 12px; font-weight: bold; color: #c62828;
+    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 2px;
+  }
+  .cert-event {
+    font-size: 10px; color: #555;
+    letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 2px;
+  }
+  .cert-area { font-size: 9.5px; color: #888; margin-bottom: 5px; }
+
+  /* ── Bloque central: texto principal ── */
+  .cert-body-block {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    overflow: hidden;
+  }
+  .cert-body {
+    font-size: 11.5px; line-height: 1.7; color: #333;
+  }
+
+  /* ── Bloque inferior: sello + firmantes + fecha ── */
+  .cert-bottom-block { flex-shrink: 0; }
+
+  .cert-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .cert-sello { width: 52px; height: 52px; object-fit: contain; opacity: 0.85; }
+
+  .cert-firmantes { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; }
+  .cert-firmante-item {
+    display: flex; flex-direction: column; align-items: center; min-width: 100px;
+  }
+  .cert-firma-img     { max-width: 82px; max-height: 34px; object-fit: contain; margin-bottom: 2px; }
+  .cert-firma-espacio { height: 34px; }
+  .cert-firmante-linea {
+    width: 100px; height: 1px; background: #555; margin-bottom: 2px;
+  }
+  .cert-firmante-nombre { font-size: 9.5px; font-weight: bold; color: #222; text-align: center; }
+  .cert-firmante-cargo  { font-size: 8.5px; color: #555; text-align: center; }
+
+  .cert-fecha { font-size: 9px; color: #999; text-align: center; margin-top: 3px; }
+
+  /* ── Pie de página institucional ── */
+  .cert-pie-pagina {
+    font-size: 8px; color: #888; text-align: center;
+    padding: 2px 12px;
+    border-top: 1px solid #ddd;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+
+  @media print {
+    html, body { margin: 0; }
+    .cert-page { page-break-after: always; }
+  }
 `;
 
 function imprimirCertificados(certs, showNotif) {
@@ -192,7 +412,6 @@ function imprimirCertificados(certs, showNotif) {
   const body = certs.map(buildCertPage).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Certificados — Expociencia</title><style>${CERT_CSS}</style></head><body>${body}</body></html>`;
 
-  // Usar Blob URL: más confiable que document.write en todos los navegadores
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const win = window.open(url, '_blank');
@@ -202,7 +421,6 @@ function imprimirCertificados(certs, showNotif) {
     URL.revokeObjectURL(url);
     return;
   }
-  // Disparar impresión cuando la página cargue completamente
   win.addEventListener('load', () => {
     win.focus();
     win.print();
@@ -218,12 +436,14 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
 
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState({ open: false, item: null });
-  const [form, setForm] = useState({ descripcion: '', contenido: '' });
+  const [form, setForm] = useState({ descripcion: '', contenido: '', orientacion: 'horizontal' });
   const [preview, setPreview] = useState(null);
   const [confirm, setConfirm] = useState({ open: false, id: null });
 
   const openDialog = (item = null) => {
-    setForm(item ? { descripcion: item.descripcion, contenido: item.contenido } : { descripcion: '', contenido: '' });
+    setForm(item
+      ? { descripcion: item.descripcion, contenido: item.contenido, orientacion: item.orientacion || 'horizontal' }
+      : { descripcion: '', contenido: '', orientacion: 'horizontal' });
     setDialog({ open: true, item });
   };
 
@@ -266,6 +486,7 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
             <TableRow>
               <TableCell width={60}>ID</TableCell>
               <TableCell>Descripción</TableCell>
+              <TableCell width={110} align="center">Formato</TableCell>
               <TableCell>Contenido (vista previa)</TableCell>
               <TableCell align="center">Estado</TableCell>
               <TableCell align="right" width={120}>Acciones</TableCell>
@@ -276,6 +497,14 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
               <TableRow key={p.idPlantilla} hover>
                 <TableCell>{p.idPlantilla}</TableCell>
                 <TableCell><Typography fontWeight={500}>{p.descripcion}</Typography></TableCell>
+                <TableCell align="center">
+                  <Chip
+                    label={p.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                    size="small"
+                    color={p.orientacion === 'vertical' ? 'secondary' : 'info'}
+                    variant="outlined"
+                  />
+                </TableCell>
                 <TableCell>
                   <Typography variant="caption" color="text.secondary"
                     sx={{ fontFamily: 'monospace', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -300,7 +529,7 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
             ))}
             {plantillas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin plantillas registradas.</TableCell>
+                <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin plantillas registradas.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -314,6 +543,22 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label="Descripción de la plantilla" fullWidth value={form.descripcion}
               onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} />
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                Formato del certificado
+              </Typography>
+              <ToggleButtonGroup
+                value={form.orientacion}
+                exclusive
+                onChange={(_, v) => v && setForm(p => ({ ...p, orientacion: v }))}
+                size="small"
+              >
+                <ToggleButton value="horizontal">Horizontal (A4 apaisado)</ToggleButton>
+                <ToggleButton value="vertical">Vertical (A4 retrato)</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
                 Variables disponibles (clic para insertar):
@@ -345,9 +590,18 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
       <Dialog open={!!preview} onClose={() => setPreview(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Vista previa — {preview?.descripcion}</DialogTitle>
         <DialogContent dividers>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 120 }}>
-            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>{preview?.contenido}</Typography>
-          </Box>
+          <Stack spacing={1}>
+            <Chip
+              label={preview?.orientacion === 'vertical' ? 'Formato Vertical' : 'Formato Horizontal'}
+              size="small"
+              color={preview?.orientacion === 'vertical' ? 'secondary' : 'info'}
+              variant="outlined"
+              sx={{ width: 'fit-content' }}
+            />
+            <Box sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 120 }}>
+              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>{preview?.contenido}</Typography>
+            </Box>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPreview(null)}>Cerrar</Button>
@@ -388,11 +642,9 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
   const ganadoresActivos  = ganadores.filter(g => g.estado);
   const certActivos       = certificados.filter(c => c.estado);
 
-  // IDs de ganadores que ya tienen certificado
   const ganadoresConCert = new Set(certActivos.map(c => c.ganadorPremio?.idGanadorPremio));
   const ganadores_pendientes = ganadoresActivos.filter(g => !ganadoresConCert.has(g.idGanadorPremio));
 
-  // ── Generar uno ──
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -407,7 +659,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
     setSaving(false);
   };
 
-  // ── Generar en lote ──
   const handleBatchGenerate = async () => {
     if (!batchPlantilla || ganadores_pendientes.length === 0) return;
     setBatchSaving(true);
@@ -427,7 +678,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
     setBatchSaving(false);
   };
 
-  // ── Eliminar ──
   const handleDelete = async () => {
     try {
       const res = (await eliminarCertificado({ variables: { idCertificado: confirm.id } })).data?.eliminarCertificado;
@@ -437,7 +687,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
     setConfirm({ open: false, id: null });
   };
 
-  // Auto-sugerir plantilla por posición al seleccionar ganador
   const handleSelectGanador = (idGanador) => {
     const g = ganadores.find(x => x.idGanadorPremio === idGanador);
     const pos = g?.candidatoPremio?.premio?.numeroGanadores;
@@ -457,7 +706,9 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
   const previewTexto = selectedGanador && selectedPlantilla
     ? resolverContenido(selectedPlantilla.contenido, selectedGanador) : null;
 
-  // Agrupar certificados por oferta
+  // Membrete del ganador seleccionado (para mostrar en vista previa)
+  const previewMembrete = selectedGanador?.candidatoPremio?.premio?.evento?.membrete;
+
   const certPorOferta = certActivos.reduce((acc, cert) => {
     const oferta = cert.ganadorPremio?.candidatoPremio?.proyecto?.ofertaEaCarrera?.oferta;
     const key = oferta?.idOferta || 'sin_oferta';
@@ -469,7 +720,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
 
   return (
     <Box>
-      {/* ── Alerta de pendientes ── */}
       {ganadores_pendientes.length > 0 && (
         <Alert
           severity="warning"
@@ -485,7 +735,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
         </Alert>
       )}
 
-      {/* ── Cabecera ── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Certificados Emitidos</Typography>
         <Stack direction="row" gap={1}>
@@ -499,7 +748,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
         </Stack>
       </Box>
 
-      {/* ── Certificados agrupados por oferta (colapsables) ── */}
       {gruposCert.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>Sin certificados generados.</Box>
       ) : gruposCert.map(grupo => {
@@ -548,6 +796,8 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                       <TableCell width={120} align="center">Lugar</TableCell>
                       <TableCell>Proyecto</TableCell>
                       <TableCell>Plantilla</TableCell>
+                      <TableCell width={90} align="center">Formato</TableCell>
+                      <TableCell>Membrete</TableCell>
                       <TableCell align="center">Nota</TableCell>
                       <TableCell>Fecha Emisión</TableCell>
                       <TableCell align="right" width={90}>Acciones</TableCell>
@@ -556,6 +806,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                   <TableBody>
                     {certsOrdenados.map(cert => {
                       const cp = cert.ganadorPremio.candidatoPremio;
+                      const membrete = cp.premio?.evento?.membrete;
                       return (
                         <TableRow key={cert.idCertificado} hover>
                           <TableCell align="center">
@@ -568,6 +819,19 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                             <Typography variant="caption" color="text.secondary">{cp.premio.area.nombre}</Typography>
                           </TableCell>
                           <TableCell>{cert.plantilla.descripcion}</TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              label={cert.plantilla.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                              size="small"
+                              color={cert.plantilla.orientacion === 'vertical' ? 'secondary' : 'info'}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" color="text.secondary">
+                              {membrete?.titulo || '—'}
+                            </Typography>
+                          </TableCell>
                           <TableCell align="center">
                             <Chip label={cp.nota} color="primary" size="small" />
                           </TableCell>
@@ -635,12 +899,34 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
               </Select>
             </FormControl>
 
+            {/* Membrete del evento seleccionado */}
+            {previewMembrete && (
+              <Alert severity="info" icon={false} sx={{ py: 0.5 }}>
+                <Typography variant="caption">
+                  <strong>Membrete:</strong> {previewMembrete.titulo}
+                  {previewMembrete.firmantes?.filter(f => f.estado).length > 0 && (
+                    <> · <strong>Firmantes:</strong> {previewMembrete.firmantes.filter(f => f.estado).map(f => f.nombre).join(', ')}</>
+                  )}
+                </Typography>
+              </Alert>
+            )}
+
             <FormControl fullWidth required>
               <InputLabel>Plantilla</InputLabel>
               <Select value={form.idPlantilla} label="Plantilla"
                 onChange={e => setForm(p => ({ ...p, idPlantilla: e.target.value }))}>
                 {plantillasActivas.map(pl => (
-                  <MenuItem key={pl.idPlantilla} value={pl.idPlantilla}>{pl.descripcion}</MenuItem>
+                  <MenuItem key={pl.idPlantilla} value={pl.idPlantilla}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span>{pl.descripcion}</span>
+                      <Chip
+                        label={pl.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                        size="small"
+                        color={pl.orientacion === 'vertical' ? 'secondary' : 'info'}
+                        variant="outlined"
+                      />
+                    </Box>
+                  </MenuItem>
                 ))}
               </Select>
               {form.idPlantilla && selectedGanador && (() => {
@@ -656,7 +942,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
             {previewTexto && (
               <>
                 <Divider />
-                <Typography variant="subtitle2">Vista previa</Typography>
+                <Typography variant="subtitle2">Vista previa del contenido</Typography>
                 <Box sx={{ p: 3, border: '4px double', borderColor: 'primary.main', borderRadius: 1,
                   textAlign: 'center', bgcolor: 'background.paper' }}>
                   <Typography variant="h5" fontWeight={700} letterSpacing={3} color="primary.main" sx={{ mb: 1 }}>
@@ -694,6 +980,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
             <Box>
               {ganadores_pendientes.map(g => {
                 const cp = g.candidatoPremio;
+                const membrete = cp.premio?.evento?.membrete;
                 return (
                   <Box key={g.idGanadorPremio} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Typography fontSize={16}>{posLabel(cp.premio?.numeroGanadores)}</Typography>
@@ -701,6 +988,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                       <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
                       <Typography variant="caption" color="text.secondary">
                         {cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
+                        {membrete && <> · Membrete: {membrete.titulo}</>}
                       </Typography>
                     </Box>
                   </Box>
@@ -712,7 +1000,17 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
               <Select value={batchPlantilla} label="Plantilla para todos"
                 onChange={e => setBatchPlantilla(e.target.value)}>
                 {plantillasActivas.map(pl => (
-                  <MenuItem key={pl.idPlantilla} value={pl.idPlantilla}>{pl.descripcion}</MenuItem>
+                  <MenuItem key={pl.idPlantilla} value={pl.idPlantilla}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span>{pl.descripcion}</span>
+                      <Chip
+                        label={pl.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                        size="small"
+                        color={pl.orientacion === 'vertical' ? 'secondary' : 'info'}
+                        variant="outlined"
+                      />
+                    </Box>
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>

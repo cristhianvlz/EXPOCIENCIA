@@ -47,6 +47,27 @@ class Membrete(models.Model):
         return self.titulo
 
 
+class Firmante(models.Model):
+    id_firmante = models.AutoField(primary_key=True)
+    membrete = models.ForeignKey(
+        Membrete,
+        on_delete=models.CASCADE,
+        related_name='firmantes',
+    )
+    nombre = models.CharField(max_length=255)
+    cargo = models.CharField(max_length=255)
+    firma_imagen = models.ImageField(upload_to='firmantes/', null=True, blank=True)
+    orden = models.PositiveSmallIntegerField(default=1)
+    estado = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'firmante'
+        ordering = ['orden']
+
+    def __str__(self):
+        return f"{self.nombre} — {self.cargo}"
+
+
 class Evento(models.Model):
     id_evento = models.AutoField(primary_key=True)
     tipo_evento = models.ForeignKey(

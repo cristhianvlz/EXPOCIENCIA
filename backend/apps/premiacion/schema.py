@@ -578,14 +578,17 @@ class CrearPlantilla(graphene.Mutation):
     class Arguments:
         descripcion = graphene.String(required=True)
         contenido = graphene.String(required=True)
+        orientacion = graphene.String()
 
     plantilla = graphene.Field(PlantillaType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, descripcion, contenido):
-        plantilla = Plantilla.objects.create(descripcion=descripcion, contenido=contenido)
+    def mutate(root, info, descripcion, contenido, orientacion='horizontal'):
+        plantilla = Plantilla.objects.create(
+            descripcion=descripcion, contenido=contenido, orientacion=orientacion
+        )
         return CrearPlantilla(plantilla=plantilla, ok=True, error=None) # type: ignore
 
 class EditarPlantilla(graphene.Mutation):
@@ -593,6 +596,7 @@ class EditarPlantilla(graphene.Mutation):
         id_plantilla = graphene.ID(required=True)
         descripcion = graphene.String()
         contenido = graphene.String()
+        orientacion = graphene.String()
         estado = graphene.Boolean()
 
     plantilla = graphene.Field(PlantillaType)
@@ -606,7 +610,7 @@ class EditarPlantilla(graphene.Mutation):
         except Plantilla.DoesNotExist:
             return EditarPlantilla(plantilla=None, ok=False, error="La plantilla no existe.") # type: ignore
 
-        for field in ['descripcion', 'contenido', 'estado']:
+        for field in ['descripcion', 'contenido', 'orientacion', 'estado']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(plantilla, field, kwargs[field])
 

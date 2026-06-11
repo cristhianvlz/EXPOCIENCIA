@@ -143,9 +143,19 @@ class GanadorPremio(models.Model):
 
 
 class Plantilla(models.Model):
+    ORIENTACION_CHOICES = [
+        ('horizontal', 'Horizontal'),
+        ('vertical', 'Vertical'),
+    ]
+
     id_plantilla = models.AutoField(primary_key=True)
     descripcion = models.CharField(max_length=255)
     contenido = models.TextField()
+    orientacion = models.CharField(
+        max_length=20,
+        choices=ORIENTACION_CHOICES,
+        default='horizontal',
+    )
     estado = models.BooleanField(default=True)
 
     class Meta:

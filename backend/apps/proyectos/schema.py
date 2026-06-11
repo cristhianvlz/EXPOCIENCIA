@@ -8,21 +8,20 @@ from apps.academico.models import OfertaEaCarrera
 from apps.eventos.utils import get_cronograma_activo
 
 class ProyectoType(DjangoObjectType):
-    participantes = graphene.List('apps.usuarios.schema.ParticipanteType')
-    tutores = graphene.List('apps.usuarios.schema.TutorType')
-    tribunales = graphene.List('apps.usuarios.schema.TribunalType')
-
     class Meta:
         model = Proyecto
         fields = '__all__'
         convert_choices_to_enum = False
 
+    @staticmethod
     def resolve_participantes(root, info):
         return root.participantes.filter(estado=True)
 
+    @staticmethod
     def resolve_tutores(root, info):
         return root.tutores.filter(estado=True)
 
+    @staticmethod
     def resolve_tribunales(root, info):
         return root.tribunales.filter(estado=True)
 

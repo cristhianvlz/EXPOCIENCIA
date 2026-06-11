@@ -2,7 +2,7 @@ import graphene
 from graphene_django import DjangoObjectType
 from graphene_file_upload.scalars import Upload
 
-from apps.eventos.models import TipoEvento, NivelEvento, Membrete, Evento, Grupo, Actividad, Cronograma
+from apps.eventos.models import TipoEvento, NivelEvento, Membrete, Firmante, Evento, Grupo, Actividad, Cronograma
 
 class TipoEventoType(DjangoObjectType):
     class Meta:
@@ -17,6 +17,11 @@ class NivelEventoType(DjangoObjectType):
 class MembreteType(DjangoObjectType):
     class Meta:
         model = Membrete
+        fields = '__all__'
+
+class FirmanteType(DjangoObjectType):
+    class Meta:
+        model = Firmante
         fields = '__all__'
 
 class EventoType(DjangoObjectType):
@@ -57,6 +62,10 @@ class Query(graphene.ObjectType):
     todos_los_membretes = graphene.List(MembreteType)
     membrete = graphene.Field(MembreteType, id=graphene.ID(required=True))
 
+    todos_los_firmantes = graphene.List(FirmanteType)
+    firmantes_por_membrete = graphene.List(FirmanteType, id_membrete=graphene.ID(required=True))
+    firmante = graphene.Field(FirmanteType, id=graphene.ID(required=True))
+
     todos_los_eventos = graphene.List(EventoType)
     evento = graphene.Field(EventoType, id=graphene.ID(required=True))
 
@@ -94,6 +103,18 @@ class Query(graphene.ObjectType):
         try:
             return Membrete.objects.get(pk=id)
         except Membrete.DoesNotExist:
+            return None
+
+    def resolve_todos_los_firmantes(root, info):
+        return Firmante.objects.select_related('membrete').all()
+
+    def resolve_firmantes_por_membrete(root, info, id_membrete):
+        return Firmante.objects.filter(membrete_id=id_membrete, estado=True).order_by('orden')
+
+    def resolve_firmante(root, info, id):
+        try:
+            return Firmante.objects.get(pk=id)
+        except Firmante.DoesNotExist:
             return None
 
     def resolve_todos_los_eventos(root, info):
@@ -699,6 +720,77 @@ class EliminarCronograma(graphene.Mutation):
             return EliminarCronograma(ok=False, error="El cronograma no existe.") # type: ignore
 
 
+class CrearFirmante(graphene.Mutation):
+    class Arguments:
+        id_membrete = graphene.ID(required=True)
+        nombre = graphene.String(required=True)
+        cargo = graphene.String(required=True)
+        orden = graphene.Int()
+        firma_imagen = Upload()
+
+    firmante = graphene.Field(FirmanteType)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_membrete, nombre, cargo, orden=1, firma_imagen=None):
+        try:
+            membrete = Membrete.objects.get(pk=id_membrete)
+        except Membrete.DoesNotExist:
+            return CrearFirmante(firmante=None, ok=False, error="El membrete no existe.")  # type: ignore
+        firmante = Firmante(membrete=membrete, nombre=nombre, cargo=cargo, orden=orden)
+        if firma_imagen:
+            firmante.firma_imagen = firma_imagen
+        firmante.save()
+        return CrearFirmante(firmante=firmante, ok=True, error=None)  # type: ignore
+
+
+class EditarFirmante(graphene.Mutation):
+    class Arguments:
+        id_firmante = graphene.ID(required=True)
+        nombre = graphene.String()
+        cargo = graphene.String()
+        orden = graphene.Int()
+        estado = graphene.Boolean()
+        firma_imagen = Upload()
+
+    firmante = graphene.Field(FirmanteType)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_firmante, **kwargs):
+        try:
+            firmante = Firmante.objects.get(pk=id_firmante)
+        except Firmante.DoesNotExist:
+            return EditarFirmante(firmante=None, ok=False, error="El firmante no existe.")  # type: ignore
+        for field in ['nombre', 'cargo', 'orden', 'estado']:
+            if field in kwargs and kwargs[field] is not None:
+                setattr(firmante, field, kwargs[field])
+        if 'firma_imagen' in kwargs and kwargs['firma_imagen'] is not None:
+            firmante.firma_imagen = kwargs['firma_imagen']
+        firmante.save()
+        return EditarFirmante(firmante=firmante, ok=True, error=None)  # type: ignore
+
+
+class EliminarFirmante(graphene.Mutation):
+    class Arguments:
+        id_firmante = graphene.ID(required=True)
+
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_firmante):
+        try:
+            firmante = Firmante.objects.get(pk=id_firmante)
+            firmante.estado = False
+            firmante.save()
+            return EliminarFirmante(ok=True, error=None)  # type: ignore
+        except Firmante.DoesNotExist:
+            return EliminarFirmante(ok=False, error="El firmante no existe.")  # type: ignore
+
+
 class Mutation(graphene.ObjectType):
     crear_tipo_evento = CrearTipoEvento.Field()
     editar_tipo_evento = EditarTipoEvento.Field()
@@ -711,6 +803,10 @@ class Mutation(graphene.ObjectType):
     crear_membrete = CrearMembrete.Field()
     editar_membrete = EditarMembrete.Field()
     eliminar_membrete = EliminarMembrete.Field()
+
+    crear_firmante = CrearFirmante.Field()
+    editar_firmante = EditarFirmante.Field()
+    eliminar_firmante = EliminarFirmante.Field()
 
     crear_evento = CrearEvento.Field()
     editar_evento = EditarEvento.Field()
