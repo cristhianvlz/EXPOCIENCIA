@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Chip, Typography, Stack, Divider,
-  FormControl, InputLabel, Select, MenuItem, Tooltip, Tabs, Tab, ToggleButtonGroup, ToggleButton
+  FormControl, InputLabel, Select, MenuItem, Tooltip, Tabs, Tab, ToggleButtonGroup, ToggleButton,
+  InputAdornment
 } from '@mui/material';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, FilePdfOutlined,
-  PrinterOutlined, FileTextOutlined, ExclamationCircleOutlined
+  PrinterOutlined, FileTextOutlined, ExclamationCircleOutlined, DollarCircleOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -52,12 +53,17 @@ const GET_DATA = gql`
     }
     todosLosGanadoresPremios {
       idGanadorPremio estado
+      asignaciones {
+        idAsignacionPremio
+        participante { idParticipante nombre apellido ci }
+        montoAsignado porcentaje impresa
+      }
       candidatoPremio {
         nota
         proyecto {
           idProyecto titulo
           ofertaEaCarrera { oferta { idOferta nombre } }
-          participantes { nombre apellido }
+          participantes { idParticipante nombre apellido ci }
           tutores { nombre apellido }
         }
         premio {
@@ -91,6 +97,15 @@ const CREAR_CERTIFICADO = gql`mutation($idGanadorPremio: ID!, $idPlantilla: ID!)
   crearCertificado(idGanadorPremio: $idGanadorPremio, idPlantilla: $idPlantilla) { ok error }
 }`;
 const ELIMINAR_CERTIFICADO = gql`mutation($idCertificado: ID!) { eliminarCertificado(idCertificado: $idCertificado) { ok error } }`;
+
+const GUARDAR_DIVISION = gql`
+  mutation($idGanadorPremio: ID!, $asignaciones: [AsignacionInput!]!) {
+    guardarDivisionPremio(idGanadorPremio: $idGanadorPremio, asignaciones: $asignaciones) { ok error }
+  }`;
+const MARCAR_DIVISION_IMPRESA = gql`
+  mutation($idGanadorPremio: ID!) {
+    marcarDivisionImpresa(idGanadorPremio: $idGanadorPremio) { ok error }
+  }`;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function TabPanel({ children, value, index }) {
@@ -406,6 +421,201 @@ const CERT_CSS = `
     .cert-page { page-break-after: always; }
   }
 `;
+
+// ── Comprobantes de división de premio ────────────────────────────────────────
+const COMP_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Georgia, serif; background: #fff; color: #222; }
+
+  @page comp-page { size: A4 portrait; margin: 15mm; }
+
+  .comp-page {
+    page: comp-page;
+    width: 180mm; height: 267mm;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+  }
+
+  .comp-membrete-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 4px 0 3px; flex-shrink: 0;
+  }
+  .comp-logo-box { width: 55px; min-width: 55px; text-align: center; }
+  .comp-logo { max-width: 50px; max-height: 50px; object-fit: contain; }
+  .comp-membrete-texto { flex: 1; text-align: center; }
+  .comp-membrete-titulo { font-size: 12px; font-weight: bold; color: #1a237e; text-transform: uppercase; letter-spacing: 0.5px; }
+  .comp-membrete-subtitulo { font-size: 9px; color: #444; margin-top: 1px; }
+  .comp-membrete-dir { font-size: 8px; color: #888; margin-top: 1px; }
+  .comp-membrete-line {
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, #1a237e 10%, #1a237e 90%, transparent);
+    margin: 2px 0 5px; flex-shrink: 0;
+  }
+
+  .comp-box {
+    border: 2px solid #1a237e;
+    outline: 4px double #1a237e;
+    outline-offset: -7px;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    padding: 16px 24px 20px;
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .comp-deco-line {
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, #1a237e 15%, #1a237e 85%, transparent);
+    margin: 0 20px 8px;
+  }
+  .comp-title { font-size: 20px; font-weight: bold; color: #1a237e; letter-spacing: 4px; margin-bottom: 3px; }
+  .comp-subtitle { font-size: 13px; font-weight: bold; color: #c62828; letter-spacing: 2px; margin-bottom: 8px; }
+
+  .comp-content { flex: 1; min-height: 0; padding: 6px 0; }
+
+  .comp-info-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; text-align: left; }
+  .comp-info-table tr { border-bottom: 1px dotted #ddd; }
+  .comp-lbl { font-size: 10.5px; color: #555; font-weight: 600; padding: 5px 12px 5px 0; width: 115px; vertical-align: top; }
+  .comp-val { font-size: 11px; color: #222; padding: 5px 0; }
+
+  .comp-amount-box {
+    border: 2px solid #1a237e; border-radius: 4px;
+    padding: 14px 24px; text-align: center;
+    background: linear-gradient(135deg, #e8eaf6 0%, #f1f8e9 100%);
+    margin: 0 12px;
+  }
+  .comp-amount-label { font-size: 11px; color: #1a237e; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+  .comp-amount-value { font-size: 34px; font-weight: bold; color: #1b5e20; letter-spacing: 2px; margin-bottom: 4px; }
+  .comp-amount-pct { font-size: 11px; color: #555; }
+
+  .comp-firma-section {
+    display: flex; justify-content: center; align-items: flex-end;
+    gap: 40px; margin-top: 16px; flex-shrink: 0;
+  }
+  .comp-sello { width: 52px; height: 52px; object-fit: contain; opacity: 0.85; }
+  .comp-firma-item { display: flex; flex-direction: column; align-items: center; }
+  .comp-firma-img { max-width: 90px; max-height: 38px; object-fit: contain; margin-bottom: 2px; }
+  .comp-firma-linea { width: 130px; height: 1px; background: #555; margin-bottom: 3px; }
+  .comp-firma-nombre { font-size: 9.5px; font-weight: bold; color: #222; }
+  .comp-firma-cargo  { font-size: 8.5px; color: #555; }
+
+  .comp-fecha { font-size: 9px; color: #999; text-align: center; margin-top: 6px; flex-shrink: 0; }
+
+  .comp-pie-pagina {
+    font-size: 8px; color: #888; text-align: center;
+    padding: 2px 0; border-top: 1px solid #ddd;
+    margin-top: 4px; flex-shrink: 0;
+  }
+
+  @media print {
+    html, body { margin: 0; }
+    .comp-page { page-break-after: always; }
+  }
+`;
+
+function buildComprobantePago(asig, ganador) {
+  const cp = ganador.candidatoPremio;
+  const membrete = cp.premio.evento?.membrete;
+  const imgUrl = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
+
+  const logoUnidad      = imgUrl(membrete?.logoUnidad);
+  const logoInstitucion = imgUrl(membrete?.logoInstitucion);
+  const sello           = imgUrl(membrete?.selloAutoridad);
+  const firmaGeneral    = imgUrl(membrete?.firma);
+
+  const piePaginas = [membrete?.piePagina1, membrete?.piePagina2, membrete?.piePagina3].filter(Boolean);
+  const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(' · ');
+  const lugar        = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+  const montoTotal   = parseFloat(cp.premio.monto);
+  const montoAsig    = parseFloat(asig.montoAsignado);
+  const pct          = parseFloat(asig.porcentaje);
+  const fecha        = new Date().toLocaleDateString('es-BO', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const fmt = (n) => n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const headerHtml = membrete ? `
+    <div class="comp-membrete-header">
+      <div class="comp-logo-box">${logoUnidad ? `<img src="${logoUnidad}" class="comp-logo" alt="Logo" />` : ''}</div>
+      <div class="comp-membrete-texto">
+        <div class="comp-membrete-titulo">${membrete.titulo || ''}</div>
+        ${membrete.subtitulo ? `<div class="comp-membrete-subtitulo">${membrete.subtitulo}</div>` : ''}
+        ${membrete.direccion ? `<div class="comp-membrete-dir">${membrete.direccion}</div>` : ''}
+      </div>
+      <div class="comp-logo-box">${logoInstitucion ? `<img src="${logoInstitucion}" class="comp-logo" alt="Logo" />` : ''}</div>
+    </div>
+    <div class="comp-membrete-line"></div>` : '';
+
+  // Firmantes del membrete (si existen) o firma general
+  const firmantesActivos = (membrete?.firmantes || []).filter(f => f.estado).sort((a, b) => a.orden - b.orden);
+  const firmaItemsHtml = firmantesActivos.length > 0
+    ? firmantesActivos.map(f => {
+        const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+        return `<div class="comp-firma-item">
+          ${fImg ? `<img src="${fImg}" class="comp-firma-img" alt="Firma" />` : '<div style="height:38px"></div>'}
+          <div class="comp-firma-linea"></div>
+          <div class="comp-firma-nombre">${f.nombre}</div>
+          <div class="comp-firma-cargo">${f.cargo}</div>
+        </div>`;
+      }).join('')
+    : firmaGeneral
+      ? `<div class="comp-firma-item">
+           <img src="${firmaGeneral}" class="comp-firma-img" alt="Firma" />
+           <div class="comp-firma-linea"></div>
+         </div>`
+      : '';
+
+  return `
+    <div class="comp-page">
+      ${headerHtml}
+      <div class="comp-box">
+        <div class="comp-deco-line"></div>
+        <div class="comp-title">COMPROBANTE DE ASIGNACIÓN</div>
+        <div class="comp-subtitle">DE PREMIO MONETARIO</div>
+        <div class="comp-deco-line"></div>
+
+        <div class="comp-content">
+          <table class="comp-info-table">
+            <tr><td class="comp-lbl">Participante:</td><td class="comp-val"><strong>${asig.participante.nombre} ${asig.participante.apellido}</strong></td></tr>
+            <tr><td class="comp-lbl">C.I.:</td><td class="comp-val">${asig.participante.ci}</td></tr>
+            <tr><td class="comp-lbl">Proyecto:</td><td class="comp-val">"${cp.proyecto.titulo}"</td></tr>
+            <tr><td class="comp-lbl">Evento:</td><td class="comp-val">${cp.premio.evento?.nombre || ''}</td></tr>
+            <tr><td class="comp-lbl">Área:</td><td class="comp-val">${cp.premio.area?.nombre || ''}</td></tr>
+            <tr><td class="comp-lbl">Premio:</td><td class="comp-val">${lugar}${descriptores ? ' — ' + descriptores : ''}</td></tr>
+          </table>
+
+          <div class="comp-amount-box">
+            <div class="comp-amount-label">MONTO ASIGNADO</div>
+            <div class="comp-amount-value">Bs. ${fmt(montoAsig)}</div>
+            <div class="comp-amount-pct">${pct.toFixed(2)}% del premio total de Bs. ${fmt(montoTotal)}</div>
+          </div>
+        </div>
+
+        <div class="comp-firma-section">
+          ${sello ? `<img src="${sello}" class="comp-sello" alt="Sello" />` : ''}
+          ${firmaItemsHtml}
+        </div>
+        <div class="comp-fecha">Santa Cruz de la Sierra, ${fecha}</div>
+      </div>
+      ${piePaginas.length ? `<div class="comp-pie-pagina">${piePaginas.join('  ·  ')}</div>` : ''}
+    </div>`;
+}
+
+function imprimirComprobantes(ganador, showNotif) {
+  const asigs = ganador.asignaciones || [];
+  if (!asigs.length) return;
+  const body = asigs.map(a => buildComprobantePago(a, ganador)).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Comprobantes — ${ganador.candidatoPremio.proyecto.titulo}</title><style>${COMP_CSS}</style></head><body>${body}</body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    showNotif('El navegador bloqueó la ventana emergente. Permite pop-ups.', 'warning');
+    URL.revokeObjectURL(url);
+    return;
+  }
+  win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); }, { once: true });
+}
 
 function imprimirCertificados(certs, showNotif) {
   if (!certs.length) return;
@@ -1047,6 +1257,378 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+// ── División de Premio Monetario ──────────────────────────────────────────────
+function getDivisionStatus(ganador) {
+  const asigs = ganador.asignaciones || [];
+  if (!asigs.length) return 'sin_dividir';
+  const allPrinted = asigs.every(a => a.impresa);
+  if (allPrinted) return 'impresa';
+  return 'dividida';
+}
+
+const STATUS_CHIP = {
+  sin_dividir: { label: 'Sin dividir',  color: 'default' },
+  dividida:    { label: 'Dividida',     color: 'warning' },
+  impresa:     { label: 'Impresa 🔒',   color: 'success' },
+};
+
+function DivisionDialog({ open, ganador, onClose, onSaved, showNotif }) {
+  const participantes = ganador?.candidatoPremio?.proyecto?.participantes || [];
+  const montoTotal    = parseFloat(ganador?.candidatoPremio?.premio?.monto || 0);
+  const status        = ganador ? getDivisionStatus(ganador) : 'sin_dividir';
+  const locked        = status === 'impresa';
+
+  const mkRow = (p, monto, pct) => ({
+    idParticipante: p.idParticipante,
+    nombre: `${p.nombre} ${p.apellido}`,
+    monto: monto.toFixed(2),
+    porcentaje: pct.toFixed(2),
+  });
+
+  const initRows = () => {
+    const asigs = ganador?.asignaciones || [];
+    if (asigs.length) {
+      return participantes.map(p => {
+        const a = asigs.find(a => a.participante.idParticipante === p.idParticipante);
+        return mkRow(p, a ? parseFloat(a.montoAsignado) : 0, a ? parseFloat(a.porcentaje) : 0);
+      });
+    }
+    // default: partes iguales
+    const n = participantes.length || 1;
+    return participantes.map(p => mkRow(p, montoTotal / n, 100 / n));
+  };
+
+  const [mode, setMode]   = useState('igual');
+  const [rows, setRows]   = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [guardar]         = useMutation(GUARDAR_DIVISION);
+
+  useEffect(() => {
+    if (open && ganador) {
+      const has = (ganador.asignaciones || []).length > 0;
+      setMode(has ? 'manual' : 'igual');
+      setRows(initRows());
+    }
+  }, [open, ganador]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyEqual = () => {
+    const n = participantes.length || 1;
+    const base = montoTotal / n;
+    setRows(rows.map((r, i) => {
+      const m = i === n - 1 ? montoTotal - base * (n - 1) : base;
+      return { ...r, monto: m.toFixed(2), porcentaje: (m / montoTotal * 100).toFixed(2) };
+    }));
+  };
+
+  const handleModeChange = (_, v) => {
+    if (!v) return;
+    setMode(v);
+    if (v === 'igual') applyEqual();
+  };
+
+  const updateMonto = (idx, val) => {
+    const m = parseFloat(val) || 0;
+    setRows(rows.map((r, i) => i === idx
+      ? { ...r, monto: val, porcentaje: montoTotal ? (m / montoTotal * 100).toFixed(2) : '0.00' }
+      : r
+    ));
+  };
+
+  const updatePct = (idx, val) => {
+    const p = parseFloat(val) || 0;
+    setRows(rows.map((r, i) => i === idx
+      ? { ...r, porcentaje: val, monto: (p / 100 * montoTotal).toFixed(2) }
+      : r
+    ));
+  };
+
+  const totalMonto  = rows.reduce((s, r) => s + (parseFloat(r.monto) || 0), 0);
+  const totalPct    = rows.reduce((s, r) => s + (parseFloat(r.porcentaje) || 0), 0);
+  const sumOk       = Math.abs(totalMonto - montoTotal) <= 0.02;
+
+  const handleSave = async () => {
+    if (!sumOk) return;
+    setSaving(true);
+    try {
+      const asignaciones = rows.map(r => ({
+        idParticipante: r.idParticipante,
+        montoAsignado:  parseFloat(r.monto),
+        porcentaje:     parseFloat(r.porcentaje),
+        observacion:    '',
+      }));
+      const res = await guardar({ variables: { idGanadorPremio: ganador.idGanadorPremio, asignaciones } });
+      if (res.data?.guardarDivisionPremio?.ok) {
+        showNotif('División guardada correctamente', 'success');
+        onSaved();
+        onClose();
+      } else {
+        showNotif(res.data?.guardarDivisionPremio?.error || 'Error al guardar', 'error');
+      }
+    } catch (e) {
+      showNotif(e.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!ganador) return null;
+  const cp = ganador.candidatoPremio;
+  const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(' · ');
+  const lugar = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+  const fmt = (n) => parseFloat(n).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Stack direction="row" alignItems="center" gap={1}>
+            <Box component="span" sx={{ color: 'success.main', display: 'inline-flex' }}>
+              <DollarCircleOutlined style={{ fontSize: 20 }} />
+            </Box>
+            División de Premio — {cp.proyecto.titulo}
+          </Stack>
+          {locked && <Chip label="Impresa 🔒 (no editable)" size="small" color="success" />}
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent dividers>
+        {/* Info del premio */}
+        <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.selected', borderRadius: 1 }}>
+          <Stack direction="row" gap={3} flexWrap="wrap">
+            <Typography variant="body2"><strong>Evento:</strong> {cp.premio.evento?.nombre}</Typography>
+            <Typography variant="body2"><strong>Área:</strong> {cp.premio.area?.nombre}</Typography>
+            <Typography variant="body2"><strong>Premio:</strong> {lugar}{descriptores ? ' — ' + descriptores : ''}</Typography>
+            <Typography variant="body2"><strong>Monto total:</strong> Bs. {fmt(montoTotal)}</Typography>
+          </Stack>
+        </Box>
+
+        {!locked && (
+          <Stack direction="row" alignItems="center" gap={2} sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">Modo:</Typography>
+            <ToggleButtonGroup size="small" value={mode} exclusive onChange={handleModeChange}>
+              <ToggleButton value="igual">Partes iguales</ToggleButton>
+              <ToggleButton value="manual">Manual</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+        )}
+
+        {/* Tabla de asignaciones */}
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Participante</TableCell>
+              <TableCell align="right" sx={{ width: 160 }}>Monto (Bs.)</TableCell>
+              <TableCell align="right" sx={{ width: 130 }}>Porcentaje (%)</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((r, i) => (
+              <TableRow key={r.idParticipante}>
+                <TableCell>{r.nombre}</TableCell>
+                <TableCell align="right">
+                  {locked ? (
+                    <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 700 }}>Bs. {fmt(r.monto)}</Typography>
+                  ) : (
+                    <TextField
+                      size="small" type="number" value={r.monto}
+                      onChange={e => updateMonto(i, e.target.value)}
+                      disabled={mode === 'igual'}
+                      inputProps={{ min: 0, step: 0.01, style: { textAlign: 'right' } }}
+                      InputProps={{ startAdornment: <InputAdornment position="start">Bs.</InputAdornment> }}
+                      sx={{ width: 140 }}
+                    />
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  {locked ? (
+                    <Typography variant="body2">{parseFloat(r.porcentaje).toFixed(2)}%</Typography>
+                  ) : (
+                    <TextField
+                      size="small" type="number" value={r.porcentaje}
+                      onChange={e => updatePct(i, e.target.value)}
+                      disabled={mode === 'igual'}
+                      inputProps={{ min: 0, max: 100, step: 0.01, style: { textAlign: 'right' } }}
+                      InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+                      sx={{ width: 110 }}
+                    />
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableBody>
+            <TableRow sx={{ borderTop: '2px solid', borderColor: sumOk ? 'success.main' : 'error.main' }}>
+              <TableCell><strong>TOTAL</strong></TableCell>
+              <TableCell align="right">
+                <Typography variant="body2" fontWeight={700} color={sumOk ? 'success.main' : 'error.main'}>
+                  Bs. {fmt(totalMonto)}
+                </Typography>
+              </TableCell>
+              <TableCell align="right">
+                <Typography variant="body2" fontWeight={700} color={sumOk ? 'success.main' : 'error.main'}>
+                  {totalPct.toFixed(2)}%
+                </Typography>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        {!sumOk && (
+          <Alert severity="error" sx={{ mt: 1 }}>
+            La suma (Bs. {fmt(totalMonto)}) no coincide con el monto total del premio (Bs. {fmt(montoTotal)}).
+            Diferencia: Bs. {fmt(Math.abs(totalMonto - montoTotal))}.
+          </Alert>
+        )}
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={onClose} color="secondary">Cerrar</Button>
+        {!locked && (
+          <Button variant="contained" color="primary" disabled={!sumOk || saving}
+            onClick={handleSave} startIcon={saving ? <CircularProgress size={16} /> : null}>
+            {saving ? 'Guardando…' : 'Guardar División'}
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function DivisionTab({ ganadores, refetch, showNotif }) {
+  const monetarios = ganadores.filter(g => g.estado && g.candidatoPremio?.premio?.monto != null);
+  const [dialogGanador, setDialogGanador] = useState(null);
+  const [printConfirm, setPrintConfirm]   = useState(null);
+  const [marcar] = useMutation(MARCAR_DIVISION_IMPRESA);
+
+  const handleImprimir = async (ganador) => {
+    imprimirComprobantes(ganador, showNotif);
+    try {
+      const res = await marcar({ variables: { idGanadorPremio: ganador.idGanadorPremio } });
+      if (res.data?.marcarDivisionImpresa?.ok) {
+        showNotif('División marcada como impresa', 'success');
+        refetch();
+      }
+    } catch (e) {
+      showNotif(e.message, 'error');
+    }
+  };
+
+  if (!monetarios.length) {
+    return (
+      <Box sx={{ textAlign: 'center', p: 6, color: 'text.secondary' }}>
+        <DollarCircleOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+        <Typography>No hay ganadores con premios monetarios registrados.</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Registra y emite los comprobantes de asignación de monto monetario para cada participante.
+        Una vez impresos, la división queda bloqueada.
+      </Typography>
+
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: 'action.hover' }}>
+              <TableCell>Proyecto</TableCell>
+              <TableCell>Evento</TableCell>
+              <TableCell>Área</TableCell>
+              <TableCell>Premio</TableCell>
+              <TableCell align="right">Monto total</TableCell>
+              <TableCell align="center">Participantes</TableCell>
+              <TableCell align="center">Estado</TableCell>
+              <TableCell align="center">Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {monetarios.map(g => {
+              const cp     = g.candidatoPremio;
+              const status = getDivisionStatus(g);
+              const chip   = STATUS_CHIP[status];
+              const locked = status === 'impresa';
+              const hasDivision = (g.asignaciones || []).length > 0;
+              const monto  = parseFloat(cp.premio.monto);
+              const lugar  = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+              const fmt    = (n) => n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+              return (
+                <TableRow key={g.idGanadorPremio} hover>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{cp.premio.evento?.nombre}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{cp.premio.area?.nombre}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{lugar}</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2" fontWeight={700} color="success.main">Bs. {fmt(monto)}</Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Typography variant="body2">
+                      {(cp.proyecto.participantes || []).length}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip label={chip.label} size="small" color={chip.color} />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Stack direction="row" gap={0.5} justifyContent="center">
+                      <Tooltip title={locked ? 'Ver división (bloqueada)' : hasDivision ? 'Editar división' : 'Dividir premio'}>
+                        <IconButton size="small" color="primary"
+                          onClick={() => setDialogGanador(g)}>
+                          <DollarCircleOutlined />
+                        </IconButton>
+                      </Tooltip>
+                      {hasDivision && (
+                        <Tooltip title="Imprimir comprobantes">
+                          <IconButton size="small" color="secondary"
+                            onClick={() => setPrintConfirm(g)}>
+                            <PrinterOutlined />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <DivisionDialog
+        open={!!dialogGanador}
+        ganador={dialogGanador}
+        onClose={() => setDialogGanador(null)}
+        onSaved={refetch}
+        showNotif={showNotif}
+      />
+
+      <ConfirmDialog
+        open={!!printConfirm}
+        title="Imprimir comprobantes"
+        message={
+          getDivisionStatus(printConfirm || {}) === 'impresa'
+            ? 'Esta división ya fue marcada como impresa. ¿Deseas reimprimir igualmente?'
+            : 'Se imprimirá un comprobante por cada participante y la división quedará bloqueada. ¿Continuar?'
+        }
+        confirmLabel="Imprimir"
+        confirmColor="primary"
+        onConfirm={() => { handleImprimir(printConfirm); setPrintConfirm(null); }}
+        onCancel={() => setPrintConfirm(null)}
+      />
+    </Box>
+  );
+}
+
 export default function CertificadosPage() {
   const { data, loading, error, refetch } = useQuery(GET_DATA, { fetchPolicy: 'network-only' });
   const [tab, setTab] = useState(0);
@@ -1068,6 +1650,7 @@ export default function CertificadosPage() {
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 0 }}>
             <Tab label="Plantillas de Texto" icon={<FileTextOutlined />} iconPosition="start" />
             <Tab label="Certificados" icon={<FilePdfOutlined />} iconPosition="start" />
+            <Tab label="División de Premios" icon={<DollarCircleOutlined />} iconPosition="start" />
           </Tabs>
 
           <TabPanel value={tab} index={0}>
@@ -1078,6 +1661,9 @@ export default function CertificadosPage() {
               certificados={certificados} ganadores={ganadores} plantillas={plantillas}
               refetch={refetch} showNotif={showNotif}
             />
+          </TabPanel>
+          <TabPanel value={tab} index={2}>
+            <DivisionTab ganadores={ganadores} refetch={refetch} showNotif={showNotif} />
           </TabPanel>
         </>
       )}

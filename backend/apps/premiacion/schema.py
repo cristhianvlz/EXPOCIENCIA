@@ -1,9 +1,8 @@
 import graphene
 from graphene_django import DjangoObjectType
-
 from apps.premiacion.models import (
     TipoDescriptor, Descriptor, Premio, PremioDescriptor,
-    CandidatoPremio, GanadorPremio, Plantilla, Certificado
+    CandidatoPremio, GanadorPremio, Plantilla, Certificado, AsignacionPremio
 )
 from apps.eventos.models import Evento
 from apps.academico.models import Area, Oferta
@@ -35,10 +34,26 @@ class CandidatoPremioType(DjangoObjectType):
         model = CandidatoPremio
         fields = '__all__'
 
+# Definido antes de GanadorPremioType para evitar referencia hacia adelante
+class AsignacionPremioType(DjangoObjectType):
+    class Meta:
+        model = AsignacionPremio
+        fields = (
+            'id_asignacion_premio', 'participante',
+            'monto_asignado', 'porcentaje',
+            'observacion', 'impresa', 'estado', 'fecha_registro',
+        )
+
 class GanadorPremioType(DjangoObjectType):
+    asignaciones = graphene.List(AsignacionPremioType)
+
     class Meta:
         model = GanadorPremio
         fields = '__all__'
+
+    @staticmethod
+    def resolve_asignaciones(root, info):
+        return root.asignaciones.filter(estado=True).select_related('participante')
 
 class PlantillaType(DjangoObjectType):
     class Meta:
@@ -74,6 +89,11 @@ class Query(graphene.ObjectType):
 
     todos_los_certificados = graphene.List(CertificadoType)
     certificado = graphene.Field(CertificadoType, id=graphene.ID(required=True))
+
+    asignaciones_por_ganador = graphene.List(
+        AsignacionPremioType,
+        id_ganador_premio=graphene.ID(required=True),
+    )
 
     def resolve_todos_los_tipos_descriptores(root, info):
         return TipoDescriptor.objects.all()
@@ -146,6 +166,11 @@ class Query(graphene.ObjectType):
             return Certificado.objects.get(pk=id)
         except Certificado.DoesNotExist:
             return None
+
+    def resolve_asignaciones_por_ganador(root, info, id_ganador_premio):
+        return AsignacionPremio.objects.filter(
+            ganador_premio_id=id_ganador_premio, estado=True
+        ).select_related('participante')
 
 
 # ================= MUTACIONES TipoDescriptor =================
@@ -813,6 +838,101 @@ class CerrarActaResultados(graphene.Mutation):
         return CerrarActaResultados(ok=True, error=None, ganadores=ganadores_resultado, empates=empates_resultado) # type: ignore
 
 
+# ================= MUTACIONES División de Premio =================
+
+class AsignacionInput(graphene.InputObjectType):
+    id_participante = graphene.ID(required=True)
+    monto_asignado  = graphene.Float(required=True)
+    porcentaje      = graphene.Float(required=True)
+    observacion     = graphene.String()
+
+
+class GuardarDivisionPremio(graphene.Mutation):
+    """Crea o reemplaza la división del monto entre los participantes de un ganador."""
+    class Arguments:
+        id_ganador_premio = graphene.ID(required=True)
+        asignaciones      = graphene.List(graphene.NonNull(AsignacionInput), required=True)
+
+    ok    = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_ganador_premio, asignaciones):
+        from decimal import Decimal
+        from apps.usuarios.models import Participante
+
+        try:
+            ganador = GanadorPremio.objects.select_related(
+                'candidato_premio__premio'
+            ).get(pk=id_ganador_premio)
+        except GanadorPremio.DoesNotExist:
+            return GuardarDivisionPremio(ok=False, error="El ganador no existe.") # type: ignore
+
+        # Bloquear si ya fue impresa
+        if AsignacionPremio.objects.filter(ganador_premio=ganador, impresa=True).exists():
+            return GuardarDivisionPremio(ok=False, error="La división ya fue impresa y no puede modificarse.") # type: ignore
+
+        monto_total = ganador.candidato_premio.premio.monto
+        if monto_total is None:
+            return GuardarDivisionPremio(ok=False, error="El premio no tiene monto monetario.") # type: ignore
+
+        if not asignaciones:
+            return GuardarDivisionPremio(ok=False, error="Debe incluir al menos una asignación.") # type: ignore
+
+        # Validar suma
+        suma = sum(Decimal(str(a.monto_asignado)) for a in asignaciones)
+        if abs(suma - monto_total) > Decimal('0.02'):
+            return GuardarDivisionPremio( # type: ignore
+                ok=False,
+                error=f"La suma de asignaciones (Bs. {suma}) no coincide con el monto total (Bs. {monto_total}).",
+            )
+
+        # Eliminar asignaciones anteriores no impresas
+        AsignacionPremio.objects.filter(ganador_premio=ganador, impresa=False).delete()
+
+        # Crear nuevas asignaciones
+        for a in asignaciones:
+            try:
+                participante = Participante.objects.get(pk=a.id_participante)
+            except Participante.DoesNotExist:
+                return GuardarDivisionPremio(ok=False, error=f"Participante {a.id_participante} no existe.") # type: ignore
+
+            AsignacionPremio.objects.create(
+                ganador_premio=ganador,
+                participante=participante,
+                monto_asignado=Decimal(str(a.monto_asignado)),
+                porcentaje=Decimal(str(a.porcentaje)),
+                observacion=a.observacion or '',
+            )
+
+        return GuardarDivisionPremio(ok=True, error=None) # type: ignore
+
+
+class MarcarDivisionImpresa(graphene.Mutation):
+    """Bloquea la división marcando todas las asignaciones como impresas."""
+    class Arguments:
+        id_ganador_premio = graphene.ID(required=True)
+
+    ok    = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_ganador_premio):
+        try:
+            ganador = GanadorPremio.objects.get(pk=id_ganador_premio)
+        except GanadorPremio.DoesNotExist:
+            return MarcarDivisionImpresa(ok=False, error="El ganador no existe.") # type: ignore
+
+        updated = AsignacionPremio.objects.filter(
+            ganador_premio=ganador, estado=True
+        ).update(impresa=True)
+
+        if updated == 0:
+            return MarcarDivisionImpresa(ok=False, error="No hay asignaciones para marcar.") # type: ignore
+
+        return MarcarDivisionImpresa(ok=True, error=None) # type: ignore
+
+
 class Mutation(graphene.ObjectType):
     crear_tipo_descriptor = CrearTipoDescriptor.Field()
     editar_tipo_descriptor = EditarTipoDescriptor.Field()
@@ -844,3 +964,6 @@ class Mutation(graphene.ObjectType):
     eliminar_certificado = EliminarCertificado.Field()
 
     cerrar_acta_resultados = CerrarActaResultados.Field()
+
+    guardar_division_premio  = GuardarDivisionPremio.Field()
+    marcar_division_impresa  = MarcarDivisionImpresa.Field()

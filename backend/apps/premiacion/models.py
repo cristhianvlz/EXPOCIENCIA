@@ -189,3 +189,30 @@ class Certificado(models.Model):
             f" — {self.ganador_premio}"
             f" | {self.fecha_emision:%d/%m/%Y %H:%M}"
         )
+
+
+class AsignacionPremio(models.Model):
+    id_asignacion_premio = models.AutoField(primary_key=True)
+    ganador_premio = models.ForeignKey(
+        GanadorPremio,
+        on_delete=models.PROTECT,
+        related_name='asignaciones',
+    )
+    participante = models.ForeignKey(
+        'usuarios.Participante',
+        on_delete=models.PROTECT,
+        related_name='asignaciones_premio',
+    )
+    monto_asignado = models.DecimalField(max_digits=10, decimal_places=2)
+    porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
+    observacion = models.TextField(blank=True)
+    impresa = models.BooleanField(default=False)
+    estado = models.BooleanField(default=True)
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'asignacion_premio'
+        unique_together = ('ganador_premio', 'participante')
+
+    def __str__(self):
+        return f"{self.participante} → {self.ganador_premio} (Bs. {self.monto_asignado})"
