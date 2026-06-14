@@ -7,7 +7,8 @@ import {
 import {
   ProjectOutlined, InfoCircleOutlined, DownloadOutlined, FilePdfOutlined,
   TrophyOutlined, StarOutlined, CheckCircleOutlined, ClockCircleOutlined,
-  CloseCircleOutlined, PrinterOutlined, RiseOutlined, FileProtectOutlined
+  CloseCircleOutlined, PrinterOutlined, RiseOutlined, FileProtectOutlined,
+  DollarCircleOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -16,6 +17,7 @@ const GET_MIS_PROYECTOS = gql`
   query {
     me {
       participante {
+        idParticipante
         proyectosInscritos {
           idProyecto titulo resumen estado fechaInscripcion fechaConfirmacion observacion archivo
           ofertaEaCarrera {
@@ -44,6 +46,11 @@ const GET_MIS_PROYECTOS = gql`
             }
             ganador {
               idGanadorPremio estado
+              asignaciones {
+                idAsignacionPremio
+                participante { idParticipante nombre apellido ci }
+                montoAsignado porcentaje impresa
+              }
               candidatoPremio {
                 nota
                 proyecto {
@@ -186,14 +193,145 @@ function buildCertPage(cert: any): string {
 }
 
 function imprimirCertificado(cert: any) {
-  // El cert viene de candidatosPremio[].ganador.certificados[] 
-  // Necesitamos adaptar la estructura para que ganadorPremio sea el ganador del candidato
   const certConGanador = {
     ...cert,
-    ganadorPremio: cert._ganador,  // inyectado al llamar
+    ganadorPremio: cert._ganador,
   };
   const body = buildCertPage(certConGanador);
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Certificado</title><style>${CERT_CSS}</style></head><body>${body}</body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) { alert('Permite ventanas emergentes (pop-ups) para esta página.'); URL.revokeObjectURL(url); return; }
+  win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); }, { once: true });
+}
+
+// ── Comprobante de división de premio (individual por participante) ────────────
+const COMP_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Georgia, serif; background: #fff; color: #222; }
+  @page comp-page { size: A4 portrait; margin: 15mm; }
+  .comp-page { page: comp-page; width: 180mm; height: 267mm; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; }
+  .comp-membrete-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 3px; flex-shrink: 0; }
+  .comp-logo-box { width: 55px; min-width: 55px; text-align: center; }
+  .comp-logo { max-width: 50px; max-height: 50px; object-fit: contain; }
+  .comp-membrete-texto { flex: 1; text-align: center; }
+  .comp-membrete-titulo { font-size: 12px; font-weight: bold; color: #1a237e; text-transform: uppercase; letter-spacing: 0.5px; }
+  .comp-membrete-subtitulo { font-size: 9px; color: #444; margin-top: 1px; }
+  .comp-membrete-dir { font-size: 8px; color: #888; margin-top: 1px; }
+  .comp-membrete-line { height: 1.5px; background: linear-gradient(90deg, transparent, #1a237e 10%, #1a237e 90%, transparent); margin: 2px 0 5px; flex-shrink: 0; }
+  .comp-box { border: 2px solid #1a237e; outline: 4px double #1a237e; outline-offset: -7px; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 24px 20px; overflow: hidden; text-align: center; }
+  .comp-deco-line { height: 1.5px; background: linear-gradient(90deg, transparent, #1a237e 15%, #1a237e 85%, transparent); margin: 0 20px 8px; }
+  .comp-title { font-size: 20px; font-weight: bold; color: #1a237e; letter-spacing: 4px; margin-bottom: 3px; }
+  .comp-subtitle { font-size: 13px; font-weight: bold; color: #c62828; letter-spacing: 2px; margin-bottom: 8px; }
+  .comp-content { flex: 1; min-height: 0; padding: 6px 0; }
+  .comp-info-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; text-align: left; }
+  .comp-info-table tr { border-bottom: 1px dotted #ddd; }
+  .comp-lbl { font-size: 10.5px; color: #555; font-weight: 600; padding: 5px 12px 5px 0; width: 115px; vertical-align: top; }
+  .comp-val { font-size: 11px; color: #222; padding: 5px 0; }
+  .comp-amount-box { border: 2px solid #1a237e; border-radius: 4px; padding: 14px 24px; text-align: center; background: linear-gradient(135deg, #e8eaf6 0%, #f1f8e9 100%); margin: 0 12px; }
+  .comp-amount-label { font-size: 11px; color: #1a237e; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+  .comp-amount-value { font-size: 34px; font-weight: bold; color: #1b5e20; letter-spacing: 2px; margin-bottom: 4px; }
+  .comp-amount-pct { font-size: 11px; color: #555; }
+  .comp-firma-section { display: flex; justify-content: center; align-items: flex-end; gap: 40px; margin-top: 16px; flex-shrink: 0; }
+  .comp-sello { width: 52px; height: 52px; object-fit: contain; opacity: 0.85; }
+  .comp-firma-item { display: flex; flex-direction: column; align-items: center; }
+  .comp-firma-img { max-width: 90px; max-height: 38px; object-fit: contain; margin-bottom: 2px; }
+  .comp-firma-linea { width: 130px; height: 1px; background: #555; margin-bottom: 3px; }
+  .comp-firma-nombre { font-size: 9.5px; font-weight: bold; color: #222; }
+  .comp-firma-cargo  { font-size: 8.5px; color: #555; }
+  .comp-fecha { font-size: 9px; color: #999; text-align: center; margin-top: 6px; flex-shrink: 0; }
+  .comp-pie-pagina { font-size: 8px; color: #888; text-align: center; padding: 2px 0; border-top: 1px solid #ddd; margin-top: 4px; flex-shrink: 0; }
+  @media print { html, body { margin: 0; } .comp-page { page-break-after: always; } }
+`;
+
+const LUGAR_MAP_COMP: Record<number, string> = { 1: '1er Lugar', 2: '2do Lugar', 3: '3er Lugar' };
+
+function buildComprobantePago(asig: any, ganador: any): string {
+  const cp = ganador.candidatoPremio;
+  const membrete = cp.premio.evento?.membrete;
+  const imgUrl = (path: string) => path ? `${BACKEND_MEDIA}${path}` : null;
+
+  const logoUnidad      = imgUrl(membrete?.logoUnidad);
+  const logoInstitucion = imgUrl(membrete?.logoInstitucion);
+  const sello           = imgUrl(membrete?.selloAutoridad);
+  const firmaGeneral    = imgUrl(membrete?.firma);
+
+  const piePaginas = [membrete?.piePagina1, membrete?.piePagina2, membrete?.piePagina3].filter(Boolean);
+  const descriptores = (cp.premio.premioDescriptores || []).map((pd: any) => pd.descriptor.descripcion).join(' · ');
+  const lugar        = LUGAR_MAP_COMP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+  const montoTotal   = parseFloat(cp.premio.monto);
+  const montoAsig    = parseFloat(asig.montoAsignado);
+  const pct          = parseFloat(asig.porcentaje);
+  const fecha        = new Date().toLocaleDateString('es-BO', { year: 'numeric', month: 'long', day: 'numeric' });
+  const fmt = (n: number) => n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const headerHtml = membrete ? `
+    <div class="comp-membrete-header">
+      <div class="comp-logo-box">${logoUnidad ? `<img src="${logoUnidad}" class="comp-logo" alt="Logo" />` : ''}</div>
+      <div class="comp-membrete-texto">
+        <div class="comp-membrete-titulo">${membrete.titulo || ''}</div>
+        ${membrete.subtitulo ? `<div class="comp-membrete-subtitulo">${membrete.subtitulo}</div>` : ''}
+        ${membrete.direccion ? `<div class="comp-membrete-dir">${membrete.direccion}</div>` : ''}
+      </div>
+      <div class="comp-logo-box">${logoInstitucion ? `<img src="${logoInstitucion}" class="comp-logo" alt="Logo" />` : ''}</div>
+    </div>
+    <div class="comp-membrete-line"></div>` : '';
+
+  const firmantesActivos = (membrete?.firmantes || []).filter((f: any) => f.estado).sort((a: any, b: any) => a.orden - b.orden);
+  const firmaItemsHtml = firmantesActivos.length > 0
+    ? firmantesActivos.map((f: any) => {
+        const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+        return `<div class="comp-firma-item">
+          ${fImg ? `<img src="${fImg}" class="comp-firma-img" alt="Firma" />` : '<div style="height:38px"></div>'}
+          <div class="comp-firma-linea"></div>
+          <div class="comp-firma-nombre">${f.nombre}</div>
+          <div class="comp-firma-cargo">${f.cargo}</div>
+        </div>`;
+      }).join('')
+    : firmaGeneral
+      ? `<div class="comp-firma-item">
+           <img src="${firmaGeneral}" class="comp-firma-img" alt="Firma" />
+           <div class="comp-firma-linea"></div>
+         </div>`
+      : '';
+
+  return `
+    <div class="comp-page">
+      ${headerHtml}
+      <div class="comp-box">
+        <div class="comp-deco-line"></div>
+        <div class="comp-title">COMPROBANTE DE ASIGNACIÓN</div>
+        <div class="comp-subtitle">DE PREMIO MONETARIO</div>
+        <div class="comp-deco-line"></div>
+        <div class="comp-content">
+          <table class="comp-info-table">
+            <tr><td class="comp-lbl">Participante:</td><td class="comp-val"><strong>${asig.participante.nombre} ${asig.participante.apellido}</strong></td></tr>
+            <tr><td class="comp-lbl">C.I.:</td><td class="comp-val">${asig.participante.ci}</td></tr>
+            <tr><td class="comp-lbl">Proyecto:</td><td class="comp-val">"${cp.proyecto.titulo}"</td></tr>
+            <tr><td class="comp-lbl">Evento:</td><td class="comp-val">${cp.premio.evento?.nombre || ''}</td></tr>
+            <tr><td class="comp-lbl">Área:</td><td class="comp-val">${cp.premio.area?.nombre || ''}</td></tr>
+            <tr><td class="comp-lbl">Premio:</td><td class="comp-val">${lugar}${descriptores ? ' — ' + descriptores : ''}</td></tr>
+          </table>
+          <div class="comp-amount-box">
+            <div class="comp-amount-label">MONTO ASIGNADO</div>
+            <div class="comp-amount-value">Bs. ${fmt(montoAsig)}</div>
+            <div class="comp-amount-pct">${pct.toFixed(2)}% del premio total de Bs. ${fmt(montoTotal)}</div>
+          </div>
+        </div>
+        <div class="comp-firma-section">
+          ${sello ? `<img src="${sello}" class="comp-sello" alt="Sello" />` : ''}
+          ${firmaItemsHtml}
+        </div>
+        <div class="comp-fecha">Santa Cruz de la Sierra, ${fecha}</div>
+      </div>
+      ${piePaginas.length ? `<div class="comp-pie-pagina">${(piePaginas as string[]).join('  ·  ')}</div>` : ''}
+    </div>`;
+}
+
+function imprimirMiComprobante(asig: any, ganador: any) {
+  const body = buildComprobantePago(asig, ganador);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Comprobante de Asignación</title><style>${COMP_CSS}</style></head><body>${body}</body></html>`;
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');
@@ -216,6 +354,14 @@ interface Proyecto {
   candidatosPremio?: CandidatoPremio[];
 }
 
+interface AsignacionPremio {
+  idAsignacionPremio: string;
+  participante: { idParticipante: string; nombre: string; apellido: string; ci: string };
+  montoAsignado: string;
+  porcentaje: string;
+  impresa: boolean;
+}
+
 interface CandidatoPremio {
   idCandidatoPremio: string;
   nota: string;
@@ -223,7 +369,7 @@ interface CandidatoPremio {
   observacion?: string;
   premio?: { idPremio: string; monto?: string; numeroGanadores: number; area?: { nombre: string }; evento?: { nombre: string }; descriptores?: { descripcion: string }[] };
   actaEvaluacion?: { idActaEvaluacion: string; notaFinal: string };
-  ganador?: { idGanadorPremio: string; estado: boolean; certificados?: { idCertificado: string; fechaEmision: string; plantilla?: { descripcion: string } }[] };
+  ganador?: { idGanadorPremio: string; estado: boolean; asignaciones?: AsignacionPremio[]; certificados?: { idCertificado: string; fechaEmision: string; plantilla?: { descripcion: string } }[] };
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -264,14 +410,21 @@ function FlowProgress({ estado, hasEval, hasWinner }: { estado: string; hasEval:
   );
 }
 
-function PremioCard({ candidato }: { candidato: CandidatoPremio }) {
-  // La fuente de verdad definitiva es la existencia del registro GanadorPremio con estado=true,
-  // independientemente del campo candidato.estado (puede quedar como 'candidato' en desempates).
+function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremio; miIdParticipante: string }) {
   const esGanador = !!(candidato.ganador && candidato.ganador.estado !== false);
   const posicion = candidato.premio?.numeroGanadores ?? 0;
   const posConfig = POSICION_LABELS[posicion];
   const nota = candidato.actaEvaluacion?.notaFinal ?? candidato.nota;
   const certificados = candidato.ganador?.certificados ?? [];
+
+  // Buscar la asignación monetaria que corresponde al participante actual
+  const asignaciones = candidato.ganador?.asignaciones ?? [];
+  const miAsignacion = miIdParticipante
+    ? asignaciones.find(a => String(a.participante.idParticipante) === String(miIdParticipante))
+    : null;
+
+  const fmt = (n: string | number) =>
+    parseFloat(String(n)).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <Box sx={{
@@ -306,7 +459,7 @@ function PremioCard({ candidato }: { candidato: CandidatoPremio }) {
         )}
       </Box>
 
-      {/* Nota & Posición */}
+      {/* Nota & Premio monetario total */}
       <Box sx={{ display: 'flex', gap: 2, mb: esGanador ? 1.5 : 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <RiseOutlined style={{ fontSize: 14, color: '#1890ff' }} />
@@ -321,7 +474,7 @@ function PremioCard({ candidato }: { candidato: CandidatoPremio }) {
         )}
       </Box>
 
-      {/* Certificados */}
+      {/* Certificados de honor */}
       {esGanador && certificados.length > 0 && (
         <Box sx={{ mt: 1 }}>
           <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase' }}>
@@ -350,6 +503,58 @@ function PremioCard({ candidato }: { candidato: CandidatoPremio }) {
           <Typography variant="caption">¡Felicitaciones! Tu certificado será emitido próximamente por el comité organizador.</Typography>
         </Alert>
       )}
+
+      {/* Comprobante de división de premio monetario */}
+      {esGanador && miAsignacion && (
+        <Box sx={{
+          mt: 1.5, p: 1.5, borderRadius: 1.5,
+          border: '1px solid',
+          borderColor: miAsignacion.impresa ? 'success.light' : 'warning.light',
+          bgcolor: miAsignacion.impresa ? 'rgba(82,196,26,0.06)' : 'rgba(250,173,20,0.06)',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: miAsignacion.impresa ? 1 : 0 }}>
+            <DollarCircleOutlined style={{ fontSize: 15, color: miAsignacion.impresa ? '#52c41a' : '#faad14' }} />
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+              Premio Monetario — Tu Asignación
+            </Typography>
+          </Box>
+
+          {miAsignacion.impresa ? (
+            <>
+              <Box sx={{ display: 'flex', gap: 2, mb: 1, flexWrap: 'wrap' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Monto asignado</Typography>
+                  <Typography variant="body1" fontWeight={800} color="success.main">
+                    Bs. {fmt(miAsignacion.montoAsignado)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Porcentaje</Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {parseFloat(miAsignacion.porcentaje).toFixed(2)}%
+                  </Typography>
+                </Box>
+              </Box>
+              <Button
+                variant="contained"
+                color="success"
+                size="small"
+                startIcon={<PrinterOutlined />}
+                sx={{ fontWeight: 700 }}
+                onClick={() => imprimirMiComprobante(miAsignacion, candidato.ganador)}
+              >
+                Imprimir mi Comprobante de Asignación
+              </Button>
+            </>
+          ) : (
+            <Alert severity="warning" sx={{ py: 0.5, mt: 0.5 }} icon={<DollarCircleOutlined />}>
+              <Typography variant="caption">
+                Tu comprobante de asignación monetaria está siendo procesado por el comité organizador.
+              </Typography>
+            </Alert>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -372,6 +577,7 @@ export default function MisProyectos() {
   );
 
   const todos: Proyecto[] = data?.me?.participante?.proyectosInscritos || [];
+  const miIdParticipante: string = String(data?.me?.participante?.idParticipante ?? '');
 
   const aprobados   = todos.filter(p => p.estado === 'aprobado');
   const rechazados  = todos.filter(p => p.estado === 'rechazado');
@@ -526,7 +732,7 @@ export default function MisProyectos() {
                         </Typography>
                       </Box>
                       {candidatos.map((c: CandidatoPremio) => (
-                        <PremioCard key={c.idCandidatoPremio} candidato={c} />
+                        <PremioCard key={c.idCandidatoPremio} candidato={c} miIdParticipante={miIdParticipante} />
                       ))}
                     </Box>
                   )}

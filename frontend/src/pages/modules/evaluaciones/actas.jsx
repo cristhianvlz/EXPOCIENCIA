@@ -4,11 +4,12 @@ import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Chip, Typography, Stack, Divider,
-  FormControl, InputLabel, Select, MenuItem, Tooltip, Pagination
+  FormControl, InputLabel, Select, MenuItem, Tooltip, Pagination, Grid
 } from '@mui/material';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, UserAddOutlined,
-  StopOutlined, RedoOutlined, ReloadOutlined, BankOutlined
+  StopOutlined, RedoOutlined, ReloadOutlined, BankOutlined,
+  SearchOutlined, ClearOutlined, FilterOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -314,6 +315,26 @@ export default function ActasEvaluacionPage() {
   const tribunales = data?.todosLosTribunales || [];
   const evaluatedIds = new Set(actas.map(a => a.proyecto.idProyecto));
 
+  // ── Filtros ──────────────────────────────────────────────────────────────────
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroOferta, setFiltroOferta] = useState('');
+
+  const ofertasUnicas = [...new Map(
+    actas
+      .map(a => [a.proyecto?.ofertaEaCarrera?.oferta?.idOferta, a.proyecto?.ofertaEaCarrera?.oferta])
+      .filter(([id]) => id)
+  ).values()];
+
+  const hayFiltro = busqueda !== '' || filtroOferta !== '';
+
+  const actasFiltradas = actas.filter(a => {
+    const coincideProyecto = a.proyecto.titulo.toLowerCase().includes(busqueda.toLowerCase());
+    const coincideOferta   = filtroOferta === '' || a.proyecto?.ofertaEaCarrera?.oferta?.idOferta === filtroOferta;
+    return coincideProyecto && coincideOferta;
+  });
+
+  const limpiarFiltros = () => { setBusqueda(''); setFiltroOferta(''); };
+
   const handleSaveActa = async (form) => {
     setSaving(true);
     try {
@@ -433,11 +454,77 @@ export default function ActasEvaluacionPage() {
         <Alert severity="error">Error al cargar: {error.message}</Alert>
       ) : (
         <>
+          {/* ── Filtros ── */}
+          <Box sx={{
+            mb: 3, p: 2,
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={6} md={5}>
+                <TextField
+                  fullWidth size="small"
+                  placeholder="Buscar por nombre de proyecto..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  InputProps={{ startAdornment: <SearchOutlined style={{ color: '#bfbfbf', marginRight: 8 }} /> }}
+                  sx={{ bgcolor: 'background.paper' }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={5} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel shrink>Oferta Académica</InputLabel>
+                  <Select
+                    value={filtroOferta}
+                    label="Oferta Académica"
+                    onChange={(e) => setFiltroOferta(e.target.value)}
+                    sx={{ bgcolor: 'background.paper' }}
+                    notched
+                    displayEmpty
+                    startAdornment={<FilterOutlined style={{ color: '#bfbfbf', marginRight: 8 }} />}
+                  >
+                    <MenuItem value="">Todas las Ofertas</MenuItem>
+                    {ofertasUnicas.map(o => (
+                      <MenuItem key={o.idOferta} value={o.idOferta}>{o.nombre}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={1} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Tooltip title="Limpiar Filtros">
+                  <IconButton
+                    onClick={limpiarFiltros}
+                    color="secondary"
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: '8px',
+                      visibility: hayFiltro ? 'visible' : 'hidden'
+                    }}
+                  >
+                    <ClearOutlined />
+                  </IconButton>
+                </Tooltip>
+              </Grid>
+            </Grid>
+          </Box>
+
         {actas.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>Sin actas registradas.</Box>
+        ) : actasFiltradas.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+            <SearchOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+            <Typography>
+              No se encontraron actas{busqueda && <> con el proyecto <strong>"{busqueda}"</strong></>}
+              {filtroOferta && busqueda && <> en</>}
+              {filtroOferta && <> la oferta seleccionada</>}.
+            </Typography>
+          </Box>
         ) : (() => {
-          // Agrupar por oferta
-          const grupos = actas.reduce((acc, acta) => {
+          // Agrupar por oferta (usando lista filtrada)
+          const grupos = actasFiltradas.reduce((acc, acta) => {
             const oferta = acta.proyecto?.ofertaEaCarrera?.oferta;
             const key = oferta?.idOferta || 'sin_oferta';
             if (!acc[key]) acc[key] = { oferta, actas: [] };

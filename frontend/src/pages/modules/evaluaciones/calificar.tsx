@@ -3,10 +3,11 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Card, CardContent, CardActions, Typography, CircularProgress,
   Alert, Chip, Grid, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Divider, Stack, LinearProgress, Snackbar, Tooltip
+  TextField, Divider, Stack, LinearProgress, Snackbar, Tooltip, IconButton
 } from '@mui/material';
 import {
-  ClockCircleOutlined, CheckOutlined, FormOutlined, TrophyOutlined
+  ClockCircleOutlined, CheckOutlined, FormOutlined, TrophyOutlined,
+  SearchOutlined, ClearOutlined, BankOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 import { useAuth } from 'contexts/AuthContext';
@@ -66,6 +67,9 @@ interface Acta {
     estado: string;
     ofertaEaCarrera?: {
       oferta?: {
+        modalidadArea?: {
+          area?: { idArea: string; nombre: string };
+        };
         categoriaEvento?: {
           evento?: { idEvento: string; nombre: string };
         };
@@ -90,6 +94,9 @@ const GET_DATA = gql`
         idProyecto titulo estado
         ofertaEaCarrera {
           oferta {
+            modalidadArea {
+              area { idArea nombre }
+            }
             categoriaEvento {
               evento { idEvento nombre }
             }
@@ -447,6 +454,8 @@ export default function PanelCalificacionPage() {
   );
 
   const [blockAlert, setBlockAlert] = useState({ open: false, message: '' });
+  const [busqueda, setBusqueda] = useState('');
+  const [collapsedAreas, setCollapsedAreas] = useState<Set<string>>(new Set());
 
   const cronogramas: any[] = data?.todosLosCronogramas || [];
   const now = new Date();
@@ -494,6 +503,34 @@ export default function PanelCalificacionPage() {
     if (!miIdTribunal) return false;
     return a.detallesEvaluacion.some(d => String(d.tribunal.idTribunal) === miIdTribunal);
   });
+
+  const hayFiltro = busqueda !== '';
+
+  const actasFiltradas = actas.filter(a =>
+    a.proyecto.titulo.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  const getMiDetalle = (a: Acta) =>
+    a.detallesEvaluacion.find(d => String(d.tribunal.idTribunal) === miIdTribunal)!;
+
+  const actasPendientes = actasFiltradas.filter(a => (getMiDetalle(a)?.puntuacionesCriterio || []).length === 0);
+  const actasCalificadas = actasFiltradas.filter(a => (getMiDetalle(a)?.puntuacionesCriterio || []).length > 0);
+
+  const toggleArea = (key: string) => setCollapsedAreas(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
+  const groupByArea = (list: Acta[]) =>
+    list.reduce<Record<string, { nombre: string; actas: Acta[] }>>((acc, a) => {
+      const area = a.proyecto?.ofertaEaCarrera?.oferta?.modalidadArea?.area;
+      const key = area?.idArea || 'sin_area';
+      const nombre = area?.nombre || 'Sin Área';
+      if (!acc[key]) acc[key] = { nombre, actas: [] };
+      acc[key].actas.push(a);
+      return acc;
+    }, {});
 
   const handleCalificar = (acta: Acta, detalle: DetalleEvaluacion) => {
     // Verificar si ya calificó y NO tiene permiso para corregir
@@ -559,24 +596,159 @@ export default function PanelCalificacionPage() {
         <Alert severity="warning">Tu usuario no tiene un perfil de tribunal asignado.</Alert>
       ) : (
         <>
+          {/* Filtro */}
+          <Box sx={{
+            mb: 3, p: 2,
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 2, border: '1px solid', borderColor: 'divider'
+          }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={11}>
+                <TextField
+                  fullWidth size="small"
+                  placeholder="Buscar por nombre de proyecto..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  InputProps={{ startAdornment: <SearchOutlined style={{ color: '#bfbfbf', marginRight: 8 }} /> }}
+                  sx={{ bgcolor: 'background.paper' }}
+                />
+              </Grid>
+              <Grid item xs={12} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Tooltip title="Limpiar Filtros">
+                  <IconButton
+                    onClick={() => setBusqueda('')}
+                    color="secondary"
+                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px', visibility: hayFiltro ? 'visible' : 'hidden' }}
+                  >
+                    <ClearOutlined />
+                  </IconButton>
+                </Tooltip>
+              </Grid>
+            </Grid>
+          </Box>
+
           {actas.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
               <FormOutlined style={{ fontSize: 48, marginBottom: 12 }} />
               <Typography>No hay actas activas en las que estés asignado como jurado.</Typography>
             </Box>
+          ) : actasFiltradas.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+              <SearchOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+              <Typography>No se encontraron proyectos con <strong>"{busqueda}"</strong>.</Typography>
+            </Box>
           ) : (
-            <Grid container spacing={2}>
-              {actas.map(acta => {
-                const miDetalle = acta.detallesEvaluacion.find(
-                  d => String(d.tribunal.idTribunal) === miIdTribunal
-                )!;
-                return (
-                  <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
-                    <ActaCard acta={acta} miDetalle={miDetalle} onCalificar={handleCalificar} />
-                  </Grid>
-                );
-              })}
-            </Grid>
+            <>
+              {/* PENDIENTES */}
+              {actasPendientes.length > 0 && (
+                <Box sx={{ mb: 4 }}>
+                  <Box sx={{
+                    px: 2, py: 1.5, mb: 2, borderRadius: 1.5,
+                    background: 'linear-gradient(135deg, rgba(250,173,20,0.12), rgba(250,173,20,0.03))',
+                    border: '1px solid rgba(250,173,20,0.35)',
+                    display: 'flex', alignItems: 'center', gap: 1.5,
+                  }}>
+                    <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#faad14', flex: 1 }}>
+                      PENDIENTES
+                    </Typography>
+                    <Chip label={actasPendientes.length} size="small"
+                      sx={{ bgcolor: '#faad14', color: '#fff', fontWeight: 700 }} />
+                  </Box>
+
+                  {Object.entries(groupByArea(actasPendientes)).map(([areaKey, grupo]) => {
+                    const fullKey = `pendiente_${areaKey}`;
+                    const isOpen = !collapsedAreas.has(fullKey);
+                    return (
+                      <Box key={fullKey} sx={{ mb: 1.5 }}>
+                        <Box sx={{
+                          px: 2, py: 1,
+                          borderRadius: isOpen ? '8px 8px 0 0' : 1,
+                          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.100',
+                          border: '1px solid', borderColor: 'divider',
+                          display: 'flex', alignItems: 'center', gap: 1,
+                          cursor: 'pointer', userSelect: 'none',
+                        }} onClick={() => toggleArea(fullKey)}>
+                          <BankOutlined style={{ color: '#8c8c8c', fontSize: 14 }} />
+                          <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>{grupo.nombre}</Typography>
+                          <Chip
+                            label={isOpen ? `▲ ${grupo.actas.length}` : `▼ ${grupo.actas.length}`}
+                            size="small" variant={isOpen ? 'filled' : 'outlined'}
+                            sx={{ cursor: 'pointer', fontWeight: 600 }}
+                          />
+                        </Box>
+                        {isOpen && (
+                          <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                            <Grid container spacing={2}>
+                              {grupo.actas.map(acta => (
+                                <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
+                                  <ActaCard acta={acta} miDetalle={getMiDetalle(acta)} onCalificar={handleCalificar} />
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Box>
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+
+              {/* CALIFICADAS */}
+              {actasCalificadas.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{
+                    px: 2, py: 1.5, mb: 2, borderRadius: 1.5,
+                    background: 'linear-gradient(135deg, rgba(82,196,26,0.10), rgba(82,196,26,0.03))',
+                    border: '1px solid rgba(82,196,26,0.30)',
+                    display: 'flex', alignItems: 'center', gap: 1.5,
+                  }}>
+                    <CheckOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#52c41a', flex: 1 }}>
+                      CALIFICADAS
+                    </Typography>
+                    <Chip label={actasCalificadas.length} size="small"
+                      sx={{ bgcolor: '#52c41a', color: '#fff', fontWeight: 700 }} />
+                  </Box>
+
+                  {Object.entries(groupByArea(actasCalificadas)).map(([areaKey, grupo]) => {
+                    const fullKey = `calificada_${areaKey}`;
+                    const isOpen = !collapsedAreas.has(fullKey);
+                    return (
+                      <Box key={fullKey} sx={{ mb: 1.5 }}>
+                        <Box sx={{
+                          px: 2, py: 1,
+                          borderRadius: isOpen ? '8px 8px 0 0' : 1,
+                          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.100',
+                          border: '1px solid', borderColor: 'divider',
+                          display: 'flex', alignItems: 'center', gap: 1,
+                          cursor: 'pointer', userSelect: 'none',
+                        }} onClick={() => toggleArea(fullKey)}>
+                          <BankOutlined style={{ color: '#8c8c8c', fontSize: 14 }} />
+                          <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>{grupo.nombre}</Typography>
+                          <Chip
+                            label={isOpen ? `▲ ${grupo.actas.length}` : `▼ ${grupo.actas.length}`}
+                            size="small" variant={isOpen ? 'filled' : 'outlined'}
+                            sx={{ cursor: 'pointer', fontWeight: 600 }}
+                          />
+                        </Box>
+                        {isOpen && (
+                          <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                            <Grid container spacing={2}>
+                              {grupo.actas.map(acta => (
+                                <Grid item xs={12} sm={6} lg={4} key={acta.idActaEvaluacion}>
+                                  <ActaCard acta={acta} miDetalle={getMiDetalle(acta)} onCalificar={handleCalificar} />
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Box>
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+            </>
           )}
         </>
       )}

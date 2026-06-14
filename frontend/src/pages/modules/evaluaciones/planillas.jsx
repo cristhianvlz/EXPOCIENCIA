@@ -4,13 +4,13 @@ import {
   Box, Button, Typography, CircularProgress, Alert, Chip, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Accordion, AccordionSummary, AccordionDetails, Divider,
-  Snackbar, Tooltip, Stack
+  Snackbar, Tooltip, Stack, Grid
 } from '@mui/material';
 import { useColorScheme } from '@mui/material/styles';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
   DownOutlined, FileTextOutlined, UnorderedListOutlined, CheckCircleOutlined,
-  StopOutlined, RedoOutlined
+  StopOutlined, RedoOutlined, SearchOutlined, ClearOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -373,6 +373,11 @@ export default function PlanillasRubricasPage() {
 
   const planillas = data?.todasLasPlanillas || [];
 
+  const [busqueda, setBusqueda] = useState('');
+  const planillasFiltradas = planillas.filter(p =>
+    p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
   // ── Planilla handlers ──────────────────────────────────────────────────────
   const handleSavePlanilla = async (form) => {
     setSaving(true);
@@ -515,14 +520,62 @@ export default function PlanillasRubricasPage() {
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
       ) : error ? (
         <Alert severity="error">Error al cargar: {error.message}</Alert>
-      ) : planillas.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
-          <FileTextOutlined style={{ fontSize: 48, marginBottom: 12 }} />
-          <Typography>No hay planillas creadas. Crea la primera.</Typography>
-        </Box>
       ) : (
+        <>
+          {/* ── Filtro de búsqueda ── */}
+          <Box sx={{
+            mb: 3, p: 2,
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={11}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Buscar por nombre de planilla..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  InputProps={{
+                    startAdornment: <SearchOutlined style={{ color: '#bfbfbf', marginRight: 8 }} />
+                  }}
+                  sx={{ bgcolor: 'background.paper' }}
+                />
+              </Grid>
+              <Grid item xs={12} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Tooltip title="Limpiar Filtros">
+                  <IconButton
+                    onClick={() => setBusqueda('')}
+                    color="secondary"
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: '8px',
+                      visibility: busqueda !== '' ? 'visible' : 'hidden'
+                    }}
+                  >
+                    <ClearOutlined />
+                  </IconButton>
+                </Tooltip>
+              </Grid>
+            </Grid>
+          </Box>
+
+          {planillas.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+              <FileTextOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+              <Typography>No hay planillas creadas. Crea la primera.</Typography>
+            </Box>
+          ) : planillasFiltradas.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+              <SearchOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+              <Typography>No se encontraron planillas con el nombre <strong>"{busqueda}"</strong>.</Typography>
+            </Box>
+          ) : (
         <Stack spacing={2}>
-          {planillas.map(planilla => {
+          {planillasFiltradas.map(planilla => {
             const totalPonderacion = (planilla.secciones || []).reduce((s, sec) => s + parseFloat(sec.ponderacion || 0), 0);
             return (
               <Box key={planilla.idPlanillaEvaluativa} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
@@ -651,6 +704,8 @@ export default function PlanillasRubricasPage() {
             );
           })}
         </Stack>
+          )}
+        </>
       )}
 
       {/* Dialogs */}
