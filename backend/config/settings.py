@@ -102,9 +102,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'expociencia',
-        'USER': 'tokio',
-        'PASSWORD': '1204',
+        'NAME': 'bd_expo',
+        'USER': 'cristhian',
+        'PASSWORD': '9046177',
         'HOST': 'localhost',
         'PORT': '5432',
         'OPTIONS': {

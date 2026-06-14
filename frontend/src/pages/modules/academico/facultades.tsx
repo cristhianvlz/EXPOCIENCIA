@@ -3,12 +3,12 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Switch, FormControlLabel,
-  Snackbar, Alert, CircularProgress, Tabs, Tab, Chip, Typography, Pagination, Select, MenuItem, Grid
+  Snackbar, Alert, CircularProgress, Tabs, Tab, Chip, Typography, Pagination, Select, MenuItem, Grid, Tooltip
 } from '@mui/material';
 import {
   EditOutlined, DeleteOutlined, PlusOutlined,
   BankOutlined, ApartmentOutlined, ProfileOutlined, TagsOutlined,
-  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined
+  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined, ClearOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -364,6 +364,12 @@ export default function CatalogosBasePage() {
     });
   };
 
+  const handleClearFilters = () => {
+    setSearchNombre('');
+    setSearchEstado('Todos');
+    setPage(0);
+  };
+
   return (
     <MainCard
       title="Catálogos Base"
@@ -409,6 +415,22 @@ export default function CatalogosBasePage() {
               <MenuItem value="Activo">Activo</MenuItem>
               <MenuItem value="Inactivo">Inactivo</MenuItem>
             </TextField>
+          </Grid>
+          <Grid item xs={12} sm={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Tooltip title="Limpiar Filtros">
+              <IconButton 
+                onClick={handleClearFilters} 
+                color="secondary" 
+                sx={{ 
+                  border: '1px solid', 
+                  borderColor: 'divider', 
+                  borderRadius: '8px',
+                  visibility: (searchNombre || searchEstado !== 'Todos') ? 'visible' : 'hidden'
+                }}
+              >
+                <ClearOutlined />
+              </IconButton>
+            </Tooltip>
           </Grid>
         </Grid>
       </Box>

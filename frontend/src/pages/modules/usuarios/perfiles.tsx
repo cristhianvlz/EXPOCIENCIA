@@ -32,9 +32,10 @@ import {
   Select,
   Checkbox,
   ListItemText,
-  OutlinedInput
+  OutlinedInput,
+  Tooltip
 } from '@mui/material';
-import { EditOutlined, DeleteOutlined, UserOutlined, ReloadOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, UserOutlined, ReloadOutlined, StopOutlined, RedoOutlined, LockOutlined, ClearOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 import { useMutation, useQuery, gql } from '@apollo/client';
 import Swal from 'sweetalert2';
@@ -64,7 +65,9 @@ const OBTENER_PARTICIPANTES = gql`
       estado
       codigoEspecifico
       usuario {
+        idUsuario
         username
+        lockedUntil
       }
       tutor {
         idTutor
@@ -91,7 +94,9 @@ const OBTENER_TUTORES = gql`
       direccion
       estado
       usuario {
+        idUsuario
         username
+        lockedUntil
       }
     }
   }
@@ -110,7 +115,9 @@ const OBTENER_TRIBUNALES = gql`
       direccion
       estado
       usuario {
+        idUsuario
         username
+        lockedUntil
       }
       areas {
         idArea
@@ -381,6 +388,7 @@ const OBTENER_PERSONAL = gql`
       usuario {
         idUsuario
         username
+        lockedUntil
       }
     }
   }
@@ -671,6 +679,7 @@ const PerfilesPage: React.FC = () => {
   const [searchApellido, setSearchApellido] = useState('');
   const [searchCI, setSearchCI] = useState('');
   const [searchEstado, setSearchEstado] = useState('Todos');
+  const [searchArea, setSearchArea] = useState('Todas');
 
   // Modal states
   const [openParticipante, setOpenParticipante] = useState(false);
@@ -705,7 +714,10 @@ const PerfilesPage: React.FC = () => {
   const [errorFieldPersonal, setErrorFieldPersonal] = useState('');
 
   // Floating snackbar for errors
-  const [snackErr, setSnackErr] = useState({ open: false, msg: '' });
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'success' });
+  const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
+    setNotification({ open: true, message, severity });
+  };
 
   // Usuario ya creado pero perfil falló — reutilizar en siguiente intento
   const [pendingUserParticipante, setPendingUserParticipante] = useState<string | null>(null);
@@ -749,6 +761,7 @@ const PerfilesPage: React.FC = () => {
     setSearchApellido('');
     setSearchCI('');
     setSearchEstado('Todos');
+    setSearchArea('Todas');
   };
 
   const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: async () => {}, type: 'error' });
@@ -772,13 +785,13 @@ const PerfilesPage: React.FC = () => {
             : await editarMutation({ variables: { [idKey]: row[idKey], estado: true } });
           const key = isActiva ? `eliminar${tipo}` : `editar${tipo}`;
           if (res.data[key]?.ok) {
-            setSnackErr({ open: true, msg: `${tipo} ${isActiva ? 'eliminado' : 'restaurado'} exitosamente.` });
+            showNotification(`${tipo} ${isActiva ? 'eliminado' : 'restaurado'} exitosamente.`, 'success');
             refetchFn();
           } else {
-            setSnackErr({ open: true, msg: res.data[key]?.error || 'Error en la operación' });
+            showNotification(res.data[key]?.error || 'Error en la operación', 'error');
           }
         } catch (err: any) {
-          setSnackErr({ open: true, msg: err.message });
+          showNotification(err.message, 'error');
         }
         setConfirming(false);
         setConfirmDlg(p => ({ ...p, open: false }));
@@ -786,34 +799,86 @@ const PerfilesPage: React.FC = () => {
     });
   };
 
+  const renderUsuarioStatus = (row: any) => {
+    return (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
+      </Typography>
+    );
+  };
+
   const applyFilters = (data: any[]) => {
     if (!data) return [];
     return data.filter((item: any) => {
       const matchNombre = searchNombre ? item.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) : true;
       const matchApellido = searchApellido ? item.apellido?.toLowerCase().includes(searchApellido.toLowerCase()) : true;
-      const matchCI = searchCI ? item.ci?.toLowerCase().includes(searchCI.toLowerCase()) : true;
+      const searchLower = searchCI ? searchCI.toLowerCase() : '';
+      const matchCI = searchCI ? (
+        item.ci?.toLowerCase().includes(searchLower) ||
+        item.codigoEspecifico?.toLowerCase().includes(searchLower) ||
+        item.codEmpleado?.toLowerCase().includes(searchLower)
+      ) : true;
       const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
-      return matchNombre && matchApellido && matchCI && matchEstado;
+      let matchArea = true;
+      if (tabValue === 2 && searchArea !== 'Todas') {
+        matchArea = item.areas?.some((a: any) => a.idArea === searchArea) ?? false;
+      }
+      return matchNombre && matchApellido && matchCI && matchEstado && matchArea;
     });
+  };
+
+  const handleClearFilters = () => {
+    setSearchNombre('');
+    setSearchApellido('');
+    setSearchCI('');
+    setSearchEstado('Todos');
+    setSearchArea('Todas');
+    setPage(0);
   };
 
   const renderFilters = () => (
     <Grid container spacing={2} sx={{ mb: 2 }}>
-      <Grid item xs={12} sm={3}>
+      <Grid item xs={12} sm={tabValue === 2 ? 3 : 3} md={tabValue === 2 ? 2 : 3}>
         <TextField fullWidth size="small" label="Nombre" value={searchNombre} onChange={e => { setSearchNombre(e.target.value); setPage(0); }} />
       </Grid>
-      <Grid item xs={12} sm={3}>
+      <Grid item xs={12} sm={tabValue === 2 ? 3 : 3} md={tabValue === 2 ? 2 : 3}>
         <TextField fullWidth size="small" label="Apellidos" value={searchApellido} onChange={e => { setSearchApellido(e.target.value); setPage(0); }} />
       </Grid>
-      <Grid item xs={12} sm={3}>
-        <TextField fullWidth size="small" label="C.I." value={searchCI} onChange={e => { setSearchCI(e.target.value); setPage(0); }} />
+      <Grid item xs={12} sm={tabValue === 2 ? 2 : 3} md={tabValue === 2 ? 2 : 2}>
+        <TextField fullWidth size="small" label="C.I. / Código" value={searchCI} onChange={e => { setSearchCI(e.target.value); setPage(0); }} />
       </Grid>
-      <Grid item xs={12} sm={3}>
+      <Grid item xs={12} sm={tabValue === 2 ? 2 : 2} md={tabValue === 2 ? 2 : 3}>
         <TextField fullWidth size="small" select label="Estado" value={searchEstado} onChange={e => { setSearchEstado(e.target.value); setPage(0); }}>
           <MenuItem value="Todos">Todos</MenuItem>
           <MenuItem value="Activo">Activo</MenuItem>
           <MenuItem value="Inactivo">Inactivo</MenuItem>
         </TextField>
+      </Grid>
+      {tabValue === 2 && (
+        <Grid item xs={12} sm={2} md={3}>
+          <TextField fullWidth size="small" select label="Área" value={searchArea} onChange={e => { setSearchArea(e.target.value); setPage(0); }}>
+            <MenuItem value="Todas">Todas</MenuItem>
+            {dataAreas?.todasLasAreas?.map((a: any) => (
+              <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      )}
+      <Grid item xs={12} sm={1} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Tooltip title="Limpiar Filtros">
+          <IconButton 
+            onClick={handleClearFilters} 
+            color="secondary" 
+            sx={{ 
+              border: '1px solid', 
+              borderColor: 'divider', 
+              borderRadius: '8px',
+              visibility: (searchNombre || searchApellido || searchCI || searchEstado !== 'Todos' || searchArea !== 'Todas') ? 'visible' : 'hidden'
+            }}
+          >
+            <ClearOutlined />
+          </IconButton>
+        </Tooltip>
       </Grid>
     </Grid>
   );
@@ -821,7 +886,7 @@ const PerfilesPage: React.FC = () => {
   const showErr = (setMsg: (s: string) => void, setField: (s: string) => void, msg: string) => {
     setMsg(msg);
     setField(detectField(msg));
-    setSnackErr({ open: true, msg });
+    showNotification(msg, 'error');
   };
 
   // --- HANDLERS PARTICIPANTE ---
@@ -869,7 +934,7 @@ const PerfilesPage: React.FC = () => {
             resPart.data.editarParticipante.error || 'Error al actualizar el participante.'
           );
         } else {
-          MySwal.fire('¡Éxito!', 'Participante actualizado exitosamente.', 'success');
+          showNotification('Participante actualizado exitosamente.', 'success');
           setOpenParticipante(false);
           refetchParticipantes();
         }
@@ -913,13 +978,8 @@ const PerfilesPage: React.FC = () => {
             resPart.data.crearParticipante.error || 'Error al registrar el participante.'
           );
         } else {
-          const rolParticipante = dataRoles?.todosLosRoles?.find((r: any) => r.nombre === 'Participante');
-          if (rolParticipante) {
-            try {
-              await asignarRolAUsuario({ variables: { idUsuario, idRol: rolParticipante.idRol } });
-            } catch (_) {}
-          }
-          MySwal.fire('¡Éxito!', 'Participante registrado exitosamente.', 'success');
+          // El backend ahora asigna automáticamente el rol 'Participante'
+          showNotification('Participante registrado exitosamente.', 'success');
           setOpenParticipante(false);
           refetchParticipantes();
         }
@@ -963,7 +1023,7 @@ const PerfilesPage: React.FC = () => {
         if (!resTutor.data.editarTutor.ok) {
           showErr(setErrorTutor, setErrorFieldTutor, resTutor.data.editarTutor.error || 'Error al actualizar el tutor.');
         } else {
-          MySwal.fire('¡Éxito!', 'Tutor actualizado exitosamente.', 'success');
+          showNotification('Tutor actualizado exitosamente.', 'success');
           setOpenTutor(false);
           refetchTutores();
         }
@@ -1001,13 +1061,8 @@ const PerfilesPage: React.FC = () => {
         if (!resTutor.data.crearTutor.ok) {
           showErr(setErrorTutor, setErrorFieldTutor, resTutor.data.crearTutor.error || 'Error al registrar el tutor.');
         } else {
-          const rolTutor = dataRoles?.todosLosRoles?.find((r: any) => r.nombre === 'Tutor');
-          if (rolTutor) {
-            try {
-              await asignarRolAUsuario({ variables: { idUsuario, idRol: rolTutor.idRol } });
-            } catch (_) {}
-          }
-          MySwal.fire('¡Éxito!', 'Tutor registrado exitosamente.', 'success');
+          // El backend ahora asigna automáticamente el rol 'Tutor'
+          showNotification('Tutor registrado exitosamente.', 'success');
           setOpenTutor(false);
           refetchTutores();
         }
@@ -1056,7 +1111,7 @@ const PerfilesPage: React.FC = () => {
         if (!resTribunal.data.editarTribunal.ok) {
           showErr(setErrorTribunal, setErrorFieldTribunal, resTribunal.data.editarTribunal.error || 'Error al actualizar el tribunal.');
         } else {
-          MySwal.fire('¡Éxito!', 'Tribunal actualizado exitosamente.', 'success');
+          showNotification('Tribunal actualizado exitosamente.', 'success');
           setOpenTribunal(false);
           refetchTribunales();
         }
@@ -1094,13 +1149,8 @@ const PerfilesPage: React.FC = () => {
         if (!resTribunal.data.crearTribunal.ok) {
           showErr(setErrorTribunal, setErrorFieldTribunal, resTribunal.data.crearTribunal.error || 'Error al registrar el tribunal.');
         } else {
-          const rolTribunal = dataRoles?.todosLosRoles?.find((r: any) => r.nombre === 'Tribunal');
-          if (rolTribunal) {
-            try {
-              await asignarRolAUsuario({ variables: { idUsuario, idRol: rolTribunal.idRol } });
-            } catch (_) {}
-          }
-          MySwal.fire('¡Éxito!', 'Tribunal registrado exitosamente.', 'success');
+          // El backend ahora asigna automáticamente el rol 'Tribunal'
+          showNotification('Tribunal registrado exitosamente.', 'success');
           setOpenTribunal(false);
           refetchTribunales();
         }
@@ -1143,7 +1193,7 @@ const PerfilesPage: React.FC = () => {
         if (!res.data.editarPersonal.ok) {
           showErr(setErrorPersonal, setErrorFieldPersonal, res.data.editarPersonal.error || 'Error al actualizar el personal.');
         } else {
-          MySwal.fire('¡Éxito!', 'Personal actualizado exitosamente.', 'success');
+          showNotification('Personal actualizado exitosamente.', 'success');
           setOpenPersonal(false);
           refetchPersonal();
         }
@@ -1185,7 +1235,7 @@ const PerfilesPage: React.FC = () => {
               await asignarRolAUsuario({ variables: { idUsuario, idRol: selectedRolPersonal } });
             } catch (_) {}
           }
-          MySwal.fire('¡Éxito!', 'Personal registrado exitosamente.', 'success');
+          showNotification('Personal registrado exitosamente.', 'success');
           setOpenPersonal(false);
           refetchPersonal();
         }
@@ -1228,6 +1278,7 @@ const PerfilesPage: React.FC = () => {
                   <TableCell>ID</TableCell>
                   <TableCell>Nombre Completo</TableCell>
                   <TableCell>C.I.</TableCell>
+                  <TableCell>Cód. Matrícula</TableCell>
                   <TableCell>Celular</TableCell>
                   <TableCell>Tipo</TableCell>
                   <TableCell>Estado</TableCell>
@@ -1244,13 +1295,14 @@ const PerfilesPage: React.FC = () => {
                       <TableCell>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                           <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
-                          </Typography>
+                          {renderUsuarioStatus(row)}
                         </Box>
                       </TableCell>
                       <TableCell>
                         {row.ci} {row.expedicion}
+                      </TableCell>
+                      <TableCell>
+                        {row.codigoEspecifico || '-'}
                       </TableCell>
                       <TableCell>{row.celular}</TableCell>
                       <TableCell>
@@ -1275,7 +1327,7 @@ const PerfilesPage: React.FC = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       No hay participantes registrados.
                     </TableCell>
                   </TableRow>
@@ -1325,9 +1377,7 @@ const PerfilesPage: React.FC = () => {
                       <TableCell>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                           <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
-                          </Typography>
+                          {renderUsuarioStatus(row)}
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -1402,9 +1452,7 @@ const PerfilesPage: React.FC = () => {
                       <TableCell>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                           <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
-                          </Typography>
+                          {renderUsuarioStatus(row)}
                         </Box>
                       </TableCell>
                       <TableCell>{row.especialidad}</TableCell>
@@ -1479,9 +1527,7 @@ const PerfilesPage: React.FC = () => {
                       <TableCell>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                           <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <UserOutlined /> {row.usuario?.username || 'Sin usuario'}
-                          </Typography>
+                          {renderUsuarioStatus(row)}
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -1579,7 +1625,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldParticipante === 'password'}
-                      helperText={errorFieldParticipante === 'password' ? errorParticipante : undefined}
+                      helperText={errorFieldParticipante === 'password' ? errorParticipante : "Mín. 8 caracteres, mayúscula, minúscula y número"}
                     />
                   </Grid>
                 </Grid>
@@ -1799,7 +1845,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldTutor === 'password'}
-                      helperText={errorFieldTutor === 'password' ? errorTutor : undefined}
+                      helperText={errorFieldTutor === 'password' ? errorTutor : "Mín. 8 caracteres, mayúscula, minúscula y número"}
                     />
                   </Grid>
                 </Grid>
@@ -2038,7 +2084,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldTribunal === 'password'}
-                      helperText={errorFieldTribunal === 'password' ? errorTribunal : undefined}
+                      helperText={errorFieldTribunal === 'password' ? errorTribunal : "Mín. 8 caracteres, mayúscula, minúscula y número"}
                       InputProps={{
                         sx: {
                           borderRadius: '6px',
@@ -2334,7 +2380,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldPersonal === 'password'}
-                      helperText={errorFieldPersonal === 'password' ? errorPersonal : undefined}
+                      helperText={errorFieldPersonal === 'password' ? errorPersonal : "Mín. 8 caracteres, mayúscula, minúscula y número"}
                     />
                   </Grid>
                 </Grid>
@@ -2462,19 +2508,13 @@ const PerfilesPage: React.FC = () => {
 
       {/* ── Snackbar flotante de errores ── */}
       <Snackbar
-        open={snackErr.open}
-        autoHideDuration={5000}
-        onClose={() => setSnackErr((p) => ({ ...p, open: false }))}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        sx={{ mt: 7 }}
+        open={notification.open}
+        autoHideDuration={4000}
+        onClose={() => setNotification({ ...notification, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert
-          severity="error"
-          variant="filled"
-          onClose={() => setSnackErr((p) => ({ ...p, open: false }))}
-          sx={{ minWidth: 320, fontWeight: 500, boxShadow: 6 }}
-        >
-          {snackErr.msg}
+        <Alert severity={notification.severity} variant="filled" sx={{ borderRadius: 2, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+          {notification.message}
         </Alert>
       </Snackbar>
       <ConfirmDialog {...confirmDlg} onClose={() => setConfirmDlg(p => ({ ...p, open: false }))} loading={confirming} />

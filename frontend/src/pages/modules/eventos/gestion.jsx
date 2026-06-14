@@ -9,7 +9,7 @@ import {
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined, 
   CalendarOutlined, AppstoreOutlined, TagsOutlined, FileTextOutlined, InfoCircleOutlined, TrophyOutlined,
   StopOutlined, RedoOutlined, ExclamationCircleOutlined, LeftOutlined, RightOutlined,
-  SearchOutlined, FilterOutlined, CloseOutlined
+  SearchOutlined, FilterOutlined, CloseOutlined, ClearOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -210,10 +210,17 @@ export default function GestionEventosPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
 
-  // Filtros (Solo para Eventos)
+  // Filtros
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterNivel, setFilterNivel] = useState('all');
   const [searchName, setSearchName] = useState('');
+  const [searchEstado, setSearchEstado] = useState('Todos');
+
+  const handleClearFilters2 = () => {
+    setSearchName('');
+    setSearchEstado('Todos');
+    setPage(0);
+  };
 
   const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: null, type: 'error' });
   const [confirming, setConfirming] = useState(false);
@@ -398,7 +405,7 @@ export default function GestionEventosPage() {
   return (
     <MainCard title="Gestión de Eventos" secondary={tabActions[tab]}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(0); }}>
+        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(0); setSearchName(''); setSearchEstado('Todos'); setFilterTipo('all'); setFilterNivel('all'); }}>
           <Tab label="Eventos" />
           <Tab label="Tipos de Evento" />
           <Tab label="Niveles de Evento" />
@@ -423,7 +430,7 @@ export default function GestionEventosPage() {
                 borderColor: 'divider'
               }}>
                 <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} md={5}>
                     <TextField
                       fullWidth
                       size="small"
@@ -466,20 +473,21 @@ export default function GestionEventosPage() {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12} md={2}>
-                    {(filterTipo !== 'all' || filterNivel !== 'all' || searchName !== '') && (
-                      <Button 
-                        fullWidth
-                        size="medium" 
-                        variant="outlined" 
-                        color="error"
-                        startIcon={<CloseOutlined />}
+                  <Grid item xs={12} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Tooltip title="Limpiar Filtros">
+                      <IconButton 
                         onClick={() => { setFilterTipo('all'); setFilterNivel('all'); setSearchName(''); setPage(0); }}
-                        sx={{ borderRadius: 1.5 }}
+                        color="secondary" 
+                        sx={{ 
+                          border: '1px solid', 
+                          borderColor: 'divider', 
+                          borderRadius: '8px',
+                          visibility: (filterTipo !== 'all' || filterNivel !== 'all' || searchName !== '') ? 'visible' : 'hidden'
+                        }}
                       >
-                        Limpiar
-                      </Button>
-                    )}
+                        <ClearOutlined />
+                      </IconButton>
+                    </Tooltip>
                   </Grid>
                 </Grid>
               </Box>
@@ -536,92 +544,188 @@ export default function GestionEventosPage() {
           )}
 
           {/* ── Tab 1: Tipos de Evento ── */}
-          {tab === 1 && (
-            <>
-              <TableContainer component={Paper} elevation={0}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>ID</TableCell>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {tipos.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(t => (
-                      <TableRow key={t.idTipoEvento}>
-                        <TableCell>{t.idTipoEvento}</TableCell>
-                        <TableCell>{t.nombre}</TableCell>
-                        <TableCell>
-                          <Chip label={t.estado ? 'Activo' : 'Inactivo'} color={t.estado ? 'success' : 'error'} size="small" variant="outlined" />
-                        </TableCell>
-                         <TableCell align="right">
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <Tooltip title="Ver"><IconButton size="small" color="info" onClick={() => handleOpenView(t, 'Tipo de Evento')}><EyeOutlined /></IconButton></Tooltip>
-                            <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => handleOpenTipo(t)}><EditOutlined /></IconButton></Tooltip>
-                            <Tooltip title={t.estado ? "Desactivar" : "Restaurar"}>
-                              <IconButton size="small" color={t.estado ? "error" : "success"} onClick={() => handleToggleTipo(t)}>
-                                {t.estado ? <StopOutlined /> : <RedoOutlined />}
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
+          {tab === 1 && (() => {
+            const tiposFiltrados = tipos.filter(t => {
+              const matchName = searchName ? t.nombre.toLowerCase().includes(searchName.toLowerCase()) : true;
+              const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? t.estado : !t.estado) : true;
+              return matchName && matchEstado;
+            });
+            return (
+              <>
+                <Box sx={{ px: 2, mb: 2 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        size="small" fullWidth
+                        placeholder="Buscar por nombre..."
+                        value={searchName}
+                        onChange={(e) => { setSearchName(e.target.value); setPage(0); }}
+                        InputProps={{ startAdornment: <SearchOutlined style={{ color: '#888', marginRight: 8 }} /> }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
+                      <TextField 
+                        fullWidth size="small" select label="Estado" 
+                        value={searchEstado} onChange={e => { setSearchEstado(e.target.value); setPage(0); }}
+                      >
+                        <MenuItem value="Todos">Todos</MenuItem>
+                        <MenuItem value="Activo">Activo</MenuItem>
+                        <MenuItem value="Inactivo">Inactivo</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Tooltip title="Limpiar Filtros">
+                        <IconButton 
+                          onClick={handleClearFilters2} 
+                          color="secondary" 
+                          sx={{ 
+                            border: '1px solid', 
+                            borderColor: 'divider', 
+                            borderRadius: '8px',
+                            visibility: (searchName || searchEstado !== 'Todos') ? 'visible' : 'hidden'
+                          }}
+                        >
+                          <ClearOutlined />
+                        </IconButton>
+                      </Tooltip>
+                    </Grid>
+                  </Grid>
+                </Box>
+                <TableContainer component={Paper} elevation={0}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Nombre</TableCell>
+                        <TableCell>Estado</TableCell>
+                        <TableCell align="right">Acciones</TableCell>
                       </TableRow>
-                    ))}
-                    {tipos.length === 0 && (
-                      <TableRow><TableCell colSpan={4} align="center">No hay tipos registrados.</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination count={tipos.length} page={page} setPage={setPage} rowsPerPage={rowsPerPage} setRowsPerPage={setRowsPerPage} />
-            </>
-          )}
+                    </TableHead>
+                    <TableBody>
+                      {tiposFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(t => (
+                        <TableRow key={t.idTipoEvento}>
+                          <TableCell>{t.idTipoEvento}</TableCell>
+                          <TableCell>{t.nombre}</TableCell>
+                          <TableCell>
+                            <Chip label={t.estado ? 'Activo' : 'Inactivo'} color={t.estado ? 'success' : 'error'} size="small" variant="outlined" />
+                          </TableCell>
+                           <TableCell align="right">
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                              <Tooltip title="Ver"><IconButton size="small" color="info" onClick={() => handleOpenView(t, 'Tipo de Evento')}><EyeOutlined /></IconButton></Tooltip>
+                              <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => handleOpenTipo(t)}><EditOutlined /></IconButton></Tooltip>
+                              <Tooltip title={t.estado ? "Desactivar" : "Restaurar"}>
+                                <IconButton size="small" color={t.estado ? "error" : "success"} onClick={() => handleToggleTipo(t)}>
+                                  {t.estado ? <StopOutlined /> : <RedoOutlined />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {tipos.length === 0 && (
+                        <TableRow><TableCell colSpan={4} align="center">No hay tipos registrados.</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                {tiposFiltrados.length > 0 && (
+                  <TablePagination count={tiposFiltrados.length} page={page} setPage={setPage} rowsPerPage={rowsPerPage} setRowsPerPage={setRowsPerPage} />
+                )}
+              </>
+            );
+          })()}
 
           {/* ── Tab 2: Niveles de Evento ── */}
-          {tab === 2 && (
-            <>
-              <TableContainer component={Paper} elevation={0}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>ID</TableCell>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {niveles.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(n => (
-                      <TableRow key={n.idNivelEvento}>
-                        <TableCell>{n.idNivelEvento}</TableCell>
-                        <TableCell>{n.nombre}</TableCell>
-                        <TableCell>
-                          <Chip label={n.estado ? 'Activo' : 'Inactivo'} color={n.estado ? 'success' : 'error'} size="small" variant="outlined" />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <Tooltip title="Ver"><IconButton size="small" color="info" onClick={() => handleOpenView(n, 'Nivel de Evento')}><EyeOutlined /></IconButton></Tooltip>
-                            <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => handleOpenNivel(n)}><EditOutlined /></IconButton></Tooltip>
-                            <Tooltip title={n.estado ? "Desactivar" : "Restaurar"}>
-                              <IconButton size="small" color={n.estado ? "error" : "success"} onClick={() => handleToggleNivel(n)}>
-                                {n.estado ? <StopOutlined /> : <RedoOutlined />}
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
+          {tab === 2 && (() => {
+            const nivelesFiltrados = niveles.filter(n => {
+              const matchName = searchName ? n.nombre.toLowerCase().includes(searchName.toLowerCase()) : true;
+              const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? n.estado : !n.estado) : true;
+              return matchName && matchEstado;
+            });
+            return (
+              <>
+                <Box sx={{ px: 2, mb: 2 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        size="small" fullWidth
+                        placeholder="Buscar por nombre..."
+                        value={searchName}
+                        onChange={(e) => { setSearchName(e.target.value); setPage(0); }}
+                        InputProps={{ startAdornment: <SearchOutlined style={{ color: '#888', marginRight: 8 }} /> }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
+                      <TextField 
+                        fullWidth size="small" select label="Estado" 
+                        value={searchEstado} onChange={e => { setSearchEstado(e.target.value); setPage(0); }}
+                      >
+                        <MenuItem value="Todos">Todos</MenuItem>
+                        <MenuItem value="Activo">Activo</MenuItem>
+                        <MenuItem value="Inactivo">Inactivo</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Tooltip title="Limpiar Filtros">
+                        <IconButton 
+                          onClick={handleClearFilters2} 
+                          color="secondary" 
+                          sx={{ 
+                            border: '1px solid', 
+                            borderColor: 'divider', 
+                            borderRadius: '8px',
+                            visibility: (searchName || searchEstado !== 'Todos') ? 'visible' : 'hidden'
+                          }}
+                        >
+                          <ClearOutlined />
+                        </IconButton>
+                      </Tooltip>
+                    </Grid>
+                  </Grid>
+                </Box>
+                <TableContainer component={Paper} elevation={0}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Nombre</TableCell>
+                        <TableCell>Estado</TableCell>
+                        <TableCell align="right">Acciones</TableCell>
                       </TableRow>
-                    ))}
-                    {niveles.length === 0 && (
-                      <TableRow><TableCell colSpan={4} align="center">No hay niveles registrados.</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination count={niveles.length} page={page} setPage={setPage} rowsPerPage={rowsPerPage} setRowsPerPage={setRowsPerPage} />
-            </>
-          )}
+                    </TableHead>
+                    <TableBody>
+                      {nivelesFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(n => (
+                        <TableRow key={n.idNivelEvento}>
+                          <TableCell>{n.idNivelEvento}</TableCell>
+                          <TableCell>{n.nombre}</TableCell>
+                          <TableCell>
+                            <Chip label={n.estado ? 'Activo' : 'Inactivo'} color={n.estado ? 'success' : 'error'} size="small" variant="outlined" />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                              <Tooltip title="Ver"><IconButton size="small" color="info" onClick={() => handleOpenView(n, 'Nivel de Evento')}><EyeOutlined /></IconButton></Tooltip>
+                              <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => handleOpenNivel(n)}><EditOutlined /></IconButton></Tooltip>
+                              <Tooltip title={n.estado ? "Desactivar" : "Restaurar"}>
+                                <IconButton size="small" color={n.estado ? "error" : "success"} onClick={() => handleToggleNivel(n)}>
+                                  {n.estado ? <StopOutlined /> : <RedoOutlined />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {niveles.length === 0 && (
+                        <TableRow><TableCell colSpan={4} align="center">No hay niveles registrados.</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                {nivelesFiltrados.length > 0 && (
+                  <TablePagination count={nivelesFiltrados.length} page={page} setPage={setPage} rowsPerPage={rowsPerPage} setRowsPerPage={setRowsPerPage} />
+                )}
+              </>
+            );
+          })()}
         </>
       )}
 

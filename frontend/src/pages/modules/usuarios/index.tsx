@@ -27,7 +27,7 @@ import {
   Pagination,
   Stack
 } from '@mui/material';
-import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, FilterOutlined, LockOutlined, ClearOutlined } from '@ant-design/icons';
 import { MenuItem, Select, InputLabel, FormControl, Grid, Chip, Avatar, Tooltip } from '@mui/material';
 import { UserOutlined, MailOutlined, CheckCircleOutlined, StopOutlined, RedoOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
@@ -39,6 +39,8 @@ const GET_USUARIOS = gql`
       username
       email
       estado
+      lockedUntil
+      failedLoginAttempts
       participante {
         idParticipante
       }
@@ -79,11 +81,22 @@ const DELETE_USUARIO = gql`
   }
 `;
 
+const DESBLOQUEAR_USUARIO = gql`
+  mutation DesbloquearUsuario($idUsuario: ID!) {
+    desbloquearUsuario(idUsuario: $idUsuario) {
+      ok
+      error
+    }
+  }
+`;
+
 interface Usuario {
   idUsuario: string;
   username: string;
   email: string;
   estado: boolean;
+  lockedUntil?: string | null;
+  failedLoginAttempts?: number;
   participante?: { idParticipante: string };
   tutor?: { idTutor: string };
   tribunal?: { idTribunal: string };
@@ -95,6 +108,7 @@ export default function UsuariosPage() {
   const [crearUsuario] = useMutation(CREATE_USUARIO);
   const [editarUsuario] = useMutation(EDIT_USUARIO);
   const [eliminarUsuario] = useMutation(DELETE_USUARIO);
+  const [desbloquearUsuario] = useMutation(DESBLOQUEAR_USUARIO);
 
   console.log('GraphQL Data:', data);
   console.log('GraphQL Error:', error);
@@ -120,6 +134,13 @@ export default function UsuariosPage() {
   const [confirmDlg, setConfirmDlg] = useState<{ open: boolean; user: Usuario | null }>({ open: false, user: null });
   const [confirming, setConfirming] = useState(false);
 
+  const handleClearFilters = () => {
+    setFilterTipo('todos');
+    setFilterEmail('');
+    setFilterEstado('todos');
+    setPage(0);
+  };
+
   const getTipoUsuario = (user: Usuario) => {
     if (user.participante) return 'Participante';
     if (user.tutor) return 'Tutor';
@@ -132,8 +153,12 @@ export default function UsuariosPage() {
     const matchesTipo = filterTipo === 'todos' || tipo === filterTipo;
     const matchesEmail = (user.email || '').toLowerCase().includes(filterEmail.toLowerCase()) || 
                          (user.username || '').toLowerCase().includes(filterEmail.toLowerCase());
+    const isLocked = user.lockedUntil ? new Date(user.lockedUntil) > new Date() : false;
     const matchesEstado =
-      filterEstado === 'todos' || (filterEstado === 'activo' && user.estado) || (filterEstado === 'inactivo' && !user.estado);
+      filterEstado === 'todos' || 
+      (filterEstado === 'activo' && user.estado) || 
+      (filterEstado === 'inactivo' && !user.estado) ||
+      (filterEstado === 'bloqueado' && isLocked);
 
     return matchesTipo && matchesEmail && matchesEstado;
   });
@@ -227,6 +252,20 @@ export default function UsuariosPage() {
     setConfirmDlg({ open: false, user: null });
   };
 
+  const handleDesbloquear = async (idUsuario: string) => {
+    try {
+      const res = await desbloquearUsuario({ variables: { idUsuario } });
+      if (res.data.desbloquearUsuario.ok) {
+        showNotification('Usuario desbloqueado exitosamente', 'success');
+        refetch();
+      } else {
+        showNotification(res.data.desbloquearUsuario.error, 'error');
+      }
+    } catch (e: any) {
+      showNotification(e.message, 'error');
+    }
+  };
+
   const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setNotification({ open: true, message, severity });
   };
@@ -311,7 +350,7 @@ export default function UsuariosPage() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={8} md={6}>
+              <Grid item xs={12} sm={8} md={5}>
                 <TextField
                   fullWidth
                   size="medium"
@@ -328,7 +367,7 @@ export default function UsuariosPage() {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} sm={12} md={3}>
+              <Grid item xs={12} sm={11} md={3}>
                 <FormControl fullWidth size="medium">
                   <InputLabel sx={{ fontWeight: 500 }}>Estado</InputLabel>
                   <Select
@@ -343,8 +382,25 @@ export default function UsuariosPage() {
                     <MenuItem value="todos">Cualquier Estado</MenuItem>
                     <MenuItem value="activo">✅ Activo</MenuItem>
                     <MenuItem value="inactivo">❌ Inactivo</MenuItem>
+                    <MenuItem value="bloqueado">🔒 Bloqueado por Intentos</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={1} md={1} sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Tooltip title="Limpiar Filtros">
+                  <IconButton 
+                    onClick={handleClearFilters} 
+                    color="secondary" 
+                    sx={{ 
+                      border: '1px solid', 
+                      borderColor: 'divider', 
+                      borderRadius: '8px',
+                      visibility: (filterTipo !== 'todos' || filterEmail !== '' || filterEstado !== 'todos') ? 'visible' : 'hidden'
+                    }}
+                  >
+                    <ClearOutlined />
+                  </IconButton>
+                </Tooltip>
               </Grid>
             </Grid>
           </Paper>
@@ -426,9 +482,21 @@ export default function UsuariosPage() {
                             {row.username.charAt(0).toUpperCase()}
                           </Avatar>
                           <Box>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', display: 'flex', alignItems: 'center', gap: 1 }}>
                               {row.username}
+                              {row.lockedUntil && new Date(row.lockedUntil) > new Date() && (
+                                <Tooltip title="Cuenta bloqueada. Clic para desbloquear">
+                                  <IconButton size="small" sx={{ color: '#ff4d4f', p: 0 }} onClick={() => handleDesbloquear(row.idUsuario)}>
+                                    <LockOutlined style={{ fontSize: '14px' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Typography>
+                            {row.failedLoginAttempts && row.failedLoginAttempts > 0 ? (
+                              <Typography variant="caption" color="error">
+                                Intentos fallidos: {row.failedLoginAttempts}
+                              </Typography>
+                            ) : null}
                           </Box>
                         </Box>
                       </TableCell>

@@ -29,7 +29,9 @@ import {
   Avatar,
   Select,
   MenuItem,
-  Stack
+  Stack,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   EditOutlined,
@@ -45,7 +47,10 @@ import {
   StopOutlined,
   RedoOutlined,
   ExclamationCircleOutlined,
-  UserOutlined
+  UserOutlined,
+  ClearOutlined,
+  SearchOutlined,
+  FilterOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -310,9 +315,11 @@ export default function MembretesFirmasPage() {
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [viewItem, setViewItem] = useState(null);
 
-  // Paginación
+  // Paginación y Filtros
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [filterTitulo, setFilterTitulo] = useState('');
+  const [filterEstado, setFilterEstado] = useState('all');
 
   // Confirmación de cambio de estado
   const [confirmDialog, setConfirmDialog] = useState({ open: false, item: null });
@@ -333,9 +340,16 @@ export default function MembretesFirmasPage() {
   const refSello = useRef(null);
 
   const membretes = data?.todosLosMembretes || [];
+  
+  const membretesFiltrados = membretes.filter(m => {
+    const matchTitulo = filterTitulo ? m.titulo.toLowerCase().includes(filterTitulo.toLowerCase()) : true;
+    const matchEstado = filterEstado === 'all' ? true : (filterEstado === 'true' ? m.estado === true : m.estado === false);
+    return matchTitulo && matchEstado;
+  });
+
   const showNotification = (message, severity) => setNotification({ open: true, message, severity });
-  const totalPages = Math.ceil(membretes.length / rowsPerPage);
-  const paginatedMembretes = membretes.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const totalPages = Math.ceil(membretesFiltrados.length / rowsPerPage);
+  const paginatedMembretes = membretesFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const handleOpen = (item = null) => {
     setEditingItem(item);
@@ -489,6 +503,62 @@ export default function MembretesFirmasPage() {
         </Box>
       ) : (
         <>
+          <Box sx={{
+            mb: 3, p: 2,
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Buscar por título..."
+                  value={filterTitulo}
+                  onChange={(e) => { setFilterTitulo(e.target.value); setPage(0); }}
+                  InputProps={{
+                    startAdornment: <SearchOutlined style={{ color: '#bfbfbf', marginRight: 8 }} />
+                  }}
+                  sx={{ bgcolor: 'background.paper' }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Estado</InputLabel>
+                  <Select
+                    value={filterEstado}
+                    label="Estado"
+                    onChange={(e) => { setFilterEstado(e.target.value); setPage(0); }}
+                    sx={{ bgcolor: 'background.paper' }}
+                    startAdornment={<FilterOutlined style={{ color: '#bfbfbf', marginRight: 8 }} />}
+                  >
+                    <MenuItem value="all">Todos los Estados</MenuItem>
+                    <MenuItem value="true">Activos</MenuItem>
+                    <MenuItem value="false">Inactivos</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={2} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Tooltip title="Limpiar Filtros">
+                  <IconButton 
+                    onClick={() => { setFilterTitulo(''); setFilterEstado('all'); setPage(0); }}
+                    color="secondary" 
+                    sx={{ 
+                      border: '1px solid', 
+                      borderColor: 'divider', 
+                      borderRadius: '8px',
+                      visibility: (filterTitulo !== '' || filterEstado !== 'all') ? 'visible' : 'hidden'
+                    }}
+                  >
+                    <ClearOutlined />
+                  </IconButton>
+                </Tooltip>
+              </Grid>
+            </Grid>
+          </Box>
+
           <TableContainer component={Paper} elevation={0}>
             <Table>
               <TableHead>
@@ -570,10 +640,10 @@ export default function MembretesFirmasPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {membretes.length === 0 && (
+                {membretesFiltrados.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={10} align="center">
-                      No hay membretes registrados.
+                      No hay membretes que coincidan con la búsqueda.
                     </TableCell>
                   </TableRow>
                 )}
@@ -582,7 +652,7 @@ export default function MembretesFirmasPage() {
           </TableContainer>
 
           {/* ── Barra de paginación ── */}
-          {membretes.length > 0 && (
+          {membretesFiltrados.length > 0 && (
             <Box
               sx={{
                 display: 'flex',

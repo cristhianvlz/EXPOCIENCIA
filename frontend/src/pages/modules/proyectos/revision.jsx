@@ -5,13 +5,13 @@ import {
   IconButton, Dialog, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Chip, FormControl, InputLabel, Select, MenuItem,
   Typography, Divider, Avatar, Card, CardActionArea, Tabs, Tab,
-  ToggleButton, ToggleButtonGroup, Stack, Pagination, InputAdornment
+  ToggleButton, ToggleButtonGroup, Stack, Pagination, InputAdornment, Tooltip
 } from '@mui/material';
 import {
   EyeOutlined, TableOutlined, AppstoreOutlined, UserOutlined, TeamOutlined,
   FileProtectOutlined, InfoCircleOutlined, BankOutlined, FilePdfOutlined,
   CalendarOutlined, DownloadOutlined, SearchOutlined, LockOutlined,
-  ExclamationCircleOutlined, CheckCircleOutlined
+  ExclamationCircleOutlined, CheckCircleOutlined, ClearOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -408,6 +408,17 @@ export default function RevisionPage() {
               ))}
             </Select>
           </FormControl>
+          {(searchTitulo || filtroOferta || filtroEstado) && (
+            <Tooltip title="Limpiar Filtros">
+              <IconButton
+                onClick={() => { setSearchTitulo(''); setFiltroOferta(''); setFiltroEstado(''); setPage(0); }}
+                color="secondary"
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}
+              >
+                <ClearOutlined />
+              </IconButton>
+            </Tooltip>
+          )}
           <ToggleButtonGroup value={view} exclusive size="small"
             onChange={(_, v) => v && setView(v)}>
             <ToggleButton value="table" title="Tabla"><TableOutlined /></ToggleButton>

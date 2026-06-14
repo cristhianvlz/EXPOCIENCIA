@@ -8,7 +8,8 @@ import {
 import { 
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined,
   CalendarOutlined, ClockCircleOutlined, TeamOutlined, PushpinOutlined, TrophyOutlined, ScheduleOutlined,
-  StopOutlined, RedoOutlined, LeftOutlined, RightOutlined
+  StopOutlined, RedoOutlined, LeftOutlined, RightOutlined,
+  ClearOutlined, FilterOutlined
 } from '@ant-design/icons';
 import { Tooltip } from '@mui/material';
 import MainCard from 'components/MainCard';
@@ -171,6 +172,8 @@ export default function CronogramaPage() {
   // Paginación
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+
+  const [filterEvento, setFilterEvento] = useState('Todos');
 
   const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: null, type: 'error' });
   const [confirming, setConfirming] = useState(false);
@@ -356,7 +359,7 @@ export default function CronogramaPage() {
   return (
     <MainCard title="Cronograma y Actividades" secondary={tabActions[tab]}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(0); }}>
+        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(0); setFilterEvento('Todos'); }}>
           <Tab label="Cronograma" />
           <Tab label="Actividades" />
           <Tab label="Grupos" />
@@ -382,8 +385,14 @@ export default function CronogramaPage() {
               return { label: 'Activo', color: 'success' };
             };
 
+            // Filtro por evento
+            const cronogramasFiltrados = cronogramas.filter(c => {
+               if (filterEvento === 'Todos') return true;
+               return c.evento?.idEvento === filterEvento;
+            });
+
             // Agrupar por evento
-            const gruposMap = cronogramas.reduce((acc, c) => {
+            const gruposMap = cronogramasFiltrados.reduce((acc, c) => {
               const key = c.evento?.idEvento || 'sin-evento';
               if (!acc[key]) acc[key] = { evento: c.evento, items: [] };
               acc[key].items.push(c);
@@ -402,16 +411,57 @@ export default function CronogramaPage() {
               g.items.sort((a, b) => parseInt(a.idCronograma) - parseInt(b.idCronograma));
             });
 
-            if (eventGroups.length === 0) {
-              return (
-                <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-                  No hay entradas en el cronograma.
-                </Box>
-              );
-            }
-
             return (
               <Box>
+                {/* ── Barra de Filtros ── */}
+                <Box sx={{
+                  mb: 3, p: 2,
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider'
+                }}>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={4}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Evento</InputLabel>
+                        <Select
+                          value={filterEvento}
+                          label="Evento"
+                          onChange={(e) => setFilterEvento(e.target.value)}
+                          sx={{ bgcolor: 'background.paper' }}
+                          startAdornment={<FilterOutlined style={{ color: '#bfbfbf', marginRight: 8 }} />}
+                        >
+                          <MenuItem value="Todos">Todos los Eventos</MenuItem>
+                          {eventos.map(ev => <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} (v{ev.version} - {ev.gestion})</MenuItem>)}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Tooltip title="Limpiar Filtros">
+                        <IconButton 
+                          onClick={() => setFilterEvento('Todos')} 
+                          color="secondary" 
+                          sx={{ 
+                            border: '1px solid', 
+                            borderColor: 'divider', 
+                            borderRadius: '8px',
+                            visibility: filterEvento !== 'Todos' ? 'visible' : 'hidden'
+                          }}
+                        >
+                          <ClearOutlined />
+                        </IconButton>
+                      </Tooltip>
+                    </Grid>
+                  </Grid>
+                </Box>
+
+                {eventGroups.length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                    No hay entradas en el cronograma.
+                  </Box>
+                )}
+
                 {eventGroups.map((grupo) => {
                   const key = grupo.evento?.idEvento || 'sin-evento';
                   const isOpen = expandedGroups.has(key);

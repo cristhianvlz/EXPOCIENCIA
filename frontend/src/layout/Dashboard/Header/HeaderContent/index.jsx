@@ -8,7 +8,6 @@ import { useColorScheme } from '@mui/material/styles';
 // project imports
 import Search from './Search';
 import Profile from './Profile';
-import Notification from './Notification';
 import MobileSection from './MobileSection';
 
 // project import
@@ -35,7 +34,6 @@ export default function HeaderContent() {
         {mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
       </IconButton>
 
-      <Notification />
       {!downLG && <Profile />}
       {downLG && <MobileSection />}
     </>

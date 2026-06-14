@@ -26,16 +26,6 @@ const modules = {
       ]
     },
     {
-      id: 'academico',
-      title: 'Módulo Académico',
-      type: 'collapse',
-      icon: icons.BookOutlined,
-      children: [
-        { id: 'catalogos-base',     title: 'Catálogos Base',     type: 'item', url: '/academico/facultades', permission: 'academico.facultades' },
-        { id: 'ofertas-academicas', title: 'Ofertas Académicas', type: 'item', url: '/academico/ofertas',    permission: 'academico.ofertas' }
-      ]
-    },
-    {
       id: 'eventos',
       title: 'Módulo de Eventos',
       type: 'collapse',
@@ -44,6 +34,16 @@ const modules = {
         { id: 'gestion-eventos', title: 'Gestión de Eventos',      type: 'item', url: '/eventos/gestion',    permission: 'eventos.gestion' },
         { id: 'cronograma',      title: 'Cronograma y Actividades', type: 'item', url: '/eventos/cronograma', permission: 'eventos.cronograma' },
         { id: 'membretes',       title: 'Membretes y Firmas',       type: 'item', url: '/eventos/membretes',  permission: 'eventos.membretes' }
+      ]
+    },
+    {
+      id: 'academico',
+      title: 'Módulo Académico',
+      type: 'collapse',
+      icon: icons.BookOutlined,
+      children: [
+        { id: 'catalogos-base',     title: 'Catálogos Base',     type: 'item', url: '/academico/facultades', permission: 'academico.facultades' },
+        { id: 'ofertas-academicas', title: 'Ofertas Académicas', type: 'item', url: '/academico/ofertas',    permission: 'academico.ofertas' }
       ]
     },
     {

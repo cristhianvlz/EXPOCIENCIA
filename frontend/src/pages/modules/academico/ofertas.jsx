@@ -5,12 +5,12 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Switch,
   FormControlLabel, Snackbar, Alert, CircularProgress, Tabs, Tab, Chip,
   FormControl, InputLabel, Select, MenuItem, Stepper, Step, StepLabel,
-  Typography, Divider, Avatar, Pagination, Grid
+  Typography, Divider, Avatar, Pagination, Grid, Tooltip
 } from '@mui/material';
 import {
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined,
   SolutionOutlined, IdcardOutlined, CheckCircleOutlined,
-  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined
+  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined, ClearOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -243,6 +243,14 @@ export default function OfertasPage() {
 
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
+
+  // Grupos expandidos (Set de idOferta)
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+  const toggleGroup = (id) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const ofertas          = data?.todasLasOfertas              || [];
   const oecList          = data?.todosLosOfertaEaCarreras     || [];
@@ -689,6 +697,12 @@ export default function OfertasPage() {
     }
   };
 
+  const handleClearFilters = () => {
+    setSearchNombre('');
+    setSearchEstado('Todos');
+    setPage(0);
+  };
+
   const tabActions = [
     <Button key="of" variant="contained" startIcon={<PlusOutlined />} onClick={() => { resetWizard(); setOpenWizard(true); }}>
       Nueva Oferta
@@ -741,6 +755,22 @@ export default function OfertasPage() {
               <MenuItem value="Activo">Activo</MenuItem>
               <MenuItem value="Inactivo">Inactivo</MenuItem>
             </TextField>
+          </Grid>
+          <Grid item xs={12} sm={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Tooltip title="Limpiar Filtros">
+              <IconButton 
+                onClick={handleClearFilters} 
+                color="secondary" 
+                sx={{ 
+                  border: '1px solid', 
+                  borderColor: 'divider', 
+                  borderRadius: '8px',
+                  visibility: (searchNombre || searchEstado !== 'Todos') ? 'visible' : 'hidden'
+                }}
+              >
+                <ClearOutlined />
+              </IconButton>
+            </Tooltip>
           </Grid>
         </Grid>
       </Box>
@@ -820,64 +850,115 @@ export default function OfertasPage() {
           )}
 
           {/* ── Tab 1: Carreras Autorizadas ── */}
-          {tab === 1 && (
-            <>
-            <TableContainer component={Paper} elevation={0}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell width={60}>ID</TableCell>
-                    <TableCell>Oferta</TableCell>
-                    <TableCell>Facultad</TableCell>
-                    <TableCell>Carrera</TableCell>
-                    <TableCell>Plan</TableCell>
-                    <TableCell width={100}>Estado</TableCell>
-                    <TableCell align="right" width={110}>Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {paginatedOec.map(oec => (
-                    <TableRow key={oec.id} hover>
-                      <TableCell>{oec.id}</TableCell>
-                      <TableCell>
-                        <Chip label={oec.oferta?.nombre} size="small" color="primary" variant="outlined" />
-                      </TableCell>
-                      <TableCell>{oec.entidadAcademica?.nombre}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{oec.carrera}</TableCell>
-                      <TableCell>{oec.plan}</TableCell>
-                      <TableCell>
-                        <Chip label={oec.estado ? 'Activo' : 'Inactivo'} color={oec.estado ? 'success' : 'error'} size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                          <IconButton color="primary" size="small" onClick={() => handleOpenOEC(oec)}>
-                            <EditOutlined />
-                          </IconButton>
-                          <IconButton color={oec.estado ? "error" : "success"} size="small" onClick={() => handleToggleEstadoOEC(oec)}>
-                            {oec.estado ? <DeleteOutlined /> : <ReloadOutlined />}
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {oecList.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                        Sin asignaciones registradas.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {filteredOec.length > 0 && (
-              <CustomPagination 
-                count={filteredOec.length} rowsPerPage={rowsPerPage} page={page} 
-                onPageChange={(_, p) => setPage(p)} onRowsPerPageChange={e => { setRowsPerPage(e.target.value); setPage(0); }} 
-              />
-            )}
-            </>
-          )}
+          {tab === 1 && (() => {
+            // Agrupar por oferta
+            const gruposMap = filteredOec.reduce((acc, oec) => {
+              const key = oec.oferta?.idOferta || 'sin-oferta';
+              if (!acc[key]) acc[key] = { oferta: oec.oferta, items: [] };
+              acc[key].items.push(oec);
+              return acc;
+            }, {});
+
+            // Ordenar grupos: ofertas más recientes (mayor idOferta) primero
+            const ofertaGroups = Object.values(gruposMap).sort((a, b) => {
+              const idA = parseInt(a.oferta?.idOferta || 0);
+              const idB = parseInt(b.oferta?.idOferta || 0);
+              return idB - idA;
+            });
+
+            const paginatedGroups = ofertaGroups.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+            if (ofertaGroups.length === 0) {
+              return (
+                <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                  Sin asignaciones registradas.
+                </Box>
+              );
+            }
+
+            return (
+              <Box>
+                {paginatedGroups.map((grupo) => {
+                  const key = grupo.oferta?.idOferta || 'sin-oferta';
+                  const isOpen = expandedGroups.has(key);
+                  return (
+                    <Box key={key} sx={{ mb: 2 }}>
+                      <Box sx={{
+                        px: 2, py: 1.25, borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+                        background: 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+                        border: '1px solid rgba(24,144,255,0.25)',
+                        display: 'flex', alignItems: 'center', gap: 1.5,
+                        cursor: 'default',
+                      }}>
+                        <SolutionOutlined style={{ color: '#1890ff', fontSize: 17 }} />
+                        <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
+                          {grupo.oferta ? grupo.oferta.nombre : 'Sin oferta asignada'}
+                        </Typography>
+                        <Chip
+                          label={
+                            isOpen
+                              ? `▲ ${grupo.items.length} ${grupo.items.length === 1 ? 'carrera' : 'carreras'}`
+                              : `▼ ${grupo.items.length} ${grupo.items.length === 1 ? 'carrera' : 'carreras'}`
+                          }
+                          size="small" color="primary"
+                          variant={isOpen ? 'filled' : 'outlined'}
+                          onClick={() => toggleGroup(key)}
+                          sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                        />
+                      </Box>
+
+                      {isOpen && (
+                        <TableContainer component={Paper} elevation={0}
+                          sx={{ border: '1px solid rgba(24,144,255,0.25)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell width={60}>ID</TableCell>
+                                <TableCell>Facultad</TableCell>
+                                <TableCell>Carrera</TableCell>
+                                <TableCell>Plan</TableCell>
+                                <TableCell width={100}>Estado</TableCell>
+                                <TableCell align="right" width={110}>Acciones</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {grupo.items.map(oec => (
+                                <TableRow key={oec.id} hover>
+                                  <TableCell>{oec.id}</TableCell>
+                                  <TableCell>{oec.entidadAcademica?.nombre}</TableCell>
+                                  <TableCell sx={{ fontWeight: 500 }}>{oec.carrera}</TableCell>
+                                  <TableCell>{oec.plan}</TableCell>
+                                  <TableCell>
+                                    <Chip label={oec.estado ? 'Activo' : 'Inactivo'} color={oec.estado ? 'success' : 'error'} size="small" variant="outlined" />
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                      <IconButton color="primary" size="small" onClick={() => handleOpenOEC(oec)}>
+                                        <EditOutlined />
+                                      </IconButton>
+                                      <IconButton color={oec.estado ? "error" : "success"} size="small" onClick={() => handleToggleEstadoOEC(oec)}>
+                                        {oec.estado ? <DeleteOutlined /> : <ReloadOutlined />}
+                                      </IconButton>
+                                    </Box>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Box>
+                  );
+                })}
+                {ofertaGroups.length > 0 && (
+                  <CustomPagination 
+                    count={ofertaGroups.length} rowsPerPage={rowsPerPage} page={page} 
+                    onPageChange={(_, p) => setPage(p)} onRowsPerPageChange={e => { setRowsPerPage(e.target.value); setPage(0); }} 
+                  />
+                )}
+              </Box>
+            );
+          })()}
         </>
       )}
 

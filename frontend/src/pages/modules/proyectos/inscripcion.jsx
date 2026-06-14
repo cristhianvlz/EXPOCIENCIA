@@ -4,7 +4,8 @@ import {
   Box, Button, Stepper, Step, StepLabel, Typography, CircularProgress,
   Alert, FormControl, InputLabel, Select, MenuItem, TextField, Chip,
   Divider, IconButton, Paper, Snackbar, FormControlLabel, Switch,
-  ToggleButton, ToggleButtonGroup
+  ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent,
+  DialogActions, List, ListItem, ListItemText, ListItemIcon, Autocomplete, Avatar
 } from '@mui/material';
 import {
   PlusOutlined, DeleteOutlined, CheckCircleOutlined, ProjectOutlined,
@@ -180,6 +181,7 @@ export default function InscripcionPage() {
   const [activeStep, setActiveStep]   = useState(0);
   const [saving, setSaving]           = useState(false);
   const [done, setDone]               = useState(false);
+  const [openConfirm, setOpenConfirm] = useState(false);
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
 
   const [selectedOec, setSelectedOec] = useState('');
@@ -197,17 +199,13 @@ export default function InscripcionPage() {
   const [crearTutor]          = useMutation(CREAR_TUTOR);
   const [editarTutor]         = useMutation(EDITAR_TUTOR);
 
-  const ofertas            = (data?.todosLosOfertaEaCarreras || []).filter(o => o.estado);
   const todosParticipantes = data?.todosLosParticipantes || [];
   const todosTutores       = data?.todosLosTutores       || [];
   const cronogramas        = data?.todosLosCronogramas   || [];
 
-  // Determina si el período de inscripción está activo para la oferta seleccionada
-  const inscripcionActiva = (() => {
-    if (!selectedOec) return null; // sin oferta seleccionada: indeterminado
-    const oec = ofertas.find(o => o.id === selectedOec);
+  const isOfertaActiva = (oec) => {
     const idEvento = oec?.oferta?.categoriaEvento?.evento?.idEvento;
-    if (!idEvento) return null;
+    if (!idEvento) return false;
     const now = new Date();
     return cronogramas.some(c =>
       c.actividad?.nombreActividad?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('inscripcion') &&
@@ -215,28 +213,42 @@ export default function InscripcionPage() {
       new Date(c.fechaInicio) <= now &&
       new Date(c.fechaFin) >= now
     );
-  })();
+  };
+
+  const ofertas = (data?.todosLosOfertaEaCarreras || []).filter(o => o.estado && isOfertaActiva(o));
+
+  // Ya no necesitamos validar dinámicamente el mensaje de error de fecha,
+  // porque el select solo muestra ofertas con período de inscripción activo.
+  const inscripcionActiva = selectedOec ? true : null;
 
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
 
+  // ── Validation Helpers ────────────────────────────────────────────────────
+  const isCiRegistradoParticipante = (ci) => todosParticipantes.some(tp => tp.ci === ci);
+  const isCodRegistradoParticipante = (cod) => todosParticipantes.some(tp => tp.codigoEspecifico === cod);
+
+  const isCiRegistradoTutor = (ci) => todosTutores.some(tt => tt.ci === ci);
+  const isCodRegistradoTutor = (cod) => todosTutores.some(tt => tt.codEmpleado === cod);
+
   // ── Validation ────────────────────────────────────────────────────────────
   const stepValid = () => {
     switch (activeStep) {
-      // Bloquear avance si el período de inscripción está explícitamente cerrado
       case 0: return !!selectedOec && inscripcionActiva !== false;
       case 1: return !!titulo.trim() && !!archivoFile;
       case 2: return participantes.length > 0 && participantes.every(p =>
         p.modo === 'existente'
           ? !!p.idParticipante
           : p.nombre.trim() && p.apellido.trim() && p.ci.trim() &&
-            p.celular.trim() && p.codigoEspecifico.trim() && p.email.trim()
+            p.celular.trim() && p.codigoEspecifico.trim() && p.email.trim() &&
+            !isCiRegistradoParticipante(p.ci.trim()) && !isCodRegistradoParticipante(p.codigoEspecifico.trim())
       );
       case 3: return tutores.length > 0 && tutores.every(t =>
         t.modo === 'existente'
           ? !!t.idTutor
           : t.nombre.trim() && t.apellido.trim() && t.ci.trim() &&
-            t.celular.trim() && t.codEmpleado.trim() && t.email.trim() && t.direccion.trim()
+            t.celular.trim() && t.codEmpleado.trim() && t.email.trim() && t.direccion.trim() &&
+            !isCiRegistradoTutor(t.ci.trim()) && !isCodRegistradoTutor(t.codEmpleado.trim())
       );
       default: return false;
     }
@@ -349,6 +361,10 @@ export default function InscripcionPage() {
       </Typography>
       {loading ? <CircularProgress /> : error ? (
         <Alert severity="error">Error al cargar las ofertas disponibles.</Alert>
+      ) : ofertas.length === 0 ? (
+        <Alert severity="warning" sx={{ borderRadius: 2 }}>
+          <strong>No hay ofertas disponibles en este momento.</strong> Actualmente no existen eventos con su período de inscripción abierto. Por favor, intenta más adelante.
+        </Alert>
       ) : (
         <FormControl fullWidth required>
           <InputLabel>Oferta Académica</InputLabel>
@@ -451,36 +467,25 @@ export default function InscripcionPage() {
 
         {p.modo === 'existente' ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <FormControl fullWidth required size="small">
-              <InputLabel>Seleccionar participante</InputLabel>
-              <Select
-                value={p.idParticipante}
-                label="Seleccionar participante"
-                onChange={e => updateParticipante(i, 'idParticipante', e.target.value)}
-              >
-                {disponibles.map(tp => (
-                  <MenuItem key={tp.idParticipante} value={tp.idParticipante}>
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {tp.nombre} {tp.apellido}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        CI: {tp.ci} · Cód: {tp.codigoEspecifico}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {p.idParticipante && (() => {
-              const found = todosParticipantes.find(tp => tp.idParticipante === p.idParticipante);
-              return found ? (
-                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
-                  <Typography variant="body2" fontWeight={600}>{found.nombre} {found.apellido}</Typography>
-                  <Typography variant="caption" color="text.secondary">CI: {found.ci} · Cel: {found.celular}</Typography>
-                </Paper>
-              ) : null;
-            })()}
+            <Autocomplete
+              options={disponibles}
+              getOptionLabel={(option) => `${option.nombre} ${option.apellido} (CI: ${option.ci} - Cód: ${option.codigoEspecifico})`}
+              value={disponibles.find(x => x.idParticipante === p.idParticipante) || null}
+              onChange={(_, newValue) => updateParticipante(i, 'idParticipante', newValue ? newValue.idParticipante : '')}
+              renderInput={(params) => <TextField {...params} label="Buscar Participante" size="small" required />}
+              renderOption={(props, option) => (
+                <li {...props} key={option.idParticipante}>
+                  <Box>
+                    <Typography variant="body2" fontWeight={500}>
+                      {option.nombre} {option.apellido}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      CI: {option.ci} · Cód: {option.codigoEspecifico}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+            />
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -489,6 +494,8 @@ export default function InscripcionPage() {
             <TextField label="Apellido" value={p.apellido} required size="small"
               onChange={e => updateParticipante(i, 'apellido', e.target.value)} />
             <TextField label="CI" value={p.ci} required size="small"
+              error={!!p.ci && isCiRegistradoParticipante(p.ci.trim())}
+              helperText={p.ci && isCiRegistradoParticipante(p.ci.trim()) ? "Este CI ya está registrado. Búscalo en 'Existente'." : ""}
               onChange={e => updateParticipante(i, 'ci', e.target.value)} />
             <FormControl size="small" required>
               <InputLabel>Expedición</InputLabel>
@@ -500,6 +507,8 @@ export default function InscripcionPage() {
             <TextField label="Celular" value={p.celular} required size="small"
               onChange={e => updateParticipante(i, 'celular', e.target.value)} />
             <TextField label="Código Específico" value={p.codigoEspecifico} required size="small"
+              error={!!p.codigoEspecifico && isCodRegistradoParticipante(p.codigoEspecifico.trim())}
+              helperText={p.codigoEspecifico && isCodRegistradoParticipante(p.codigoEspecifico.trim()) ? "Este código ya está registrado." : ""}
               onChange={e => updateParticipante(i, 'codigoEspecifico', e.target.value)} />
             <Box sx={{ gridColumn: '1 / -1' }}>
               <TextField label="Correo Electrónico" value={p.email} required size="small"
@@ -581,38 +590,25 @@ export default function InscripcionPage() {
 
         {t.modo === 'existente' ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <FormControl fullWidth required size="small">
-              <InputLabel>Seleccionar tutor</InputLabel>
-              <Select
-                value={t.idTutor}
-                label="Seleccionar tutor"
-                onChange={e => updateTutor(i, 'idTutor', e.target.value)}
-              >
-                {disponibles.map(tt => (
-                  <MenuItem key={tt.idTutor} value={tt.idTutor}>
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {tt.nombre} {tt.apellido}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        CI: {tt.ci} · Cód: {tt.codEmpleado}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {t.idTutor && (() => {
-              const found = todosTutores.find(tt => tt.idTutor === t.idTutor);
-              return found ? (
-                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
-                  <Typography variant="body2" fontWeight={600}>{found.nombre} {found.apellido}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    CI: {found.ci} · Cód. Empleado: {found.codEmpleado} · Cel: {found.celular}
-                  </Typography>
-                </Paper>
-              ) : null;
-            })()}
+            <Autocomplete
+              options={disponibles}
+              getOptionLabel={(option) => `${option.nombre} ${option.apellido} (CI: ${option.ci} - Cód: ${option.codEmpleado})`}
+              value={disponibles.find(x => x.idTutor === t.idTutor) || null}
+              onChange={(_, newValue) => updateTutor(i, 'idTutor', newValue ? newValue.idTutor : '')}
+              renderInput={(params) => <TextField {...params} label="Buscar Tutor" size="small" required />}
+              renderOption={(props, option) => (
+                <li {...props} key={option.idTutor}>
+                  <Box>
+                    <Typography variant="body2" fontWeight={500}>
+                      {option.nombre} {option.apellido}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      CI: {option.ci} · Cód: {option.codEmpleado}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+            />
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -621,6 +617,8 @@ export default function InscripcionPage() {
             <TextField label="Apellido" value={t.apellido} required size="small"
               onChange={e => updateTutor(i, 'apellido', e.target.value)} />
             <TextField label="CI" value={t.ci} required size="small"
+              error={!!t.ci && isCiRegistradoTutor(t.ci.trim())}
+              helperText={t.ci && isCiRegistradoTutor(t.ci.trim()) ? "Este CI ya está registrado. Búscalo en 'Existente'." : ""}
               onChange={e => updateTutor(i, 'ci', e.target.value)} />
             <FormControl size="small" required>
               <InputLabel>Expedición</InputLabel>
@@ -630,6 +628,8 @@ export default function InscripcionPage() {
               </Select>
             </FormControl>
             <TextField label="Código de Empleado" value={t.codEmpleado} required size="small"
+              error={!!t.codEmpleado && isCodRegistradoTutor(t.codEmpleado.trim())}
+              helperText={t.codEmpleado && isCodRegistradoTutor(t.codEmpleado.trim()) ? "Este código ya está registrado." : ""}
               onChange={e => updateTutor(i, 'codEmpleado', e.target.value)} />
             <TextField label="Celular" value={t.celular} required size="small"
               onChange={e => updateTutor(i, 'celular', e.target.value)} />
@@ -719,13 +719,152 @@ export default function InscripcionPage() {
           <Button
             variant="contained" color="success"
             disabled={!stepValid() || saving}
-            onClick={handleSubmit}
+            onClick={() => setOpenConfirm(true)}
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <ProjectOutlined />}
           >
             {saving ? 'Inscribiendo...' : 'Inscribir Proyecto'}
           </Button>
         )}
       </Box>
+
+      {/* ── Confirm Dialog ── */}
+      <Dialog open={openConfirm} onClose={() => setOpenConfirm(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' } }}>
+        <DialogTitle sx={{ 
+          bgcolor: 'primary.lighter', 
+          display: 'flex', alignItems: 'center', gap: 1.5,
+          borderBottom: '1px solid', borderColor: 'divider', pb: 2, pt: 2.5
+        }}>
+          <Box sx={{ 
+            width: 40, height: 40, borderRadius: 2, bgcolor: 'primary.main', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' 
+          }}>
+            <ProjectOutlined style={{ fontSize: 20 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" fontWeight={700}>Confirmar Inscripción</Typography>
+            <Typography variant="caption" color="text.secondary">Verifica que todos los datos sean correctos</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, pt: 3, bgcolor: 'background.default' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
+            
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <CheckCircleOutlined style={{ color: '#1890ff', fontSize: 18 }} />
+                <Typography variant="subtitle2" fontWeight={700}>Oferta Académica y Proyecto</Typography>
+              </Box>
+              <Divider sx={{ mb: 1.5 }} />
+              
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Oferta Académica</Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5 }}>
+                {ofertas.find(o => o.id === selectedOec)?.oferta?.nombre || '-'}
+              </Typography>
+
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Título del Proyecto</Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5 }}>{titulo || 'Sin título'}</Typography>
+              
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Archivo Adjunto</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                <FileTextOutlined style={{ color: archivoFile ? '#52c41a' : '#bfbfbf' }} />
+                <Typography variant="body2" color={archivoFile ? 'text.primary' : 'text.disabled'}>
+                  {archivoFile ? archivoFile.name : 'No se adjuntó ningún archivo'}
+                </Typography>
+              </Box>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <UserOutlined style={{ color: '#1890ff', fontSize: 18 }} />
+                  <Typography variant="subtitle2" fontWeight={700}>Integrantes</Typography>
+                </Box>
+                <Chip label={`${participantes.length} registrado(s)`} size="small" color="primary" variant="outlined" />
+              </Box>
+              <Divider sx={{ mb: 1.5 }} />
+              <List dense disablePadding>
+                {participantes.map((p, i) => {
+                  let nombreF = '';
+                  let ciF = '';
+                  if (p.modo === 'existente') {
+                    const fp = todosParticipantes.find(tp => tp.idParticipante === p.idParticipante);
+                    nombreF = fp ? `${fp.nombre} ${fp.apellido}` : 'Desconocido';
+                    ciF = fp ? fp.ci : '-';
+                  } else {
+                    nombreF = `${p.nombre} ${p.apellido}`;
+                    ciF = p.ci;
+                  }
+                  return (
+                    <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 40 }}>
+                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.lighter', color: 'primary.main', fontSize: 13, fontWeight: 600 }}>
+                          {i + 1}
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={<Typography variant="body2" fontWeight={600}>{nombreF || 'Sin nombre'}</Typography>}
+                        secondary={<Typography variant="caption" color="text.secondary">CI: {ciF || '-'}</Typography>}
+                      />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <UserAddOutlined style={{ color: '#52c41a', fontSize: 18 }} />
+                  <Typography variant="subtitle2" fontWeight={700}>Tutores</Typography>
+                </Box>
+                <Chip label={`${tutores.length} asignado(s)`} size="small" color="success" variant="outlined" />
+              </Box>
+              <Divider sx={{ mb: 1.5 }} />
+              <List dense disablePadding>
+                {tutores.map((t, i) => {
+                  let nombreF = '';
+                  let ciF = '';
+                  if (t.modo === 'existente') {
+                    const ft = todosTutores.find(tt => tt.idTutor === t.idTutor);
+                    nombreF = ft ? `${ft.nombre} ${ft.apellido}` : 'Desconocido';
+                    ciF = ft ? ft.ci : '-';
+                  } else {
+                    nombreF = `${t.nombre} ${t.apellido}`;
+                    ciF = t.ci;
+                  }
+                  return (
+                    <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 40 }}>
+                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'success.lighter', color: 'success.main', fontSize: 13, fontWeight: 600 }}>
+                          {i + 1}
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={<Typography variant="body2" fontWeight={600}>{nombreF || 'Sin nombre'}</Typography>}
+                        secondary={<Typography variant="caption" color="text.secondary">CI: {ciF || '-'}</Typography>}
+                      />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            </Paper>
+
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setOpenConfirm(false)} color="inherit" disabled={saving}>
+            Revisar de nuevo
+          </Button>
+          <Button 
+            variant="contained" 
+            color="success" 
+            onClick={() => { setOpenConfirm(false); handleSubmit(); }}
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <ProjectOutlined />}
+          >
+            {saving ? 'Inscribiendo...' : 'Sí, confirmar e inscribir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={notification.open} autoHideDuration={6000}

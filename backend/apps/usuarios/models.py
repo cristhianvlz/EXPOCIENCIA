@@ -77,6 +77,10 @@ class Usuario(AbstractUser):
     totp_secret = models.CharField(max_length=64, blank=True, null=True)
     is_2fa_enabled = models.BooleanField(default=False)
 
+    # Bloqueo por intentos fallidos
+    failed_login_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
     rol = models.ForeignKey(
         Rol,
         on_delete=models.SET_NULL,

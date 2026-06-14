@@ -45,6 +45,7 @@ class RolType(DjangoObjectType):
 
 class UsuarioType(DjangoObjectType):
     estado = graphene.Boolean()
+    locked_until = graphene.String()
     participante = graphene.Field('apps.usuarios.schema.ParticipanteType')
     tutor = graphene.Field('apps.usuarios.schema.TutorType')
     tribunal = graphene.Field('apps.usuarios.schema.TribunalType')
@@ -59,6 +60,9 @@ class UsuarioType(DjangoObjectType):
 
     def resolve_estado(root, info):
         return root.is_active
+
+    def resolve_locked_until(root, info):
+        return root.locked_until.isoformat() if root.locked_until else None
 
     def resolve_participante(root, info):
         try:
@@ -229,6 +233,19 @@ class Query(graphene.ObjectType):
 # Mutations
 # ─────────────────────────────────────────────────────────────────────────────
 
+import re
+
+def validar_password(password):
+    if len(password) < 8:
+        return False, "La contraseña debe tener al menos 8 caracteres."
+    if not re.search(r'[A-Z]', password):
+        return False, "La contraseña debe contener al menos una letra mayúscula."
+    if not re.search(r'[a-z]', password):
+        return False, "La contraseña debe contener al menos una letra minúscula."
+    if not re.search(r'[0-9]', password):
+        return False, "La contraseña debe contener al menos un número."
+    return True, ""
+
 class CrearUsuario(graphene.Mutation):
 
     class Arguments:
@@ -255,6 +272,10 @@ class CrearUsuario(graphene.Mutation):
                 usuario=None, ok=False,
                 error="El correo electrónico ya está registrado.",
             )
+
+        valid, msg = validar_password(password)
+        if not valid:
+            return CrearUsuario(usuario=None, ok=False, error=msg) # type: ignore
 
         # create_user() aplica set_password() internamente: nunca texto plano
         usuario = Usuario.objects.create_user(
@@ -304,6 +325,9 @@ class EditarUsuario(graphene.Mutation):
             usuario.email = email
 
         if password:
+            valid, msg = validar_password(password)
+            if not valid:
+                return EditarUsuario(usuario=None, ok=False, error=msg) # type: ignore
             usuario.set_password(password)
 
         if estado is not None:
@@ -332,6 +356,25 @@ class EliminarUsuario(graphene.Mutation):
             return EliminarUsuario(ok=False, error="El usuario no existe.") # type: ignore
 
 
+class DesbloquearUsuario(graphene.Mutation):
+    class Arguments:
+        id_usuario = graphene.ID(required=True)
+
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_usuario):
+        try:
+            usuario = Usuario.objects.get(pk=id_usuario)
+            usuario.failed_login_attempts = 0
+            usuario.locked_until = None
+            usuario.save(update_fields=['failed_login_attempts', 'locked_until'])
+            return DesbloquearUsuario(ok=True, error=None) # type: ignore
+        except Usuario.DoesNotExist:
+            return DesbloquearUsuario(ok=False, error="El usuario no existe.") # type: ignore
+
+
 class CrearTribunal(graphene.Mutation):
     class Arguments:
         id_usuario = graphene.ID(required=True)
@@ -355,8 +398,16 @@ class CrearTribunal(graphene.Mutation):
         except Usuario.DoesNotExist:
             return CrearTribunal(tribunal=None, ok=False, error="El usuario no existe.") # type: ignore
 
+        # --- Flujo 1: Asegurar y asignar rol base ---
+        rol_obj, _ = Rol.objects.get_or_create(nombre='Tribunal')
+        if usuario.rol != rol_obj:
+            usuario.rol = rol_obj
+            usuario.save(update_fields=['rol'])
+        # ---------------------------------------------
+
         if Tribunal.objects.filter(ci=ci).exists():
             return CrearTribunal(tribunal=None, ok=False, error="El CI ya está registrado en otro tribunal.") # type: ignore
+
 
         tribunal = Tribunal.objects.create(
             usuario=usuario,
@@ -466,6 +517,13 @@ class CrearTutor(graphene.Mutation):
             usuario = Usuario.objects.get(pk=id_usuario)
         except Usuario.DoesNotExist:
             return CrearTutor(tutor=None, ok=False, error="El usuario no existe.") # type: ignore
+
+        # --- Flujo 1: Asegurar y asignar rol base ---
+        rol_obj, _ = Rol.objects.get_or_create(nombre='Tutor')
+        if usuario.rol != rol_obj:
+            usuario.rol = rol_obj
+            usuario.save(update_fields=['rol'])
+        # ---------------------------------------------
 
         if Tutor.objects.filter(ci=ci).exists():
             return CrearTutor(tutor=None, ok=False, error="El CI ya está registrado en otro tutor.") # type: ignore
@@ -588,6 +646,13 @@ class CrearParticipante(graphene.Mutation):
             usuario = Usuario.objects.get(pk=id_usuario)
         except Usuario.DoesNotExist:
             return CrearParticipante(participante=None, ok=False, error="El usuario no existe.") # type: ignore
+
+        # --- Flujo 1: Asegurar y asignar rol base ---
+        rol_obj, _ = Rol.objects.get_or_create(nombre='Participante')
+        if usuario.rol != rol_obj:
+            usuario.rol = rol_obj
+            usuario.save(update_fields=['rol'])
+        # ---------------------------------------------
 
         if Participante.objects.filter(ci=ci).exists():
             return CrearParticipante(participante=None, ok=False, error="El CI ya está registrado en otro participante.") # type: ignore
@@ -1036,6 +1101,8 @@ class LoginConTotp(graphene.Mutation):
     def mutate(root, info, username, password):
         from graphql_jwt.shortcuts import get_token
         from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        import datetime
         User = get_user_model()
         
         try:
@@ -1043,9 +1110,25 @@ class LoginConTotp(graphene.Mutation):
         except User.DoesNotExist:
             return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Credenciales incorrectas.")  # type: ignore
 
+        if user.locked_until and user.locked_until > timezone.now():
+            minutes_left = int((user.locked_until - timezone.now()).total_seconds() / 60) + 1
+            return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error=f"Cuenta bloqueada por múltiples intentos fallidos. Intente de nuevo en {minutes_left} minutos o contacte al administrador.")  # type: ignore
+
         if not user.check_password(password):
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= 5:
+                user.locked_until = timezone.now() + datetime.timedelta(minutes=15)
+            user.save(update_fields=['failed_login_attempts', 'locked_until'])
+            
+            if user.failed_login_attempts >= 5:
+                return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Demasiados intentos fallidos. Cuenta bloqueada por 15 minutos.")  # type: ignore
             return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Credenciales incorrectas.")  # type: ignore
             
+        if user.failed_login_attempts > 0 or user.locked_until:
+            user.failed_login_attempts = 0
+            user.locked_until = None
+            user.save(update_fields=['failed_login_attempts', 'locked_until'])
+
         if not user.is_active:
             return LoginConTotp(token=None, requires2fa=False, needs_setup=False, ok=False, error="Cuenta inactiva, apersónese con el administrador.")  # type: ignore
         if user.is_2fa_enabled:
@@ -1370,6 +1453,9 @@ class Mutation(graphene.ObjectType):
     crear_personal = CrearPersonal.Field()
     editar_personal = EditarPersonal.Field()
     eliminar_personal = EliminarPersonal.Field()
+
+    desbloquear_usuario = DesbloquearUsuario.Field()
+    login_con_totp = LoginConTotp.Field()
 
     cambiar_password_propio = CambiarPasswordPropio.Field()
     login_tribunal_movil = LoginTribunalMovil.Field()
