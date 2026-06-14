@@ -56,7 +56,7 @@ function calcularNotaFinal(detalles) {
 }
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
-function SummaryCards({ actas }) {
+function SummaryCards({ actas, activeFilter, onFilter }) {
   const total = actas.length;
   const completas = actas.filter(a => {
     const detalles = a.detallesEvaluacion || [];
@@ -68,25 +68,70 @@ function SummaryCards({ actas }) {
     : '—';
 
   const cards = [
-    { icon: <FileTextOutlined style={{ fontSize: 28, color: '#1890ff' }} />, label: 'Total Actas', value: total, color: 'primary.lighter' },
-    { icon: <CheckCircleOutlined style={{ fontSize: 28, color: '#52c41a' }} />, label: 'Evaluadas', value: completas, color: 'success.lighter' },
-    { icon: <ClockCircleOutlined style={{ fontSize: 28, color: '#faad14' }} />, label: 'Pendientes', value: pendientes, color: 'warning.lighter' },
-    { icon: <TrophyOutlined style={{ fontSize: 28, color: '#722ed1' }} />, label: 'Promedio General', value: notaPromedio, color: 'secondary.lighter' },
+    {
+      icon: <FileTextOutlined style={{ fontSize: 28, color: '#1890ff' }} />,
+      label: 'Total Actas', value: total,
+      bgColor: 'primary.lighter', accentColor: '#1890ff',
+      filtro: null, isActive: activeFilter === null,
+      tooltip: 'Mostrar todas las actas',
+    },
+    {
+      icon: <CheckCircleOutlined style={{ fontSize: 28, color: '#52c41a' }} />,
+      label: 'Evaluadas', value: completas,
+      bgColor: 'success.lighter', accentColor: '#52c41a',
+      filtro: 'evaluadas', isActive: activeFilter === 'evaluadas',
+      tooltip: 'Filtrar actas completamente evaluadas',
+    },
+    {
+      icon: <ClockCircleOutlined style={{ fontSize: 28, color: '#faad14' }} />,
+      label: 'Pendientes', value: pendientes,
+      bgColor: 'warning.lighter', accentColor: '#faad14',
+      filtro: 'pendientes', isActive: activeFilter === 'pendientes',
+      tooltip: 'Filtrar actas con evaluaciones pendientes',
+    },
+    {
+      icon: <TrophyOutlined style={{ fontSize: 28, color: '#722ed1' }} />,
+      label: 'Promedio General', value: notaPromedio,
+      bgColor: 'secondary.lighter', accentColor: '#722ed1',
+      filtro: null, isActive: false,
+      tooltip: 'Promedio de notas finales consolidadas',
+    },
   ];
 
   return (
     <Grid container spacing={2} sx={{ mb: 3 }}>
       {cards.map(c => (
         <Grid item xs={6} sm={3} key={c.label}>
-          <Card variant="outlined" sx={{ bgcolor: c.color }}>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '16px !important' }}>
-              {c.icon}
-              <Box>
-                <Typography variant="h5" fontWeight={700}>{c.value}</Typography>
-                <Typography variant="caption" color="text.secondary">{c.label}</Typography>
-              </Box>
-            </CardContent>
-          </Card>
+          <Tooltip title={c.tooltip} arrow>
+            <Card
+              variant="outlined"
+              onClick={() => onFilter(c.filtro !== null && activeFilter === c.filtro ? null : c.filtro)}
+              sx={{
+                bgcolor: c.bgColor,
+                cursor: 'pointer',
+                border: c.isActive ? `2px solid ${c.accentColor}` : '1px solid transparent',
+                borderColor: c.isActive ? c.accentColor : 'divider',
+                transition: 'all 0.2s ease',
+                boxShadow: c.isActive ? `0 0 0 3px ${c.accentColor}22` : 0,
+                '&:hover': {
+                  transform: 'translateY(-3px)',
+                  boxShadow: `0 6px 20px ${c.accentColor}33`,
+                  borderColor: c.accentColor,
+                },
+              }}
+            >
+              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '16px !important' }}>
+                {c.icon}
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h5" fontWeight={700}>{c.value}</Typography>
+                  <Typography variant="caption" color="text.secondary">{c.label}</Typography>
+                </Box>
+                {c.isActive && c.filtro !== null && (
+                  <CheckCircleOutlined style={{ fontSize: 16, color: c.accentColor }} />
+                )}
+              </CardContent>
+            </Card>
+          </Tooltip>
         </Grid>
       ))}
     </Grid>
@@ -101,6 +146,7 @@ export default function ResultadosNotasPage() {
   const showNotif = (msg, sev = 'success') => setNotif({ open: true, msg, sev });
 
   const actas = data?.todasLasActas || [];
+  const [activeFilter, setActiveFilter] = useState(null);
 
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const toggleGroup = (id) => setExpandedGroups(prev => {
@@ -108,6 +154,19 @@ export default function ResultadosNotasPage() {
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
+
+  const actasFiltradas = (() => {
+    if (!activeFilter) return actas;
+    if (activeFilter === 'evaluadas') return actas.filter(a => {
+      const d = a.detallesEvaluacion || [];
+      return d.length > 0 && d.every(x => (x.puntuacionesCriterio || []).length > 0);
+    });
+    if (activeFilter === 'pendientes') return actas.filter(a => {
+      const d = a.detallesEvaluacion || [];
+      return !(d.length > 0 && d.every(x => (x.puntuacionesCriterio || []).length > 0));
+    });
+    return actas;
+  })();
 
   const handleConsolidar = async (acta) => {
     const detalles = acta.detallesEvaluacion || [];
@@ -126,7 +185,7 @@ export default function ResultadosNotasPage() {
     } catch { showNotif('Error de conexión', 'error'); }
   };
 
-  const actasMap = actas.reduce((acc, a) => {
+  const actasMap = actasFiltradas.reduce((acc, a) => {
     const oferta = a.proyecto?.ofertaEaCarrera?.oferta;
     const key = oferta?.idOferta || 'sin-oferta';
     if (!acc[key]) acc[key] = { oferta, items: [] };
@@ -140,6 +199,11 @@ export default function ResultadosNotasPage() {
     return idB - idA;
   });
 
+  const FILTER_LABELS = {
+    evaluadas: { label: 'Evaluadas', color: '#52c41a' },
+    pendientes: { label: 'Pendientes', color: '#faad14' },
+  };
+
   return (
     <MainCard title="Resultados y Notas">
       {loading ? (
@@ -148,17 +212,48 @@ export default function ResultadosNotasPage() {
         <Alert severity="error">Error al cargar: {error.message}</Alert>
       ) : (
         <>
-          <SummaryCards actas={actas} />
+          <SummaryCards actas={actas} activeFilter={activeFilter} onFilter={setActiveFilter} />
 
-          {ofertaGroups.length === 0 ? (
+          {/* Indicador de filtro activo */}
+          {activeFilter && (
+            <Box sx={{
+              display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, px: 1.5, py: 1,
+              borderRadius: 1.5,
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+              border: '1px dashed', borderColor: FILTER_LABELS[activeFilter]?.color,
+            }}>
+              <Typography variant="body2" color="text.secondary">
+                Mostrando:{' '}
+                <strong style={{ color: FILTER_LABELS[activeFilter]?.color }}>
+                  {FILTER_LABELS[activeFilter]?.label}
+                </strong>
+                {' '}— {actasFiltradas.length} acta{actasFiltradas.length !== 1 ? 's' : ''}
+              </Typography>
+              <Chip
+                label="Ver todas"
+                size="small"
+                variant="outlined"
+                onClick={() => setActiveFilter(null)}
+                onDelete={() => setActiveFilter(null)}
+                sx={{ ml: 'auto', borderColor: FILTER_LABELS[activeFilter]?.color, color: FILTER_LABELS[activeFilter]?.color }}
+              />
+            </Box>
+          )}
+
+          {actas.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
               Sin actas registradas.
+            </Box>
+          ) : ofertaGroups.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+              <CheckCircleOutlined style={{ fontSize: 40, marginBottom: 8, color: '#52c41a' }} />
+              <Typography>No hay actas {activeFilter === 'pendientes' ? 'pendientes' : 'evaluadas'} en este momento.</Typography>
             </Box>
           ) : (
             <Box>
               {ofertaGroups.map((grupo) => {
                 const key = grupo.oferta?.idOferta || 'sin-oferta';
-                const isOpen = expandedGroups.has(key);
+                const isOpen = activeFilter !== null ? true : expandedGroups.has(key);
                 return (
                   <Box key={key} sx={{ mb: 2 }}>
                     <Box sx={{
@@ -172,13 +267,21 @@ export default function ResultadosNotasPage() {
                       <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
                         {grupo.oferta ? grupo.oferta.nombre : 'Sin oferta asignada'}
                       </Typography>
-                      <Chip
-                        label={isOpen ? `▲ ${grupo.items.length} actas` : `▼ ${grupo.items.length} actas`}
-                        size="small" color="primary"
-                        variant={isOpen ? 'filled' : 'outlined'}
-                        onClick={() => toggleGroup(key)}
-                        sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
-                      />
+                      {activeFilter !== null ? (
+                        <Chip
+                          label={`${grupo.items.length} acta${grupo.items.length !== 1 ? 's' : ''}`}
+                          size="small" color="primary" variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      ) : (
+                        <Chip
+                          label={isOpen ? `▲ ${grupo.items.length} actas` : `▼ ${grupo.items.length} actas`}
+                          size="small" color="primary"
+                          variant={isOpen ? 'filled' : 'outlined'}
+                          onClick={() => toggleGroup(key)}
+                          sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+                        />
+                      )}
                     </Box>
 
                     {isOpen && (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, FilePdfOutlined,
-  PrinterOutlined, FileTextOutlined, ExclamationCircleOutlined, DollarCircleOutlined
+  PrinterOutlined, FileTextOutlined, ExclamationCircleOutlined, DollarCircleOutlined,
+  QrcodeOutlined, CheckOutlined, WalletOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -57,6 +58,7 @@ const GET_DATA = gql`
         idAsignacionPremio
         participante { idParticipante nombre apellido ci }
         montoAsignado porcentaje impresa
+        metodoPago qrImagen estadoPago fechaPago comprobantePagoImagen
       }
       candidatoPremio {
         nota
@@ -105,6 +107,18 @@ const GUARDAR_DIVISION = gql`
 const MARCAR_DIVISION_IMPRESA = gql`
   mutation($idGanadorPremio: ID!) {
     marcarDivisionImpresa(idGanadorPremio: $idGanadorPremio) { ok error }
+  }`;
+const CONFIGURAR_METODO_PAGO = gql`
+  mutation($idAsignacionPremio: ID!, $metodoPago: String!) {
+    configurarMetodoPago(idAsignacionPremio: $idAsignacionPremio, metodoPago: $metodoPago) { ok error }
+  }`;
+const MARCAR_ASIGNACION_PAGADA = gql`
+  mutation($idAsignacionPremio: ID!) {
+    marcarAsignacionPagada(idAsignacionPremio: $idAsignacionPremio) { ok error }
+  }`;
+const SUBIR_COMPROBANTE_PAGO = gql`
+  mutation($idAsignacionPremio: ID!, $comprobanteBase64: String!) {
+    subirComprobantePago(idAsignacionPremio: $idAsignacionPremio, comprobanteBase64: $comprobanteBase64) { ok error }
   }`;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -614,6 +628,187 @@ function imprimirComprobantes(ganador, showNotif) {
     URL.revokeObjectURL(url);
     return;
   }
+  win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); }, { once: true });
+}
+
+function imprimirComprobantePagado(asig, ganador, fechaPagoStr, showNotif) {
+  const cp       = ganador.candidatoPremio;
+  const membrete = cp.premio.evento?.membrete;
+  const imgUrl   = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
+
+  const fechaObj  = fechaPagoStr ? new Date(fechaPagoStr) : new Date();
+  const fechaPago = fechaObj.toLocaleDateString('es-BO', { year: 'numeric', month: 'long', day: 'numeric' });
+  const horaPago  = fechaObj.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const refNum    = `COMP-${fechaObj.getFullYear()}-${String(asig.idAsignacionPremio).padStart(5, '0')}`;
+
+  const lugar           = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+  const fmt             = n => parseFloat(n).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const montoAsig       = parseFloat(asig.montoAsignado);
+  const metodoPagoLabel = asig.metodoPago === 'qr' ? 'Código QR' : asig.metodoPago === 'efectivo' ? 'Efectivo' : '—';
+
+  const logoUnidad      = imgUrl(membrete?.logoUnidad);
+  const logoInstitucion = imgUrl(membrete?.logoInstitucion);
+  const sello           = imgUrl(membrete?.selloAutoridad);
+  const firmaGeneral    = imgUrl(membrete?.firma);
+  const piePaginas      = [membrete?.piePagina1, membrete?.piePagina2, membrete?.piePagina3].filter(Boolean);
+
+  const headerHtml = membrete ? `
+    <div class="mbr-header">
+      <div class="mbr-logo">${logoUnidad ? `<img src="${logoUnidad}" class="mbr-img" alt="Logo" />` : ''}</div>
+      <div class="mbr-texto">
+        <div class="mbr-titulo">${membrete.titulo || ''}</div>
+        ${membrete.subtitulo ? `<div class="mbr-sub">${membrete.subtitulo}</div>` : ''}
+        ${membrete.direccion ? `<div class="mbr-dir">${membrete.direccion}</div>` : ''}
+      </div>
+      <div class="mbr-logo">${logoInstitucion ? `<img src="${logoInstitucion}" class="mbr-img" alt="Logo" />` : ''}</div>
+    </div>
+    <div class="mbr-line"></div>` : '';
+
+  const firmantesActivos = (membrete?.firmantes || []).filter(f => f.estado).sort((a, b) => a.orden - b.orden);
+  const firmaItemsHtml = firmantesActivos.length > 0
+    ? firmantesActivos.map(f => {
+        const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+        return `<div class="firma-item">
+          ${fImg ? `<img src="${fImg}" class="firma-img" alt="Firma" />` : '<div style="height:38px"></div>'}
+          <div class="firma-linea"></div>
+          <div class="firma-nombre">${f.nombre}</div>
+          <div class="firma-cargo">${f.cargo}</div>
+        </div>`;
+      }).join('')
+    : firmaGeneral
+      ? `<div class="firma-item"><img src="${firmaGeneral}" class="firma-img" alt="Firma" /><div class="firma-linea"></div></div>`
+      : '';
+
+  const COMP_PAGO_CSS = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:Arial,Helvetica,sans-serif; background:#fff; color:#222; }
+    @page { size:A4 portrait; margin:15mm; }
+    .pago-page { width:180mm; min-height:240mm; display:flex; flex-direction:column; }
+    .mbr-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0 3px; }
+    .mbr-logo { width:55px; min-width:55px; text-align:center; }
+    .mbr-img { max-width:50px; max-height:50px; object-fit:contain; }
+    .mbr-texto { flex:1; text-align:center; }
+    .mbr-titulo { font-size:12px; font-weight:bold; color:#1a237e; text-transform:uppercase; letter-spacing:0.5px; }
+    .mbr-sub { font-size:9px; color:#444; margin-top:1px; }
+    .mbr-dir { font-size:8px; color:#888; margin-top:1px; }
+    .mbr-line { height:1.5px; background:linear-gradient(90deg,transparent,#1a237e 10%,#1a237e 90%,transparent); margin:2px 0 5px; }
+    .pago-box { border:2px solid #1a237e; outline:4px double #1a237e; outline-offset:-7px; flex:1; display:flex; flex-direction:column; padding:16px 22px 20px; }
+    .title-row { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+    .title-block .main-title { font-size:17px; font-weight:bold; color:#1a237e; letter-spacing:2px; }
+    .title-block .sub-title { font-size:9px; color:#c62828; letter-spacing:1px; text-transform:uppercase; margin-top:3px; }
+    .title-block .ref-num { font-size:8.5px; color:#666; margin-top:5px; font-family:monospace; letter-spacing:1px; }
+    .pagado-badge { background:#e8f5e9; border:2px solid #2e7d32; color:#1b5e20; border-radius:6px; padding:7px 14px; text-align:center; font-size:11px; font-weight:bold; letter-spacing:2px; min-width:78px; }
+    .pagado-badge .check { font-size:18px; display:block; margin-bottom:2px; }
+    .sec-title { font-size:8px; font-weight:bold; letter-spacing:2px; text-transform:uppercase; color:#1a237e; border-bottom:1.5px solid #1a237e; padding-bottom:3px; margin:10px 0 5px; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
+    .field { padding:5px 0; border-bottom:1px dotted #ddd; }
+    .field .lbl { font-size:8px; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:2px; }
+    .field .val { font-size:11px; color:#222; font-weight:600; }
+    .field-full { padding:5px 0; border-bottom:1px dotted #ddd; }
+    .field-full .lbl { font-size:8px; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:2px; }
+    .field-full .val { font-size:11px; color:#222; font-weight:600; }
+    .amount-box { border:2px solid #2e7d32; border-radius:6px; padding:14px 24px; text-align:center; background:linear-gradient(135deg,#e8f5e9 0%,#f1f8e9 100%); margin:14px 0 10px; }
+    .amount-lbl { font-size:8.5px; color:#2e7d32; text-transform:uppercase; letter-spacing:2px; margin-bottom:5px; }
+    .amount-val { font-size:36px; font-weight:bold; color:#1b5e20; letter-spacing:2px; margin-bottom:4px; font-family:Georgia,serif; }
+    .amount-note { font-size:10px; color:#555; }
+    .firma-section { display:flex; justify-content:center; align-items:flex-end; gap:40px; margin-top:16px; }
+    .firma-sello { width:52px; height:52px; object-fit:contain; opacity:0.85; }
+    .firma-item { display:flex; flex-direction:column; align-items:center; }
+    .firma-img { max-width:90px; max-height:38px; object-fit:contain; margin-bottom:2px; }
+    .firma-linea { width:130px; height:1px; background:#555; margin-bottom:3px; }
+    .firma-nombre { font-size:9.5px; font-weight:bold; color:#222; }
+    .firma-cargo { font-size:8.5px; color:#555; }
+    .pie-fecha { font-size:8.5px; color:#aaa; text-align:center; margin-top:10px; }
+    .pie-pagina { font-size:8px; color:#888; text-align:center; padding:4px 0; border-top:1px solid #ddd; margin-top:6px; }
+    @media print { html,body{margin:0;} .pago-page{page-break-after:always;} }
+  `;
+
+  const body = `
+    <div class="pago-page">
+      ${headerHtml}
+      <div class="pago-box">
+        <div class="title-row">
+          <div class="title-block">
+            <div class="main-title">COMPROBANTE DE PAGO</div>
+            <div class="sub-title">Constancia de pago de premio monetario</div>
+            <div class="ref-num">N° ${refNum}</div>
+          </div>
+          <div class="pagado-badge">
+            <span class="check">✓</span>
+            PAGADO
+          </div>
+        </div>
+
+        <div class="sec-title">Datos del Beneficiario</div>
+        <div class="grid2">
+          <div class="field">
+            <span class="lbl">Nombre completo</span>
+            <span class="val">${asig.participante.nombre} ${asig.participante.apellido}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">Cédula de Identidad</span>
+            <span class="val">${asig.participante.ci}</span>
+          </div>
+        </div>
+        <div class="field-full">
+          <span class="lbl">Proyecto</span>
+          <span class="val">"${cp.proyecto.titulo}"</span>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <span class="lbl">Evento</span>
+            <span class="val">${cp.premio.evento?.nombre || '—'}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">Área</span>
+            <span class="val">${cp.premio.area?.nombre || '—'}</span>
+          </div>
+        </div>
+        <div class="field-full">
+          <span class="lbl">Premio</span>
+          <span class="val">${lugar}</span>
+        </div>
+
+        <div class="sec-title">Datos de la Transacción</div>
+        <div class="grid2">
+          <div class="field">
+            <span class="lbl">Método de pago</span>
+            <span class="val">${metodoPagoLabel}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">Estado</span>
+            <span class="val" style="color:#1b5e20;">✓ Completado</span>
+          </div>
+          <div class="field">
+            <span class="lbl">Fecha de pago</span>
+            <span class="val">${fechaPago}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">Hora</span>
+            <span class="val">${horaPago}</span>
+          </div>
+        </div>
+
+        <div class="amount-box">
+          <div class="amount-lbl">Monto Pagado</div>
+          <div class="amount-val">Bs. ${fmt(montoAsig)}</div>
+          <div class="amount-note">Monto acreditado mediante ${metodoPagoLabel}</div>
+        </div>
+
+        <div class="firma-section">
+          ${sello ? `<img src="${sello}" class="firma-sello" alt="Sello" />` : ''}
+          ${firmaItemsHtml}
+        </div>
+        <div class="pie-fecha">Santa Cruz de la Sierra, ${fechaPago} — ${horaPago}</div>
+      </div>
+      ${piePaginas.length ? `<div class="pie-pagina">${piePaginas.join('  ·  ')}</div>` : ''}
+    </div>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Comprobante de Pago — ${asig.participante.nombre} ${asig.participante.apellido}</title><style>${COMP_PAGO_CSS}</style></head><body>${body}</body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) { showNotif('El navegador bloqueó la ventana emergente. Permite pop-ups.', 'warning'); URL.revokeObjectURL(url); return; }
   win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); }, { once: true });
 }
 
@@ -1387,7 +1582,8 @@ function DivisionDialog({ open, ganador, onClose, onSaved, showNotif }) {
             </Box>
             División de Premio — {cp.proyecto.titulo}
           </Stack>
-          {locked && <Chip label="Impresa 🔒 (no editable)" size="small" color="success" />}
+          {locked && <Chip label="Impresa 🔒 (no editable)" size="small" color="success"
+            variant="outlined" sx={{ borderRadius: '999px', fontWeight: 700 }} />}
         </Stack>
       </DialogTitle>
 
@@ -1494,10 +1690,367 @@ function DivisionDialog({ open, ganador, onClose, onSaved, showNotif }) {
   );
 }
 
+const ESTADO_PAGO_CFG = {
+  sin_configurar: { label: 'Sin configurar', color: 'default' },
+  configurado:    { label: 'Pendiente pago', color: 'warning' },
+  pagado:         { label: 'Pagado',          color: 'success' },
+};
+
+function GestionPagosDialog({ open, ganador, onClose, refetch, showNotif, localPagos, updatePago }) {
+  const [configurarMetodo, { loading: configuring }]       = useMutation(CONFIGURAR_METODO_PAGO);
+  const [marcarPagada, { loading: marking }]               = useMutation(MARCAR_ASIGNACION_PAGADA);
+  const [subirComprobante, { loading: subiendoComp }]      = useMutation(SUBIR_COMPROBANTE_PAGO);
+  const [qrModal, setQrModal]                     = useState(null);
+  const [confirmPagoId, setConfirmPagoId]         = useState(null);
+  const [comprobanteModal, setComprobanteModal]   = useState(null);
+  const [localComprobantes, setLocalComprobantes] = useState({});
+  const [compUploadId, setCompUploadId]           = useState(null);
+  const compInputRef                              = useRef(null);
+
+  // Al cerrar el dialog limpiar solo el confirm pendiente
+  useEffect(() => { if (!open) setConfirmPagoId(null); }, [open]);
+
+  const handleSubirComprobante = (idAsignacion) => {
+    setCompUploadId(idAsignacion);
+    compInputRef.current?.click();
+  };
+
+  const handleComprobanteFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !compUploadId) return;
+    if (!file.type.startsWith('image/')) { showNotif('Solo se aceptan imágenes', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { showNotif('La imagen no debe superar 5 MB', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result;
+      try {
+        const res = await subirComprobante({ variables: { idAsignacionPremio: compUploadId, comprobanteBase64: base64 } });
+        if (res.data?.subirComprobantePago?.ok) {
+          setLocalComprobantes(prev => ({ ...prev, [compUploadId]: base64 }));
+          showNotif('Foto del comprobante guardada', 'success');
+          refetch();
+        } else showNotif(res.data?.subirComprobantePago?.error || 'Error al subir', 'error');
+      } catch (err) { showNotif(err.message, 'error'); }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const asigs    = ganador?.asignaciones || [];
+  const montoTotal = parseFloat(ganador?.candidatoPremio?.premio?.monto || 0);
+  const fmt      = n => parseFloat(n).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Lectura que prioriza estado local (persiste en DivisionTab) sobre el prop del servidor
+  const getMetodo = (a) => localPagos[a.idAsignacionPremio]?.metodo ?? a.metodoPago ?? 'pendiente';
+  const getEstado = (a) => localPagos[a.idAsignacionPremio]?.estado ?? a.estadoPago  ?? 'sin_configurar';
+  const getFecha  = (a) => localPagos[a.idAsignacionPremio]?.fecha  ?? a.fechaPago   ?? null;
+
+  const pagados = asigs.filter(a => getEstado(a) === 'pagado').length;
+  const allPaid = asigs.length > 0 && pagados === asigs.length;
+
+  const handleMetodoChange = async (idAsignacion, metodo) => {
+    const estadoActual = localPagos[idAsignacion]?.estado ?? asigs.find(a => a.idAsignacionPremio === idAsignacion)?.estadoPago ?? 'sin_configurar';
+    updatePago(idAsignacion, {
+      metodo,
+      ...(metodo !== 'pendiente' && estadoActual === 'sin_configurar' ? { estado: 'configurado' } : {}),
+    });
+    try {
+      const res = await configurarMetodo({ variables: { idAsignacionPremio: idAsignacion, metodoPago: metodo } });
+      if (res.data?.configurarMetodoPago?.ok) { showNotif('Método de pago actualizado', 'success'); refetch(); }
+      else {
+        updatePago(idAsignacion, { metodo: undefined, estado: undefined });
+        showNotif(res.data?.configurarMetodoPago?.error || 'Error', 'error');
+      }
+    } catch (e) {
+      updatePago(idAsignacion, { metodo: undefined, estado: undefined });
+      showNotif(e.message, 'error');
+    }
+  };
+
+  const handleMarcarPagada = async (idAsignacion) => {
+    const now = new Date().toISOString();
+    updatePago(idAsignacion, { estado: 'pagado', fecha: now });
+    setConfirmPagoId(null);
+    try {
+      const res = await marcarPagada({ variables: { idAsignacionPremio: idAsignacion } });
+      if (res.data?.marcarAsignacionPagada?.ok) { showNotif('Pago registrado exitosamente', 'success'); refetch(); }
+      else {
+        updatePago(idAsignacion, { estado: undefined, fecha: undefined });
+        showNotif(res.data?.marcarAsignacionPagada?.error || 'Error', 'error');
+      }
+    } catch (e) {
+      updatePago(idAsignacion, { estado: undefined, fecha: undefined });
+      showNotif(e.message, 'error');
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={compInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleComprobanteFileChange}
+      />
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" alignItems="center" gap={1.5}>
+              <WalletOutlined style={{ fontSize: 22, color: '#1890ff' }} />
+              <Box>
+                <Typography variant="h6" sx={{ lineHeight: 1.2 }}>Gestión de Pagos</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {ganador?.candidatoPremio?.proyecto?.titulo}
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Chip
+                label={`${pagados} / ${asigs.length} pagados`}
+                size="small"
+                variant="outlined"
+                color={allPaid ? 'success' : pagados > 0 ? 'warning' : 'default'}
+                sx={{ borderRadius: '999px', fontWeight: 700 }}
+              />
+              {allPaid && (
+                <Chip label="Completado ✓" size="small" color="success" variant="outlined"
+                  sx={{ borderRadius: '999px', fontWeight: 700 }} />
+              )}
+            </Stack>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.selected', borderRadius: 1 }}>
+            <Stack direction="row" gap={3} flexWrap="wrap">
+              <Typography variant="body2">
+                <strong>Evento:</strong> {ganador?.candidatoPremio?.premio?.evento?.nombre}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Monto total:</strong> Bs. {fmt(montoTotal)}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Participantes:</strong> {asigs.length}
+              </Typography>
+            </Stack>
+          </Box>
+
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'action.hover' }}>
+                <TableCell>Participante</TableCell>
+                <TableCell>CI</TableCell>
+                <TableCell align="right">Monto</TableCell>
+                <TableCell align="center">Método de pago</TableCell>
+                <TableCell align="center">QR</TableCell>
+                <TableCell align="center">Estado</TableCell>
+                <TableCell align="center">Acción</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {asigs.map(a => {
+                const metodoActual = getMetodo(a);
+                const estadoActual = getEstado(a);
+                const fechaActual  = getFecha(a);
+                const isPagado     = estadoActual === 'pagado';
+                const hasQr        = !!a.qrImagen;
+                const cfg          = ESTADO_PAGO_CFG[estadoActual] || ESTADO_PAGO_CFG.sin_configurar;
+                const isConfirming = confirmPagoId === a.idAsignacionPremio;
+
+                return (
+                  <TableRow key={a.idAsignacionPremio} hover
+                    sx={{ bgcolor: isPagado ? 'rgba(82,196,26,0.05)' : undefined }}>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>
+                        {a.participante.nombre} {a.participante.apellido}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">{a.participante.ci}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" fontWeight={700} color="success.main">
+                        Bs. {fmt(a.montoAsignado)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      {isPagado ? (
+                        <Chip
+                          label={metodoActual === 'qr' ? 'QR' : metodoActual === 'efectivo' ? 'Efectivo' : '—'}
+                          size="small" variant="outlined"
+                        />
+                      ) : (
+                        <Select
+                          value={metodoActual}
+                          size="small"
+                          disabled={configuring}
+                          onChange={e => handleMetodoChange(a.idAsignacionPremio, e.target.value)}
+                          sx={{ minWidth: 130, fontSize: 13 }}
+                        >
+                          <MenuItem value="pendiente"><em>Seleccionar</em></MenuItem>
+                          <MenuItem value="qr">QR</MenuItem>
+                          <MenuItem value="efectivo">Efectivo</MenuItem>
+                        </Select>
+                      )}
+                    </TableCell>
+                    <TableCell align="center">
+                      {hasQr ? (
+                        <Tooltip title="Ver QR del participante">
+                          <IconButton size="small" color="primary" onClick={() => setQrModal(a.qrImagen)}>
+                            <QrcodeOutlined />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="caption" color="text.disabled">Sin QR</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip label={cfg.label} size="small" color={cfg.color}
+                        variant="outlined" sx={{ borderRadius: '999px', fontWeight: 600 }} />
+                    </TableCell>
+                    <TableCell align="center">
+                      {isPagado ? (
+                        <Stack spacing={0.5} alignItems="center">
+                          <Typography variant="caption" color="success.main" fontWeight={700}>
+                            {fechaActual ? new Date(fechaActual).toLocaleDateString('es-BO') : '—'}
+                          </Typography>
+                          <Chip
+                            label="Imprimir comprobante"
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            onClick={() => imprimirComprobantePagado({ ...a, metodoPago: metodoActual }, ganador, fechaActual, showNotif)}
+                            sx={{ cursor: 'pointer', borderRadius: '999px', fontSize: 10, fontWeight: 700 }}
+                          />
+                          {(localComprobantes[a.idAsignacionPremio] || a.comprobantePagoImagen) ? (
+                            <>
+                              <Chip
+                                label="Ver foto pago"
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                onClick={() => setComprobanteModal(localComprobantes[a.idAsignacionPremio] || a.comprobantePagoImagen)}
+                                sx={{ cursor: 'pointer', borderRadius: '999px', fontSize: 10 }}
+                              />
+                              <Chip
+                                label={subiendoComp && compUploadId === a.idAsignacionPremio ? 'Subiendo...' : 'Reemplazar foto'}
+                                size="small"
+                                variant="outlined"
+                                disabled={subiendoComp}
+                                onClick={() => handleSubirComprobante(a.idAsignacionPremio)}
+                                sx={{ cursor: 'pointer', borderRadius: '999px', fontSize: 10 }}
+                              />
+                            </>
+                          ) : (
+                            <Chip
+                              label={subiendoComp && compUploadId === a.idAsignacionPremio ? 'Subiendo...' : 'Subir foto pago'}
+                              size="small"
+                              variant="outlined"
+                              disabled={subiendoComp}
+                              onClick={() => handleSubirComprobante(a.idAsignacionPremio)}
+                              sx={{ cursor: 'pointer', borderRadius: '999px', fontSize: 10 }}
+                            />
+                          )}
+                        </Stack>
+                      ) : isConfirming ? (
+                        <Stack direction="row" spacing={0.5} justifyContent="center">
+                          <Chip label="Confirmar" size="small" color="success"
+                            onClick={() => handleMarcarPagada(a.idAsignacionPremio)}
+                            sx={{ cursor: 'pointer', fontWeight: 700, borderRadius: '999px',
+                                  border: '1.5px solid #52c41a', bgcolor: 'transparent', color: '#52c41a' }} />
+                          <Chip label="Cancelar" size="small"
+                            onClick={() => setConfirmPagoId(null)}
+                            sx={{ cursor: 'pointer', borderRadius: '999px',
+                                  border: '1.5px solid', borderColor: 'divider' }} />
+                        </Stack>
+                      ) : (
+                        <Tooltip title={
+                          metodoActual === 'pendiente'
+                            ? 'Selecciona el método de pago primero'
+                            : 'Marcar como pagado'
+                        }>
+                          <span>
+                            <Button
+                              size="small" variant="outlined" color="success"
+                              disabled={metodoActual === 'pendiente' || marking}
+                              startIcon={<CheckOutlined />}
+                              onClick={() => setConfirmPagoId(a.idAsignacionPremio)}
+                              sx={{ borderRadius: '999px', fontWeight: 700, textTransform: 'none',
+                                    border: '1.5px solid' }}
+                            >
+                              Pagar
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose} color="secondary">Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Visor QR */}
+      <Dialog open={!!qrModal} onClose={() => setQrModal(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <QrcodeOutlined style={{ color: '#1890ff' }} />
+            QR de cobro del participante
+          </Stack>
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', p: 3 }}>
+          {qrModal && (
+            <img src={qrModal} alt="QR de pago"
+              style={{ maxWidth: '100%', maxHeight: 380, borderRadius: 8, border: '1px solid #e8e8e8' }} />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQrModal(null)}>Cerrar</Button>
+          {qrModal && (
+            <Button variant="outlined" color="primary" component="a" href={qrModal} download="qr_pago.png">
+              Descargar QR
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Visor foto comprobante */}
+      <Dialog open={!!comprobanteModal} onClose={() => setComprobanteModal(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Foto del comprobante de pago</DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', p: 2 }}>
+          {comprobanteModal && (
+            <img src={comprobanteModal} alt="Comprobante de pago"
+              style={{ maxWidth: '100%', maxHeight: 500, borderRadius: 8, border: '1px solid #e8e8e8' }} />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setComprobanteModal(null)}>Cerrar</Button>
+          {comprobanteModal && (
+            <Button variant="outlined" color="primary" component="a" href={comprobanteModal} download="comprobante_pago.jpg">
+              Descargar
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
 function DivisionTab({ ganadores, refetch, showNotif }) {
   const monetarios = ganadores.filter(g => g.estado && g.candidatoPremio?.premio?.monto != null);
   const [dialogGanador, setDialogGanador] = useState(null);
   const [printConfirm, setPrintConfirm]   = useState(null);
+  const [pagosDialogId, setPagosDialogId] = useState(null);
+  const pagosGanador = pagosDialogId ? monetarios.find(g => g.idGanadorPremio === pagosDialogId) || null : null;
+  // Estado local persistente de pagos (sobrevive open/close del dialog)
+  const [localPagos, setLocalPagos] = useState({});
+  const updatePago = (id, updates) =>
+    setLocalPagos(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...updates } }));
   const [marcar] = useMutation(MARCAR_DIVISION_IMPRESA);
 
   const handleImprimir = async (ganador) => {
@@ -1549,7 +2102,9 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
               const status = getDivisionStatus(g);
               const chip   = STATUS_CHIP[status];
               const locked = status === 'impresa';
-              const hasDivision = (g.asignaciones || []).length > 0;
+              const asigs  = g.asignaciones || [];
+              const hasDivision = asigs.length > 0;
+              const pagadosCount = asigs.filter(a => (localPagos[a.idAsignacionPremio]?.estado ?? a.estadoPago) === 'pagado').length;
               const monto  = parseFloat(cp.premio.monto);
               const lugar  = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
               const fmt    = (n) => n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1577,7 +2132,19 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    <Chip label={chip.label} size="small" color={chip.color} />
+                    <Stack spacing={0.5} alignItems="center">
+                      <Chip label={chip.label} size="small" color={chip.color}
+                        variant="outlined" sx={{ borderRadius: '999px', fontWeight: 700 }} />
+                      {locked && hasDivision && (
+                        <Chip
+                          label={`${pagadosCount}/${asigs.length} pag.`}
+                          size="small"
+                          color={pagadosCount === asigs.length ? 'success' : pagadosCount > 0 ? 'warning' : 'default'}
+                          variant="outlined"
+                          sx={{ fontSize: 10, borderRadius: '999px' }}
+                        />
+                      )}
+                    </Stack>
                   </TableCell>
                   <TableCell align="center">
                     <Stack direction="row" gap={0.5} justifyContent="center">
@@ -1592,6 +2159,14 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
                           <IconButton size="small" color="secondary"
                             onClick={() => setPrintConfirm(g)}>
                             <PrinterOutlined />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {locked && (
+                        <Tooltip title="Gestionar pagos de participantes">
+                          <IconButton size="small" color="success"
+                            onClick={() => setPagosDialogId(g.idGanadorPremio)}>
+                            <WalletOutlined />
                           </IconButton>
                         </Tooltip>
                       )}
@@ -1624,6 +2199,16 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
         confirmColor="primary"
         onConfirm={() => { handleImprimir(printConfirm); setPrintConfirm(null); }}
         onCancel={() => setPrintConfirm(null)}
+      />
+
+      <GestionPagosDialog
+        open={!!pagosDialogId}
+        ganador={pagosGanador}
+        onClose={() => setPagosDialogId(null)}
+        refetch={refetch}
+        showNotif={showNotif}
+        localPagos={localPagos}
+        updatePago={updatePago}
       />
     </Box>
   );

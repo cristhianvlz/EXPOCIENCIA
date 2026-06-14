@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { useQuery, gql } from '@apollo/client';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Typography, CircularProgress, Alert, Card, CardContent, Chip, Stack,
-  Divider, Button, Tabs, Tab, Avatar, LinearProgress, Tooltip
+  Divider, Button, Tabs, Tab, Avatar, LinearProgress, Tooltip, Snackbar,
+  Dialog, DialogContent, IconButton
 } from '@mui/material';
 import {
   ProjectOutlined, InfoCircleOutlined, DownloadOutlined, FilePdfOutlined,
   TrophyOutlined, StarOutlined, CheckCircleOutlined, ClockCircleOutlined,
   CloseCircleOutlined, PrinterOutlined, RiseOutlined, FileProtectOutlined,
-  DollarCircleOutlined
+  DollarCircleOutlined, QrcodeOutlined, UploadOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -50,6 +51,7 @@ const GET_MIS_PROYECTOS = gql`
                 idAsignacionPremio
                 participante { idParticipante nombre apellido ci }
                 montoAsignado porcentaje impresa
+                metodoPago qrImagen estadoPago fechaPago comprobantePagoImagen
               }
               candidatoPremio {
                 nota
@@ -85,6 +87,11 @@ const GET_MIS_PROYECTOS = gql`
     }
   }
 `;
+
+const SUBIR_QR_ASIGNACION = gql`
+  mutation($idAsignacionPremio: ID!, $qrBase64: String!) {
+    subirQrAsignacion(idAsignacionPremio: $idAsignacionPremio, qrBase64: $qrBase64) { ok error }
+  }`;
 
 // ── Print helper (replicates certificados.jsx logic) ─────────────────────────
 const BACKEND_MEDIA = 'http://localhost:8000/media/';
@@ -360,6 +367,11 @@ interface AsignacionPremio {
   montoAsignado: string;
   porcentaje: string;
   impresa: boolean;
+  metodoPago: 'pendiente' | 'qr' | 'efectivo';
+  qrImagen: string;
+  estadoPago: 'sin_configurar' | 'configurado' | 'pagado';
+  fechaPago: string | null;
+  comprobantePagoImagen: string;
 }
 
 interface CandidatoPremio {
@@ -410,7 +422,178 @@ function FlowProgress({ estado, hasEval, hasWinner }: { estado: string; hasEval:
   );
 }
 
-function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremio; miIdParticipante: string }) {
+const PAGO_ESTADO_CFG = {
+  sin_configurar: { label: 'Pendiente de configuración', color: 'default' as const },
+  configurado:    { label: 'Pendiente de pago',          color: 'warning' as const },
+  pagado:         { label: 'Pago recibido ✓',            color: 'success' as const },
+};
+
+function QrUploadSection({ asignacion, refetch }: { asignacion: AsignacionPremio; refetch: () => void }) {
+  const [subirQr, { loading }] = useMutation(SUBIR_QR_ASIGNACION);
+  const [notif, setNotif] = useState<{ open: boolean; msg: string; sev: 'success' | 'error' }>({ open: false, msg: '', sev: 'success' });
+  const [verificando, setVerificando] = useState(false);
+  const [openComprobante, setOpenComprobante] = useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const showNotif = (msg: string, sev: 'success' | 'error') => setNotif({ open: true, msg, sev });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { showNotif('Solo se aceptan imágenes', 'error'); return; }
+    if (file.size > 2 * 1024 * 1024) { showNotif('La imagen no debe superar 2 MB', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await subirQr({ variables: { idAsignacionPremio: asignacion.idAsignacionPremio, qrBase64: base64 } });
+        if (res.data?.subirQrAsignacion?.ok) { showNotif('QR subido correctamente', 'success'); refetch(); }
+        else showNotif(res.data?.subirQrAsignacion?.error || 'Error al subir QR', 'error');
+      } catch (err: any) { showNotif(err.message, 'error'); }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const isPagado   = asignacion.estadoPago === 'pagado';
+  const hasQr      = !!asignacion.qrImagen;
+  const esEfectivo = asignacion.metodoPago === 'efectivo';
+  const metodoPendiente = !asignacion.metodoPago || asignacion.metodoPago === 'pendiente';
+  const estadoCfg  = PAGO_ESTADO_CFG[asignacion.estadoPago] ?? PAGO_ESTADO_CFG.sin_configurar;
+
+  return (
+    <Box sx={{ mt: 2, p: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+      {/* Cabecera: título + estado */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <QrcodeOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+          <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ textTransform: 'uppercase' }}>
+            Información de Pago
+          </Typography>
+        </Box>
+        <Chip label={estadoCfg.label} size="small" color={estadoCfg.color} />
+      </Box>
+
+      {/* Método asignado por el administrador */}
+      {!metodoPendiente && (
+        <Chip
+          label={esEfectivo ? 'Método: Efectivo' : 'Método: QR'}
+          size="small"
+          color={esEfectivo ? 'default' : 'primary'}
+          variant="outlined"
+          sx={{ mb: 1, fontSize: 11 }}
+        />
+      )}
+      {metodoPendiente && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          El administrador aún no ha configurado el método de pago.
+        </Typography>
+      )}
+
+      {/* Pago recibido */}
+      {isPagado && (
+        <Box sx={{ mt: 2 }}>
+          <Alert severity="success" sx={{ py: 1, px: 2, mb: 2, borderRadius: 2, border: '1px solid', borderColor: 'success.light', bgcolor: 'rgba(82, 196, 26, 0.08)' }} icon={<CheckCircleOutlined style={{ fontSize: 18 }} />}>
+            <Typography variant="body2" fontWeight={600} color="success.dark">
+              {asignacion.fechaPago
+                ? `Pago recibido el ${new Date(asignacion.fechaPago).toLocaleDateString('es-BO', { year: 'numeric', month: 'long', day: 'numeric' })}`
+                : 'Pago recibido exitosamente'}
+            </Typography>
+          </Alert>
+          {asignacion.comprobantePagoImagen && (
+            <Box>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                color="inherit" 
+                onClick={() => setOpenComprobante(true)}
+                startIcon={<FileProtectOutlined />}
+                sx={{ borderRadius: 6, textTransform: 'none', px: 3 }}
+              >
+                Ver comprobante de pago
+              </Button>
+              <Dialog open={openComprobante} onClose={() => setOpenComprobante(false)} maxWidth="md" fullWidth>
+                <DialogContent sx={{ p: 1, position: 'relative', bgcolor: '#f0f2f5' }}>
+                  <IconButton onClick={() => setOpenComprobante(false)} sx={{ position: 'absolute', right: 8, top: 8, bgcolor: 'rgba(255,255,255,0.8)' }}>
+                    <CloseCircleOutlined />
+                  </IconButton>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                    <img
+                      src={asignacion.comprobantePagoImagen}
+                      alt="Comprobante de pago"
+                      style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                  </Box>
+                </DialogContent>
+              </Dialog>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Subida de QR — siempre disponible mientras no esté pagado */}
+      {!isPagado && (
+        <Box>
+          <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+          <Button size="small" variant="text" color="inherit"
+            disabled={verificando}
+            onClick={async () => {
+              setVerificando(true);
+              try { await refetch(); } finally { setVerificando(false); }
+            }}
+            sx={{ fontSize: 10, mb: 0.5, color: 'text.disabled', textTransform: 'none' }}>
+            {verificando ? 'Verificando...' : 'Verificar estado de pago'}
+          </Button>
+
+          {esEfectivo && (
+            <Alert severity="info" sx={{ py: 0.5, mb: 1 }} icon={<DollarCircleOutlined />}>
+              <Typography variant="caption">
+                El pago está configurado en efectivo. Aun así puedes subir tu QR por si el administrador lo necesita.
+              </Typography>
+            </Alert>
+          )}
+
+          {hasQr ? (
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <img src={asignacion.qrImagen} alt="Tu QR"
+                style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 6, border: '1px solid #d9d9d9' }} />
+              <Box>
+                <Typography variant="caption" color="success.main" fontWeight={600} sx={{ display: 'block' }}>
+                  QR subido correctamente
+                </Typography>
+                <Button size="small" variant="outlined" startIcon={<UploadOutlined />}
+                  disabled={loading} onClick={() => inputRef.current?.click()}
+                  sx={{ mt: 0.5, fontSize: 11 }}>
+                  Reemplazar QR
+                </Button>
+              </Box>
+            </Stack>
+          ) : (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Sube tu código QR de cobro para que el administrador pueda realizar el pago.
+              </Typography>
+              <Button size="small" variant="contained" startIcon={<UploadOutlined />}
+                disabled={loading} onClick={() => inputRef.current?.click()}
+                sx={{ fontWeight: 700 }}>
+                {loading ? 'Subiendo...' : 'Subir mi QR de cobro'}
+              </Button>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      <Snackbar open={notif.open} autoHideDuration={4000} onClose={() => setNotif(n => ({ ...n, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={notif.sev} onClose={() => setNotif(n => ({ ...n, open: false }))} sx={{ width: '100%' }}>
+          {notif.msg}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}
+
+function PremioCard({ candidato, miIdParticipante, refetch }: { candidato: CandidatoPremio; miIdParticipante: string; refetch: () => void }) {
   const esGanador = !!(candidato.ganador && candidato.ganador.estado !== false);
   const posicion = candidato.premio?.numeroGanadores ?? 0;
   const posConfig = POSICION_LABELS[posicion];
@@ -428,11 +611,20 @@ function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremi
 
   return (
     <Box sx={{
-      p: 2, borderRadius: 2,
+      p: 2.5, borderRadius: 2,
       border: '1px solid',
-      borderColor: esGanador ? 'warning.main' : 'divider',
-      bgcolor: esGanador ? 'rgba(255,215,0,0.06)' : 'action.hover',
+      borderColor: 'divider',
+      bgcolor: 'background.paper',
+      position: 'relative',
+      overflow: 'hidden',
       mb: 1.5,
+      '&::before': esGanador ? {
+        content: '""',
+        position: 'absolute',
+        top: 0, left: 0, bottom: 0,
+        width: 4,
+        bgcolor: 'warning.main'
+      } : {}
     }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -507,14 +699,14 @@ function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremi
       {/* Comprobante de división de premio monetario */}
       {esGanador && miAsignacion && (
         <Box sx={{
-          mt: 1.5, p: 1.5, borderRadius: 1.5,
+          mt: 2, p: 2, borderRadius: 2,
           border: '1px solid',
-          borderColor: miAsignacion.impresa ? 'success.light' : 'warning.light',
-          bgcolor: miAsignacion.impresa ? 'rgba(82,196,26,0.06)' : 'rgba(250,173,20,0.06)',
+          borderColor: 'divider',
+          bgcolor: 'action.hover',
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: miAsignacion.impresa ? 1 : 0 }}>
-            <DollarCircleOutlined style={{ fontSize: 15, color: miAsignacion.impresa ? '#52c41a' : '#faad14' }} />
-            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+            <DollarCircleOutlined style={{ fontSize: 16, color: '#8c8c8c' }} />
+            <Typography variant="caption" fontWeight={700} color="text.primary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Premio Monetario — Tu Asignación
             </Typography>
           </Box>
@@ -524,7 +716,7 @@ function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremi
               <Box sx={{ display: 'flex', gap: 2, mb: 1, flexWrap: 'wrap' }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">Monto asignado</Typography>
-                  <Typography variant="body1" fontWeight={800} color="success.main">
+                  <Typography variant="body1" fontWeight={700} color="text.primary">
                     Bs. {fmt(miAsignacion.montoAsignado)}
                   </Typography>
                 </Box>
@@ -536,15 +728,17 @@ function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremi
                 </Box>
               </Box>
               <Button
-                variant="contained"
-                color="success"
+                variant="outlined"
+                color="inherit"
                 size="small"
                 startIcon={<PrinterOutlined />}
-                sx={{ fontWeight: 700 }}
+                sx={{ fontWeight: 600, textTransform: 'none', borderRadius: 6 }}
                 onClick={() => imprimirMiComprobante(miAsignacion, candidato.ganador)}
               >
                 Imprimir mi Comprobante de Asignación
               </Button>
+
+              <QrUploadSection asignacion={miAsignacion} refetch={refetch} />
             </>
           ) : (
             <Alert severity="warning" sx={{ py: 0.5, mt: 0.5 }} icon={<DollarCircleOutlined />}>
@@ -562,15 +756,21 @@ function PremioCard({ candidato, miIdParticipante }: { candidato: CandidatoPremi
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function MisProyectos() {
   const [tab, setTab] = useState(0);
-  const { data, loading, error } = useQuery(GET_MIS_PROYECTOS, { fetchPolicy: 'network-only' });
+  const { data, loading, error, refetch } = useQuery(GET_MIS_PROYECTOS, { fetchPolicy: 'no-cache' });
 
-  if (loading) return (
+  useEffect(() => {
+    const onFocus = () => refetch();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refetch]);
+
+  if (loading && !data) return (
     <MainCard title="Mis Proyectos">
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
     </MainCard>
   );
 
-  if (error) return (
+  if (error && !data) return (
     <MainCard title="Mis Proyectos">
       <Alert severity="error">Error al cargar tus proyectos.</Alert>
     </MainCard>
@@ -731,9 +931,18 @@ export default function MisProyectos() {
                           Resultados & Premiación
                         </Typography>
                       </Box>
-                      {candidatos.map((c: CandidatoPremio) => (
-                        <PremioCard key={c.idCandidatoPremio} candidato={c} miIdParticipante={miIdParticipante} />
-                      ))}
+                      <Box sx={{ 
+                        maxHeight: 450, 
+                        overflowY: 'auto', 
+                        pr: 1,
+                        mr: -1, // Compensar el padding
+                        '&::-webkit-scrollbar': { width: 6 },
+                        '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 3 }
+                      }}>
+                        {candidatos.map((c: CandidatoPremio) => (
+                          <PremioCard key={c.idCandidatoPremio} candidato={c} miIdParticipante={miIdParticipante} refetch={refetch} />
+                        ))}
+                      </Box>
                     </Box>
                   )}
 

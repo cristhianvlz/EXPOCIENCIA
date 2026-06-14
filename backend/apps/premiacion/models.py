@@ -203,12 +203,30 @@ class AsignacionPremio(models.Model):
         on_delete=models.PROTECT,
         related_name='asignaciones_premio',
     )
+    METODO_PAGO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('qr', 'QR'),
+        ('efectivo', 'Efectivo'),
+    ]
+    ESTADO_PAGO_CHOICES = [
+        ('sin_configurar', 'Sin Configurar'),
+        ('configurado', 'Configurado'),
+        ('pagado', 'Pagado'),
+    ]
+
     monto_asignado = models.DecimalField(max_digits=10, decimal_places=2)
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
     observacion = models.TextField(blank=True)
     impresa = models.BooleanField(default=False)
     estado = models.BooleanField(default=True)
     fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    # ── Gestión de pago ──────────────────────────────────────────────────────────
+    metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO_CHOICES, default='pendiente')
+    qr_imagen = models.TextField(blank=True, default='')
+    estado_pago = models.CharField(max_length=20, choices=ESTADO_PAGO_CHOICES, default='sin_configurar')
+    fecha_pago = models.DateTimeField(null=True, blank=True)
+    comprobante_pago_imagen = models.TextField(blank=True, default='')
 
     class Meta:
         db_table = 'asignacion_premio'

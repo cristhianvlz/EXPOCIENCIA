@@ -36,13 +36,23 @@ class CandidatoPremioType(DjangoObjectType):
 
 # Definido antes de GanadorPremioType para evitar referencia hacia adelante
 class AsignacionPremioType(DjangoObjectType):
+    metodo_pago = graphene.String()
+    estado_pago = graphene.String()
+
     class Meta:
         model = AsignacionPremio
         fields = (
             'id_asignacion_premio', 'participante',
             'monto_asignado', 'porcentaje',
             'observacion', 'impresa', 'estado', 'fecha_registro',
+            'metodo_pago', 'qr_imagen', 'estado_pago', 'fecha_pago', 'comprobante_pago_imagen',
         )
+
+    def resolve_metodo_pago(self, info):
+        return self.metodo_pago
+
+    def resolve_estado_pago(self, info):
+        return self.estado_pago
 
 class GanadorPremioType(DjangoObjectType):
     asignaciones = graphene.List(AsignacionPremioType)
@@ -887,15 +897,30 @@ class GuardarDivisionPremio(graphene.Mutation):
                 error=f"La suma de asignaciones (Bs. {suma}) no coincide con el monto total (Bs. {monto_total}).",
             )
 
-        # Eliminar asignaciones anteriores no impresas
-        AsignacionPremio.objects.filter(ganador_premio=ganador, impresa=False).delete()
+        # Actualización de asignaciones sin borrar para no perder estado de pago
+        actuales = AsignacionPremio.objects.filter(ganador_premio=ganador, impresa=False)
+        actuales_dict = {a.participante_id: a for a in actuales}
+        nuevos_participantes = set(int(a.id_participante) for a in asignaciones)
 
-        # Crear nuevas asignaciones
+        # Eliminar solo las asignaciones de participantes que ya no están en la lista
+        for a in actuales:
+            if a.participante_id not in nuevos_participantes:
+                a.delete()
+
+        # Actualizar o crear las nuevas asignaciones
         for a in asignaciones:
-            try:
-                participante = Participante.objects.get(pk=a.id_participante)
-            except Participante.DoesNotExist:
-                return GuardarDivisionPremio(ok=False, error=f"Participante {a.id_participante} no existe.") # type: ignore
+            pid = int(a.id_participante)
+            if pid in actuales_dict:
+                asig = actuales_dict[pid]
+                asig.monto_asignado = Decimal(str(a.monto_asignado))
+                asig.porcentaje = Decimal(str(a.porcentaje))
+                asig.observacion = a.observacion or ''
+                asig.save()
+            else:
+                try:
+                    participante = Participante.objects.get(pk=pid)
+                except Participante.DoesNotExist:
+                    return GuardarDivisionPremio(ok=False, error=f"Participante {pid} no existe.") # type: ignore
 
             AsignacionPremio.objects.create(
                 ganador_premio=ganador,
@@ -933,6 +958,115 @@ class MarcarDivisionImpresa(graphene.Mutation):
         return MarcarDivisionImpresa(ok=True, error=None) # type: ignore
 
 
+class SubirQrAsignacion(graphene.Mutation):
+    """El participante sube su imagen de QR (base64) para recibir el pago."""
+    class Arguments:
+        id_asignacion_premio = graphene.ID(required=True)
+        qr_base64 = graphene.String(required=True)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_asignacion_premio, qr_base64):
+        print(f"[MUTATION] SubirQrAsignacion iniciada para asignación ID={id_asignacion_premio}")
+        try:
+            asig = AsignacionPremio.objects.get(pk=id_asignacion_premio, estado=True)
+            asig.qr_imagen = qr_base64
+            print(f"[MUTATION] SubirQrAsignacion antes del save() - QR length: {len(qr_base64)}")
+            asig.save()
+            print(f"[MUTATION] SubirQrAsignacion después del save() exitoso")
+            return SubirQrAsignacion(ok=True, error=None)  # type: ignore
+        except AsignacionPremio.DoesNotExist:
+            print("[MUTATION] SubirQrAsignacion FALLO: Asignación no encontrada")
+            return SubirQrAsignacion(ok=False, error="Asignación no encontrada.")  # type: ignore
+        except Exception as e:
+            print(f"[MUTATION] SubirQrAsignacion FALLO: Excepción {str(e)}")
+            return SubirQrAsignacion(ok=False, error=str(e))  # type: ignore
+
+
+class ConfigurarMetodoPago(graphene.Mutation):
+    """El administrador establece el método de pago (qr/efectivo) para una asignación."""
+    class Arguments:
+        id_asignacion_premio = graphene.ID(required=True)
+        metodo_pago = graphene.String(required=True)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_asignacion_premio, metodo_pago):
+        print(f"[MUTATION] ConfigurarMetodoPago iniciada: asignación ID={id_asignacion_premio}, método={metodo_pago}")
+        if metodo_pago not in ('qr', 'efectivo', 'pendiente'):
+            return ConfigurarMetodoPago(ok=False, error="Método de pago inválido.")  # type: ignore
+        try:
+            asig = AsignacionPremio.objects.get(pk=id_asignacion_premio, estado=True)
+            asig.metodo_pago = metodo_pago
+            if asig.estado_pago == 'sin_configurar':
+                asig.estado_pago = 'configurado'
+            print(f"[MUTATION] ConfigurarMetodoPago antes del save() - Estado a guardar: {asig.estado_pago}")
+            asig.save()
+            print(f"[MUTATION] ConfigurarMetodoPago después del save() exitoso")
+            return ConfigurarMetodoPago(ok=True, error=None)  # type: ignore
+        except AsignacionPremio.DoesNotExist:
+            print("[MUTATION] ConfigurarMetodoPago FALLO: Asignación no encontrada")
+            return ConfigurarMetodoPago(ok=False, error="Asignación no encontrada.")  # type: ignore
+        except Exception as e:
+            print(f"[MUTATION] ConfigurarMetodoPago FALLO: Excepción {str(e)}")
+            return ConfigurarMetodoPago(ok=False, error=str(e))  # type: ignore
+
+
+class MarcarAsignacionPagada(graphene.Mutation):
+    """El administrador marca una asignación como pagada."""
+    class Arguments:
+        id_asignacion_premio = graphene.ID(required=True)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_asignacion_premio):
+        from django.utils import timezone
+        print(f"[MUTATION] MarcarAsignacionPagada iniciada para asignación ID={id_asignacion_premio}")
+        try:
+            asig = AsignacionPremio.objects.get(pk=id_asignacion_premio, estado=True)
+            asig.estado_pago = 'pagado'
+            asig.fecha_pago = timezone.now()
+            print(f"[MUTATION] MarcarAsignacionPagada antes del save()")
+            asig.save()
+            print(f"[MUTATION] MarcarAsignacionPagada después del save() exitoso")
+            return MarcarAsignacionPagada(ok=True, error=None)  # type: ignore
+        except AsignacionPremio.DoesNotExist:
+            print("[MUTATION] MarcarAsignacionPagada FALLO: Asignación no encontrada")
+            return MarcarAsignacionPagada(ok=False, error="Asignación no encontrada.")  # type: ignore
+        except Exception as e:
+            print(f"[MUTATION] MarcarAsignacionPagada FALLO: Excepción {str(e)}")
+            return MarcarAsignacionPagada(ok=False, error=str(e))  # type: ignore
+
+
+class SubirComprobantePago(graphene.Mutation):
+    """El administrador sube la foto/captura del comprobante de pago (base64)."""
+    class Arguments:
+        id_asignacion_premio = graphene.ID(required=True)
+        comprobante_base64   = graphene.String(required=True)
+    ok    = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_asignacion_premio, comprobante_base64):
+        print(f"[MUTATION] SubirComprobantePago iniciada para asignación ID={id_asignacion_premio}")
+        try:
+            asig = AsignacionPremio.objects.get(pk=id_asignacion_premio, estado=True)
+            asig.comprobante_pago_imagen = comprobante_base64
+            print(f"[MUTATION] SubirComprobantePago antes del save() - Base64 length: {len(comprobante_base64)}")
+            asig.save()
+            print(f"[MUTATION] SubirComprobantePago después del save() exitoso")
+            return SubirComprobantePago(ok=True, error=None)  # type: ignore
+        except AsignacionPremio.DoesNotExist:
+            print("[MUTATION] SubirComprobantePago FALLO: Asignación no encontrada")
+            return SubirComprobantePago(ok=False, error="Asignación no encontrada.")  # type: ignore
+        except Exception as e:
+            print(f"[MUTATION] SubirComprobantePago FALLO: Excepción {str(e)}")
+            return SubirComprobantePago(ok=False, error=str(e))  # type: ignore
+
+
 class Mutation(graphene.ObjectType):
     crear_tipo_descriptor = CrearTipoDescriptor.Field()
     editar_tipo_descriptor = EditarTipoDescriptor.Field()
@@ -967,3 +1101,8 @@ class Mutation(graphene.ObjectType):
 
     guardar_division_premio  = GuardarDivisionPremio.Field()
     marcar_division_impresa  = MarcarDivisionImpresa.Field()
+
+    subir_qr_asignacion      = SubirQrAsignacion.Field()
+    configurar_metodo_pago   = ConfigurarMetodoPago.Field()
+    marcar_asignacion_pagada = MarcarAsignacionPagada.Field()
+    subir_comprobante_pago   = SubirComprobantePago.Field()
