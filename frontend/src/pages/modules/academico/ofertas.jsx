@@ -262,6 +262,8 @@ export default function OfertasPage() {
   const modalidades      = data?.todasLasModalidades          || [];
   const areas            = data?.todasLasAreas                || [];
 
+  const usedEventIds = new Set(ofertas.map(of => of.categoriaEvento?.evento?.idEvento).filter(Boolean));
+
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
 
@@ -574,7 +576,7 @@ export default function OfertasPage() {
             <InputLabel>Evento</InputLabel>
             <Select value={wizardEvento} label="Evento"
               onChange={e => { setWizardEvento(e.target.value); setWizardCategoria(''); }}>
-              {eventos.filter(ev => ev.estado).map(ev => (
+              {eventos.filter(ev => ev.estado && !usedEventIds.has(ev.idEvento)).map(ev => (
                 <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} v{ev.version}</MenuItem>
               ))}
             </Select>
@@ -1024,7 +1026,7 @@ export default function OfertasPage() {
               <InputLabel>Evento</InputLabel>
               <Select value={formEditOferta.evento} label="Evento"
                 onChange={e => setFormEditOferta(p => ({ ...p, evento: e.target.value }))}>
-                {eventos.filter(ev => ev.estado).map(ev => (
+                {eventos.filter(ev => ev.estado && (!usedEventIds.has(ev.idEvento) || ev.idEvento === editingOferta?.categoriaEvento?.evento?.idEvento)).map(ev => (
                   <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} v{ev.version}</MenuItem>
                 ))}
               </Select>
