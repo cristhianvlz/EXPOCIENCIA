@@ -42,7 +42,11 @@ class ActaEvaluacionType(DjangoObjectType):
         model = ActaEvaluacion
         fields = '__all__'
 
+    consolidada = graphene.Boolean()
     detalles_evaluacion = graphene.List(lambda: DetalleEvaluacionType)
+
+    def resolve_consolidada(root, info):
+        return root.consolidada
 
     def resolve_detalles_evaluacion(root, info):
         return root.detalles_evaluacion.all()
@@ -529,6 +533,7 @@ class EditarActaEvaluacion(graphene.Mutation):
         hora_fin = graphene.Time()
         estado = graphene.Boolean()
         observacion = graphene.String()
+        consolidada = graphene.Boolean()
 
     acta = graphene.Field(ActaEvaluacionType)
     ok = graphene.Boolean()
@@ -564,7 +569,7 @@ class EditarActaEvaluacion(graphene.Mutation):
             except Proyecto.DoesNotExist:
                 return EditarActaEvaluacion(acta=None, ok=False, error="El proyecto no existe.") # type: ignore
 
-        for field in ['nota_final', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'observacion']:
+        for field in ['nota_final', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'observacion', 'consolidada']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(acta, field, kwargs[field])
 
@@ -672,14 +677,22 @@ class EditarDetalleEvaluacion(graphene.Mutation):
                 return EditarDetalleEvaluacion(detalle_evaluacion=None, ok=False, error="El tribunal no existe.") # type: ignore
 
         if 'puntuacion' in kwargs and kwargs['puntuacion'] is not None:
+            acta = detalle.acta_evaluacion
+            # Bloquear si acta consolidada y sin permiso tardío
+            if acta.consolidada and not detalle.permiso_calificacion_tardia:
+                if not kwargs.get('permiso_calificacion_tardia', False):
+                    return EditarDetalleEvaluacion(detalle_evaluacion=None, ok=False, error="El acta ya fue consolidada. Solicita permiso al administrador para registrar tu calificación.") # type: ignore
             # Check if trying to update but already graded and no permission
             if detalle.puntuacion and detalle.puntuacion > 0 and not detalle.permiso_calificacion_tardia:
                 # Allow admin to explicitly grant permission along with score, but flutter app won't
                 if not kwargs.get('permiso_calificacion_tardia', False):
                     return EditarDetalleEvaluacion(detalle_evaluacion=None, ok=False, error="Ya calificaste este proyecto. Pide permiso al administrador para volver a calificar.") # type: ignore
-            # If grading with permission, revoke it automatically
+            # If grading with permission, revoke it and unlock the acta for re-consolidation
             if detalle.permiso_calificacion_tardia and kwargs['puntuacion'] > 0:
                 detalle.permiso_calificacion_tardia = False
+                # Desconsolidar para que el admin deba volver a consolidar con la nota del ausente
+                acta.consolidada = False
+                acta.save()
 
         for field in ['puntuacion', 'permiso_calificacion_tardia', 'estado']:
             if field in kwargs and kwargs[field] is not None:
@@ -699,8 +712,7 @@ class EliminarDetalleEvaluacion(graphene.Mutation):
     def mutate(root, info, id_detalle_evaluacion):
         try:
             detalle = DetalleEvaluacion.objects.get(pk=id_detalle_evaluacion)
-            detalle.estado = False
-            detalle.save()
+            detalle.delete()
             return EliminarDetalleEvaluacion(ok=True, error=None) # type: ignore
         except DetalleEvaluacion.DoesNotExist:
             return EliminarDetalleEvaluacion(ok=False, error="El detalle no existe.") # type: ignore
@@ -733,6 +745,10 @@ class CrearPuntuacionCriterio(graphene.Mutation):
 
         if not get_cronograma_activo(evento, 'evaluaci') and not detalle.permiso_calificacion_tardia:
             return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El período de Fase de Evaluación/Defensa no está activo y no se cuenta con permiso para calificación tardía.") # type: ignore
+
+        # Bloquear si el acta está consolidada y el jurado no tiene permiso
+        if detalle.acta_evaluacion.consolidada and not detalle.permiso_calificacion_tardia:
+            return CrearPuntuacionCriterio(puntuacion=None, ok=False, error="El acta ya fue consolidada. Solicita permiso al administrador para registrar tu calificación.") # type: ignore
 
         try:
             criterio = Criterio.objects.get(pk=id_criterio)
@@ -789,7 +805,12 @@ class EditarPuntuacionCriterio(graphene.Mutation):
             except Criterio.DoesNotExist:
                 return EditarPuntuacionCriterio(puntuacion=None, ok=False, error="El criterio no existe.") # type: ignore
 
-        if puntuacion.detalle_evaluacion.puntuacion and puntuacion.detalle_evaluacion.puntuacion > 0 and not puntuacion.detalle_evaluacion.permiso_calificacion_tardia:
+        det = puntuacion.detalle_evaluacion
+        # Bloquear si acta consolidada y sin permiso
+        if det.acta_evaluacion.consolidada and not det.permiso_calificacion_tardia:
+            return EditarPuntuacionCriterio(puntuacion=None, ok=False, error="El acta ya fue consolidada. Solicita permiso al administrador para modificar tu calificación.") # type: ignore
+
+        if det.puntuacion and det.puntuacion > 0 and not det.permiso_calificacion_tardia:
             return EditarPuntuacionCriterio(puntuacion=None, ok=False, error="Ya calificaste este proyecto. Pide permiso al administrador para volver a calificar.") # type: ignore
 
         for field in ['puntuacion_criterio', 'estado']:
@@ -817,6 +838,95 @@ class EliminarPuntuacionCriterio(graphene.Mutation):
             return EliminarPuntuacionCriterio(ok=False, error="El registro de puntuación no existe.") # type: ignore
 
 
+# ================= MUTACIÓN ConsolidarActa =================
+class ConsolidarActa(graphene.Mutation):
+    """Calcula el promedio de los jurados que calificaron, guarda la nota_final
+    y marca el acta como consolidada (bloqueada). Solo puede revertirse cuando
+    un jurado ausente tiene permiso y registra su nota."""
+    class Arguments:
+        id_acta_evaluacion = graphene.ID(required=True)
+
+    acta = graphene.Field(ActaEvaluacionType)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_acta_evaluacion):
+        from decimal import Decimal
+        from django.db.models import Sum
+        try:
+            acta = ActaEvaluacion.objects.prefetch_related(
+                'detalles_evaluacion__puntuaciones_criterio'
+            ).get(pk=id_acta_evaluacion)
+        except ActaEvaluacion.DoesNotExist:
+            return ConsolidarActa(acta=None, ok=False, error="El acta no existe.") # type: ignore
+
+        detalles = acta.detalles_evaluacion.all()
+        # Solo cuentan los jurados que efectivamente ingresaron puntuaciones de criterios
+        completados = [d for d in detalles if d.puntuaciones_criterio.exists()]
+        if not completados:
+            return ConsolidarActa(acta=None, ok=False, error="Ningún jurado ha registrado calificaciones aún.") # type: ignore
+
+        # Promedio: suma de puntuaciones de los que calificaron / total de jurados asignados
+        suma = sum(d.puntuacion or Decimal('0') for d in completados)
+        total_jurados = detalles.count()
+        nota_final = (suma / total_jurados).quantize(Decimal('0.01'))
+
+        acta.nota_final = nota_final
+        acta.consolidada = True
+        acta.save()
+        return ConsolidarActa(acta=acta, ok=True, error=None) # type: ignore
+
+
+# ================= MUTACIÓN ConcederPermisoCalificacion =================
+class ConcederPermisoCalificacion(graphene.Mutation):
+    """Concede o revoca el permiso de calificación tardía a un jurado específico.
+    Solo funciona si el acta está consolidada.
+    Al conceder el permiso, el jurado podrá ingresar su nota desde web o app.
+    Al enviar su nota, el permiso se revoca automáticamente y el acta
+    queda desconsolidada para que el admin vuelva a consolidar."""
+    class Arguments:
+        id_detalle_evaluacion = graphene.ID(required=True)
+        conceder = graphene.Boolean(required=True)  # True=conceder, False=revocar
+
+    detalle = graphene.Field(DetalleEvaluacionType)
+    ok = graphene.Boolean()
+    error = graphene.String()
+
+    @staticmethod
+    def mutate(root, info, id_detalle_evaluacion, conceder):
+        try:
+            detalle = DetalleEvaluacion.objects.select_related('acta_evaluacion').get(
+                pk=id_detalle_evaluacion
+            )
+        except DetalleEvaluacion.DoesNotExist:
+            return ConcederPermisoCalificacion(detalle=None, ok=False, error="El detalle no existe.") # type: ignore
+
+        if conceder and not detalle.acta_evaluacion.consolidada:
+            return ConcederPermisoCalificacion(
+                detalle=None, ok=False,
+                error="Solo se puede conceder permiso cuando el acta ya está consolidada."
+            ) # type: ignore
+
+        detalle.permiso_calificacion_tardia = conceder
+        detalle.save()
+
+        # Notificar al jurado por push si se concede el permiso
+        if conceder and detalle.tribunal.fcm_token:
+            from config.fcm import send_push
+            send_push(
+                token=detalle.tribunal.fcm_token,
+                title='Permiso de calificación concedido',
+                body=(
+                    f'Se te ha concedido permiso para registrar tu calificación '
+                    f'del proyecto "{detalle.acta_evaluacion.proyecto.titulo}". '
+                    'Ingresa tu nota desde la aplicación o el sistema web.'
+                ),
+            )
+
+        return ConcederPermisoCalificacion(detalle=detalle, ok=True, error=None) # type: ignore
+
+
 class Mutation(graphene.ObjectType):
     crear_planilla_evaluativa = CrearPlanillaEvaluativa.Field()
     editar_planilla_evaluativa = EditarPlanillaEvaluativa.Field()
@@ -835,10 +945,12 @@ class Mutation(graphene.ObjectType):
     crear_acta_evaluacion = CrearActaEvaluacion.Field()
     editar_acta_evaluacion = EditarActaEvaluacion.Field()
     eliminar_acta_evaluacion = EliminarActaEvaluacion.Field()
+    consolidar_acta = ConsolidarActa.Field()
 
     crear_detalle_evaluacion = CrearDetalleEvaluacion.Field()
     editar_detalle_evaluacion = EditarDetalleEvaluacion.Field()
     eliminar_detalle_evaluacion = EliminarDetalleEvaluacion.Field()
+    conceder_permiso_calificacion = ConcederPermisoCalificacion.Field()
 
     crear_puntuacion_criterio = CrearPuntuacionCriterio.Field()
     editar_puntuacion_criterio = EditarPuntuacionCriterio.Field()

@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python manage.py check)"
+      "Bash(python manage.py check)",
+      "Bash(cp \"/c/Users/CRISTHIAN/AppData/Local/Temp/pw-search/test.mjs\" \"/c/Users/CRISTHIAN/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/test.mjs\")",
+      "Read(//c/Users/CRISTHIAN/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/**)",
+      "Bash(node test.mjs)",
+      "Read(//c/Users/CRISTHIAN/AppData/Local/Temp/pw-search/**)"
     ]
   }
 }

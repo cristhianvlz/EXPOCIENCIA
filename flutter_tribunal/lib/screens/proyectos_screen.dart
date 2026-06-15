@@ -12,9 +12,11 @@ const String _misProyectosQuery = r'''
       id
       yaEvaluo
       puntuacion
+      permisoCalificacionTardia
       actaEvaluacion {
         idActaEvaluacion
         fecha
+        consolidada
         planillaEvaluativa {
           idPlanillaEvaluativa
           nombre
@@ -80,8 +82,9 @@ class _ProyectosScreenState extends State<ProyectosScreen>
 
   List<DetalleEvaluacion> get _filtrados {
     var lista = _detalles;
-    if (_filtro == 'pendientes') lista = lista.where((d) => !d.yaEvaluo).toList();
-    if (_filtro == 'calificados') lista = lista.where((d) => d.yaEvaluo).toList();
+    // Un jurado con permiso tardío es tratado como pendiente aunque yaEvaluo=true
+    if (_filtro == 'pendientes') lista = lista.where((d) => !d.yaEvaluo || d.permisoCalificacionTardia).toList();
+    if (_filtro == 'calificados') lista = lista.where((d) => d.yaEvaluo && !d.permisoCalificacionTardia).toList();
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       lista = lista.where((d) =>
@@ -420,8 +423,9 @@ class _ProyectosScreenState extends State<ProyectosScreen>
 
   Widget _buildList() {
     final lista      = _filtrados;
-    final pendientes = lista.where((d) => !d.yaEvaluo).toList();
-    final evaluados  = lista.where((d) => d.yaEvaluo).toList();
+    // Pendientes: sin calificar O con permiso tardío (aunque ya evaluaron)
+    final pendientes = lista.where((d) => !d.yaEvaluo || d.permisoCalificacionTardia).toList();
+    final evaluados  = lista.where((d) => d.yaEvaluo && !d.permisoCalificacionTardia).toList();
 
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),
@@ -449,7 +453,7 @@ class _ProyectosScreenState extends State<ProyectosScreen>
               ),
             ),
 
-          // ── Pendientes: lista vertical ──────────────────────────────
+          // ── Pendientes y con permiso tardío ────────────────────────
           if (pendientes.isNotEmpty) ...[
             _sectionHeader('Pendientes', pendientes.length, Colors.orange),
             const SizedBox(height: 10),
@@ -714,9 +718,11 @@ class _ProyectoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final proyecto  = detalle.acta.proyecto;
-    final evaluado  = detalle.yaEvaluo;
-    final cardColor = evaluado ? Colors.green : Colors.orange;
+    final proyecto       = detalle.acta.proyecto;
+    final evaluado       = detalle.yaEvaluo;
+    final tienePermiso   = detalle.permisoCalificacionTardia;
+    // Con permiso tardío → azul; pendiente normal → naranja; calificado → verde
+    final cardColor      = tienePermiso ? Colors.blue : (evaluado ? Colors.green : Colors.orange);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -748,18 +754,22 @@ class _ProyectoCard extends StatelessWidget {
                   height: 52,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: evaluado
-                          ? [Colors.green.shade400, Colors.green.shade700]
-                          : [Colors.orange.shade300, Colors.orange.shade600],
+                      colors: tienePermiso
+                          ? [Colors.blue.shade400, Colors.blue.shade700]
+                          : evaluado
+                              ? [Colors.green.shade400, Colors.green.shade700]
+                              : [Colors.orange.shade300, Colors.orange.shade600],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    evaluado
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.pending_actions_rounded,
+                    tienePermiso
+                        ? Icons.vpn_key_rounded
+                        : evaluado
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.pending_actions_rounded,
                     color: Colors.white,
                     size: 26,
                   ),
@@ -803,17 +813,21 @@ class _ProyectoCard extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  evaluado
-                                      ? Icons.check_rounded
-                                      : Icons.radio_button_unchecked,
+                                  tienePermiso
+                                      ? Icons.vpn_key_rounded
+                                      : evaluado
+                                          ? Icons.check_rounded
+                                          : Icons.radio_button_unchecked,
                                   size: 12,
                                   color: cardColor,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  evaluado
-                                      ? 'Calificado'
-                                      : 'Pendiente',
+                                  tienePermiso
+                                      ? 'Permiso concedido'
+                                      : evaluado
+                                          ? 'Calificado'
+                                          : 'Pendiente',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,

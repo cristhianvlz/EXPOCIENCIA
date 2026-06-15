@@ -243,20 +243,6 @@ class _CalificarScreenState extends State<CalificarScreen> {
     try {
       final client = await GraphQLConfig.buildClient();
 
-      final detalleResult = await client.mutate(MutationOptions(
-        document: gql(_editarDetalleMutation),
-        variables: {
-          'idDetalleEvaluacion': widget.detalle.idDetalle,
-          'puntuacion': _totalActual.toStringAsFixed(2),
-        },
-      ));
-      if (detalleResult.data?['editarDetalleEvaluacion']?['ok'] != true) {
-        setState(() => _errorMsg =
-            detalleResult.data?['editarDetalleEvaluacion']?['error'] ??
-                'Error al guardar puntuación total.');
-        return;
-      }
-
       for (final seccion in widget.detalle.acta.planilla.secciones) {
         for (final criterio in seccion.criterios) {
           final val =
@@ -293,6 +279,20 @@ class _CalificarScreenState extends State<CalificarScreen> {
             return;
           }
         }
+      }
+
+      final detalleResult = await client.mutate(MutationOptions(
+        document: gql(_editarDetalleMutation),
+        variables: {
+          'idDetalleEvaluacion': widget.detalle.idDetalle,
+          'puntuacion': _totalActual.toStringAsFixed(2),
+        },
+      ));
+      if (detalleResult.data?['editarDetalleEvaluacion']?['ok'] != true) {
+        setState(() => _errorMsg =
+            detalleResult.data?['editarDetalleEvaluacion']?['error'] ??
+                'Error al guardar puntuación total.');
+        return;
       }
 
       if (mounted) {

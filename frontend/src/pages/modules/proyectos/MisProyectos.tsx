@@ -3,13 +3,13 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Typography, CircularProgress, Alert, Card, CardContent, Chip, Stack,
   Divider, Button, Tabs, Tab, Avatar, LinearProgress, Tooltip, Snackbar,
-  Dialog, DialogContent, IconButton
+  Dialog, DialogContent, IconButton, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
 import {
   ProjectOutlined, InfoCircleOutlined, DownloadOutlined, FilePdfOutlined,
   TrophyOutlined, StarOutlined, CheckCircleOutlined, ClockCircleOutlined,
   CloseCircleOutlined, PrinterOutlined, RiseOutlined, FileProtectOutlined,
-  DollarCircleOutlined, QrcodeOutlined, UploadOutlined
+  DollarCircleOutlined, QrcodeOutlined, UploadOutlined, DownOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -531,53 +531,65 @@ function QrUploadSection({ asignacion, refetch }: { asignacion: AsignacionPremio
         </Box>
       )}
 
-      {/* Subida de QR — siempre disponible mientras no esté pagado */}
+      {/* Estado del pago cuando no está pagado */}
       {!isPagado && (
         <Box>
-          <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
           <Button size="small" variant="text" color="inherit"
             disabled={verificando}
             onClick={async () => {
               setVerificando(true);
               try { await refetch(); } finally { setVerificando(false); }
             }}
-            sx={{ fontSize: 10, mb: 0.5, color: 'text.disabled', textTransform: 'none' }}>
+            sx={{ fontSize: 10, mb: 1, color: 'text.disabled', textTransform: 'none' }}>
             {verificando ? 'Verificando...' : 'Verificar estado de pago'}
           </Button>
 
-          {esEfectivo && (
-            <Alert severity="info" sx={{ py: 0.5, mb: 1 }} icon={<DollarCircleOutlined />}>
+          {metodoPendiente && (
+            <Alert severity="warning" sx={{ py: 0.5, mb: 1 }} icon={<ClockCircleOutlined />}>
               <Typography variant="caption">
-                El pago está configurado en efectivo. Aun así puedes subir tu QR por si el administrador lo necesita.
+                El administrador aún no ha configurado el método de pago. Por favor espera a que se asigne el método para continuar.
               </Typography>
             </Alert>
           )}
 
-          {hasQr ? (
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <img src={asignacion.qrImagen} alt="Tu QR"
-                style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 6, border: '1px solid #d9d9d9' }} />
-              <Box>
-                <Typography variant="caption" color="success.main" fontWeight={600} sx={{ display: 'block' }}>
-                  QR subido correctamente
-                </Typography>
-                <Button size="small" variant="outlined" startIcon={<UploadOutlined />}
-                  disabled={loading} onClick={() => inputRef.current?.click()}
-                  sx={{ mt: 0.5, fontSize: 11 }}>
-                  Reemplazar QR
-                </Button>
-              </Box>
-            </Stack>
-          ) : (
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Sube tu código QR de cobro para que el administrador pueda realizar el pago.
+          {esEfectivo && (
+            <Alert severity="info" sx={{ py: 0.5, mb: 1 }} icon={<DollarCircleOutlined />}>
+              <Typography variant="caption">
+                El método de pago asignado es Efectivo. Por favor, comunícate con el comité organizador o acércate a las oficinas para realizar el cobro manual.
               </Typography>
-              <Button size="small" variant="contained" startIcon={<UploadOutlined />}
-                disabled={loading} onClick={() => inputRef.current?.click()}
-                sx={{ fontWeight: 700 }}>
-                {loading ? 'Subiendo...' : 'Subir mi QR de cobro'}
-              </Button>
+            </Alert>
+          )}
+
+          {asignacion.metodoPago === 'qr' && (
+            <Box>
+              <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+              {hasQr ? (
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <img src={asignacion.qrImagen} alt="Tu QR"
+                    style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 6, border: '1px solid #d9d9d9' }} />
+                  <Box>
+                    <Typography variant="caption" color="success.main" fontWeight={600} sx={{ display: 'block' }}>
+                      QR subido correctamente
+                    </Typography>
+                    <Button size="small" variant="outlined" startIcon={<UploadOutlined />}
+                      disabled={loading} onClick={() => inputRef.current?.click()}
+                      sx={{ mt: 0.5, fontSize: 11 }}>
+                      Reemplazar QR
+                    </Button>
+                  </Box>
+                </Stack>
+              ) : (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    El pago se realizará mediante transferencia. Sube tu código QR de cobro para continuar.
+                  </Typography>
+                  <Button size="small" variant="contained" startIcon={<UploadOutlined />}
+                    disabled={loading} onClick={() => inputRef.current?.click()}
+                    sx={{ fontWeight: 700 }}>
+                    {loading ? 'Subiendo...' : 'Subir mi QR de cobro'}
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
         </Box>
@@ -799,6 +811,9 @@ export default function MisProyectos() {
       {/* ── Tabs ── */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 } }}>
           {tabData.map((t, i) => (
             <Tab key={i} label={
@@ -836,14 +851,22 @@ export default function MisProyectos() {
             });
 
             return (
-              <Card key={proyecto.idProyecto} variant="outlined" sx={{
-                borderRadius: 3,
+              <Accordion key={proyecto.idProyecto} variant="outlined" sx={{
+                borderRadius: '12px !important',
                 border: '1px solid',
                 borderColor: hasWinner ? 'warning.main' : 'divider',
                 boxShadow: hasWinner ? '0 4px 20px rgba(245,166,35,0.15)' : 'none',
+                '&:before': { display: 'none' },
+                '&.Mui-expanded': { m: 0 },
+                overflow: 'hidden'
               }}>
-                <CardContent sx={{ p: 3 }}>
-
+                <AccordionSummary
+                  expandIcon={<DownOutlined />}
+                  sx={{ 
+                    p: 3, 
+                    '& .MuiAccordionSummary-content': { display: 'block', m: '0 !important', pr: 2 } 
+                  }}
+                >
                   {/* Header */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
@@ -877,8 +900,10 @@ export default function MisProyectos() {
 
                   {/* Barra de progreso del flujo */}
                   <FlowProgress estado={proyecto.estado} hasEval={hasEval} hasWinner={hasWinner} />
+                </AccordionSummary>
 
-                  <Divider sx={{ my: 2 }} />
+                <AccordionDetails sx={{ px: 3, pb: 3, pt: 0 }}>
+                  <Divider sx={{ mb: 2 }} />
 
                   {/* Resumen */}
                   {proyecto.resumen && (
@@ -945,9 +970,8 @@ export default function MisProyectos() {
                       </Box>
                     </Box>
                   )}
-
-                </CardContent>
-              </Card>
+                </AccordionDetails>
+              </Accordion>
             );
           })}
         </Stack>

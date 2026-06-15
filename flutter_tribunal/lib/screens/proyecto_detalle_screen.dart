@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/evaluacion.dart';
@@ -9,18 +10,93 @@ import '../config/graphql_config.dart';
 import '../services/auth_service.dart';
 import 'calificar_screen.dart';
 
+const String _getDetalleEstadoQuery = r'''
+  query GetDetalleEstado($id: ID!) {
+    detalleEvaluacion(id: $id) {
+      id
+      yaEvaluo
+      puntuacion
+      permisoCalificacionTardia
+      actaEvaluacion {
+        consolidada
+      }
+    }
+  }
+''';
+
 // ─── Colores del tema ───────────────────────────────────────────────────────
 const _kNavy  = Color(0xFF0D1B3E);
 const _kNavy2 = Color(0xFF1A3A6E);
 const _kGold  = Color(0xFFD4AF37);
 
-class ProyectoDetalleScreen extends StatelessWidget {
+class ProyectoDetalleScreen extends StatefulWidget {
   final DetalleEvaluacion detalle;
   const ProyectoDetalleScreen({super.key, required this.detalle});
 
   @override
+  State<ProyectoDetalleScreen> createState() => _ProyectoDetalleScreenState();
+}
+
+class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen> {
+  late bool _yaEvaluo;
+  late bool _permisoCalificacionTardia;
+  late double? _puntuacion;
+  late bool _consolidada;
+
+  @override
+  void initState() {
+    super.initState();
+    _yaEvaluo = widget.detalle.yaEvaluo;
+    _permisoCalificacionTardia = widget.detalle.permisoCalificacionTardia;
+    _puntuacion = widget.detalle.puntuacion;
+    _consolidada = widget.detalle.acta.consolidada;
+    _refrescarEstado();
+  }
+
+  Future<void> _refrescarEstado() async {
+    try {
+      final client = await GraphQLConfig.buildClient();
+      final result = await client.query(QueryOptions(
+        document: gql(_getDetalleEstadoQuery),
+        variables: {'id': widget.detalle.idDetalle},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+      final data = result.data?['detalleEvaluacion'];
+      if (data != null && mounted) {
+        setState(() {
+          _yaEvaluo = data['yaEvaluo'] as bool? ?? _yaEvaluo;
+          _permisoCalificacionTardia =
+              data['permisoCalificacionTardia'] as bool? ?? _permisoCalificacionTardia;
+          _puntuacion = data['puntuacion'] != null
+              ? double.tryParse(data['puntuacion'].toString())
+              : _puntuacion;
+          if (data['actaEvaluacion'] != null) {
+            _consolidada = data['actaEvaluacion']['consolidada'] as bool? ?? _consolidada;
+          }
+        });
+      }
+    } catch (_) {
+      // Si falla la red, usa los datos iniciales
+    }
+  }
+
+  DetalleEvaluacion get _detalleActualizado => DetalleEvaluacion(
+        idDetalle: widget.detalle.idDetalle,
+        yaEvaluo: _yaEvaluo,
+        puntuacion: _puntuacion,
+        permisoCalificacionTardia: _permisoCalificacionTardia,
+        acta: ActaEvaluacion(
+          idActa: widget.detalle.acta.idActa,
+          fecha: widget.detalle.acta.fecha,
+          consolidada: _consolidada,
+          planilla: widget.detalle.acta.planilla,
+          proyecto: widget.detalle.acta.proyecto,
+        ),
+      );
+
+  @override
   Widget build(BuildContext context) {
-    final proyecto = detalle.acta.proyecto;
+    final proyecto = widget.detalle.acta.proyecto;
     return DefaultTabController(
       length: 4,
       child: Scaffold(
@@ -80,25 +156,37 @@ class ProyectoDetalleScreen extends StatelessWidget {
           ],
           body: TabBarView(
             children: [
-              _InfoTab(detalle: detalle),
+              _InfoTab(detalle: _detalleActualizado),
               _AcademicoTab(proyecto: proyecto),
               _EquipoTab(proyecto: proyecto),
               _ArchivoTab(proyecto: proyecto),
             ],
           ),
         ),
-        floatingActionButton: detalle.yaEvaluo
-            ? null
-            : FloatingActionButton.extended(
-                backgroundColor: _kNavy,
+        floatingActionButton: ((!_yaEvaluo || _permisoCalificacionTardia) && (!_consolidada || _permisoCalificacionTardia))
+            ? FloatingActionButton.extended(
+                backgroundColor: _permisoCalificacionTardia ? Colors.blue[700] : _kNavy,
                 foregroundColor: Colors.white,
-                icon: const Icon(Icons.rate_review_outlined),
-                label: const Text('Calificar', style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => CalificarScreen(detalle: detalle)),
+                icon: Icon(_permisoCalificacionTardia
+                    ? Icons.vpn_key_rounded
+                    : Icons.rate_review_outlined),
+                label: Text(
+                  _permisoCalificacionTardia
+                      ? 'Registrar nota tardía'
+                      : 'Calificar',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-              ),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CalificarScreen(detalle: _detalleActualizado),
+                    ),
+                  );
+                  _refrescarEstado();
+                },
+              )
+            : null,
       ),
     );
   }
@@ -137,8 +225,48 @@ class _InfoTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
       children: [
-        // Badge evaluado
-        if (detalle.yaEvaluo) ...[
+        // Badge de permiso tardío (tiene prioridad visual)
+        if (detalle.permisoCalificacionTardia) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade700, Colors.blue.shade500],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.vpn_key_rounded, color: Colors.white, size: 28),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Permiso concedido',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14)),
+                      Text(
+                        'Puedes registrar tu nota ahora. Usa el botón inferior.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ] else if (detalle.yaEvaluo) ...[
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(

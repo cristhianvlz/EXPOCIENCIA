@@ -10,7 +10,7 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, FilePdfOutlined,
   PrinterOutlined, FileTextOutlined, ExclamationCircleOutlined, DollarCircleOutlined,
-  QrcodeOutlined, CheckOutlined, WalletOutlined
+  QrcodeOutlined, CheckOutlined, WalletOutlined, SearchOutlined, CloseOutlined, TrophyOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -204,7 +204,7 @@ function buildCertPage(cert) {
   const cp = cert.ganadorPremio.candidatoPremio;
   const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(' · ');
   const membrete = cp.premio.evento?.membrete;
-  const isHorizontal = cert.plantilla.orientacion !== 'vertical';
+  const isHorizontal = cert.plantilla.orientacion?.toLowerCase() !== 'vertical';
 
   const imgUrl = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
   const logoUnidad      = imgUrl(membrete?.logoUnidad);
@@ -847,7 +847,7 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
 
   const openDialog = (item = null) => {
     setForm(item
-      ? { descripcion: item.descripcion, contenido: item.contenido, orientacion: item.orientacion || 'horizontal' }
+      ? { descripcion: item.descripcion, contenido: item.contenido, orientacion: item.orientacion?.toLowerCase() || 'horizontal' }
       : { descripcion: '', contenido: '', orientacion: 'horizontal' });
     setDialog({ open: true, item });
   };
@@ -894,7 +894,7 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
               <TableCell width={110} align="center">Formato</TableCell>
               <TableCell>Contenido (vista previa)</TableCell>
               <TableCell align="center">Estado</TableCell>
-              <TableCell align="right" width={120}>Acciones</TableCell>
+              <TableCell align="right" width={140}>Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -904,9 +904,9 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
                 <TableCell><Typography fontWeight={500}>{p.descripcion}</Typography></TableCell>
                 <TableCell align="center">
                   <Chip
-                    label={p.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                    label={p.orientacion?.toLowerCase() === 'vertical' ? 'Vertical' : 'Horizontal'}
                     size="small"
-                    color={p.orientacion === 'vertical' ? 'secondary' : 'info'}
+                    color={p.orientacion?.toLowerCase() === 'vertical' ? 'secondary' : 'info'}
                     variant="outlined"
                   />
                 </TableCell>
@@ -920,15 +920,17 @@ function PlantillasTab({ plantillas, refetch, showNotif }) {
                   <Chip label={p.estado ? 'Activa' : 'Inactiva'} size="small" color={p.estado ? 'success' : 'default'} />
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Ver plantilla">
-                    <IconButton size="small" color="secondary" onClick={() => setPreview(p)}><FileTextOutlined /></IconButton>
-                  </Tooltip>
-                  <Tooltip title="Editar">
-                    <IconButton size="small" color="primary" onClick={() => openDialog(p)}><EditOutlined /></IconButton>
-                  </Tooltip>
-                  <Tooltip title="Desactivar">
-                    <IconButton size="small" color="error" onClick={() => setConfirm({ open: true, id: p.idPlantilla })}><DeleteOutlined /></IconButton>
-                  </Tooltip>
+                  <Stack direction="row" justifyContent="flex-end" flexWrap="nowrap">
+                    <Tooltip title="Ver plantilla">
+                      <IconButton size="small" color="secondary" onClick={() => setPreview(p)}><FileTextOutlined /></IconButton>
+                    </Tooltip>
+                    <Tooltip title="Editar">
+                      <IconButton size="small" color="primary" onClick={() => openDialog(p)}><EditOutlined /></IconButton>
+                    </Tooltip>
+                    <Tooltip title="Desactivar">
+                      <IconButton size="small" color="error" onClick={() => setConfirm({ open: true, id: p.idPlantilla })}><DeleteOutlined /></IconButton>
+                    </Tooltip>
+                  </Stack>
                 </TableCell>
               </TableRow>
             ))}
@@ -1226,9 +1228,9 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                           <TableCell>{cert.plantilla.descripcion}</TableCell>
                           <TableCell align="center">
                             <Chip
-                              label={cert.plantilla.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                              label={cert.plantilla.orientacion?.toLowerCase() === 'vertical' ? 'Vertical' : 'Horizontal'}
                               size="small"
-                              color={cert.plantilla.orientacion === 'vertical' ? 'secondary' : 'info'}
+                              color={cert.plantilla.orientacion?.toLowerCase() === 'vertical' ? 'secondary' : 'info'}
                               variant="outlined"
                             />
                           </TableCell>
@@ -1284,9 +1286,8 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
               <InputLabel>Ganador</InputLabel>
               <Select value={form.idGanadorPremio} label="Ganador"
                 onChange={e => handleSelectGanador(e.target.value)}>
-                {ganadoresActivos.map(g => {
+                {ganadores_pendientes.map(g => {
                   const cp = g.candidatoPremio;
-                  const yaTiene = ganadoresConCert.has(g.idGanadorPremio);
                   return (
                     <MenuItem key={g.idGanadorPremio} value={g.idGanadorPremio}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
@@ -1296,7 +1297,6 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                             {posLabel(cp.premio?.numeroGanadores)} — {cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
                           </Typography>
                         </Box>
-                        {yaTiene && <Chip label="Ya tiene cert." size="small" color="success" variant="outlined" />}
                       </Box>
                     </MenuItem>
                   );
@@ -1325,9 +1325,9 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <span>{pl.descripcion}</span>
                       <Chip
-                        label={pl.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                        label={pl.orientacion?.toLowerCase() === 'vertical' ? 'Vertical' : 'Horizontal'}
                         size="small"
-                        color={pl.orientacion === 'vertical' ? 'secondary' : 'info'}
+                        color={pl.orientacion?.toLowerCase() === 'vertical' ? 'secondary' : 'info'}
                         variant="outlined"
                       />
                     </Box>
@@ -1409,9 +1409,9 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <span>{pl.descripcion}</span>
                       <Chip
-                        label={pl.orientacion === 'vertical' ? 'Vertical' : 'Horizontal'}
+                        label={pl.orientacion?.toLowerCase() === 'vertical' ? 'Vertical' : 'Horizontal'}
                         size="small"
-                        color={pl.orientacion === 'vertical' ? 'secondary' : 'info'}
+                        color={pl.orientacion?.toLowerCase() === 'vertical' ? 'secondary' : 'info'}
                         variant="outlined"
                       />
                     </Box>
@@ -2053,6 +2053,12 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
     setLocalPagos(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...updates } }));
   const [marcar] = useMutation(MARCAR_DIVISION_IMPRESA);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandidos, setExpandidos] = useState(new Set());
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
+  });
+
   const handleImprimir = async (ganador) => {
     imprimirComprobantes(ganador, showNotif);
     try {
@@ -2075,109 +2081,189 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
     );
   }
 
+  // Filtrado por búsqueda
+  const term = searchTerm.toLowerCase().trim();
+  const filtered = monetarios.filter(g => {
+    if (!term) return true;
+    const cp = g.candidatoPremio;
+    const title = cp?.proyecto?.titulo?.toLowerCase() || '';
+    const evento = cp?.premio?.evento?.nombre?.toLowerCase() || '';
+    const oferta = cp?.proyecto?.ofertaEaCarrera?.oferta?.nombre?.toLowerCase() || '';
+    const area = cp?.premio?.area?.nombre?.toLowerCase() || '';
+    return title.includes(term) || evento.includes(term) || oferta.includes(term) || area.includes(term);
+  });
+
+  // Agrupación por Oferta (fallback a Evento)
+  const gruposOferta = filtered.reduce((acc, g) => {
+    const cp = g.candidatoPremio;
+    const oferta = cp?.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp?.premio?.evento?.nombre || 'Sin Oferta';
+    if (!acc[oferta]) acc[oferta] = [];
+    acc[oferta].push(g);
+    return acc;
+  }, {});
+
+  const grupos = Object.entries(gruposOferta).sort((a, b) => a[0].localeCompare(b[0]));
+
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Registra y emite los comprobantes de asignación de monto monetario para cada participante.
-        Una vez impresos, la división queda bloqueada.
-      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' }, gap: 2, mb: 3 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+          Registra y emite los comprobantes de asignación de monto monetario para cada participante.
+          Una vez impresos, la división queda bloqueada.
+        </Typography>
 
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ bgcolor: 'action.hover' }}>
-              <TableCell>Proyecto</TableCell>
-              <TableCell>Evento</TableCell>
-              <TableCell>Área</TableCell>
-              <TableCell>Premio</TableCell>
-              <TableCell align="right">Monto total</TableCell>
-              <TableCell align="center">Participantes</TableCell>
-              <TableCell align="center">Estado</TableCell>
-              <TableCell align="center">Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {monetarios.map(g => {
-              const cp     = g.candidatoPremio;
-              const status = getDivisionStatus(g);
-              const chip   = STATUS_CHIP[status];
-              const locked = status === 'impresa';
-              const asigs  = g.asignaciones || [];
-              const hasDivision = asigs.length > 0;
-              const pagadosCount = asigs.filter(a => (localPagos[a.idAsignacionPremio]?.estado ?? a.estadoPago) === 'pagado').length;
-              const monto  = parseFloat(cp.premio.monto);
-              const lugar  = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
-              const fmt    = (n) => n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        <TextField
+          size="small"
+          placeholder="Buscar proyecto, oferta, evento..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{ minWidth: 300, bgcolor: 'background.paper' }}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><SearchOutlined /></InputAdornment>,
+            endAdornment: searchTerm ? (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setSearchTerm('')}>
+                  <CloseOutlined style={{ fontSize: 14 }} />
+                </IconButton>
+              </InputAdornment>
+            ) : null
+          }}
+        />
+      </Box>
 
-              return (
-                <TableRow key={g.idGanadorPremio} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{cp.premio.evento?.nombre}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{cp.premio.area?.nombre}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{lugar}</Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2" fontWeight={700} color="success.main">Bs. {fmt(monto)}</Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography variant="body2">
-                      {(cp.proyecto.participantes || []).length}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Stack spacing={0.5} alignItems="center">
-                      <Chip label={chip.label} size="small" color={chip.color}
-                        variant="outlined" sx={{ borderRadius: '999px', fontWeight: 700 }} />
-                      {locked && hasDivision && (
-                        <Chip
-                          label={`${pagadosCount}/${asigs.length} pag.`}
-                          size="small"
-                          color={pagadosCount === asigs.length ? 'success' : pagadosCount > 0 ? 'warning' : 'default'}
-                          variant="outlined"
-                          sx={{ fontSize: 10, borderRadius: '999px' }}
-                        />
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Stack direction="row" gap={0.5} justifyContent="center">
-                      <Tooltip title={locked ? 'Ver división (bloqueada)' : hasDivision ? 'Editar división' : 'Dividir premio'}>
-                        <IconButton size="small" color="primary"
-                          onClick={() => setDialogGanador(g)}>
-                          <DollarCircleOutlined />
-                        </IconButton>
-                      </Tooltip>
-                      {hasDivision && (
-                        <Tooltip title="Imprimir comprobantes">
-                          <IconButton size="small" color="secondary"
-                            onClick={() => setPrintConfirm(g)}>
-                            <PrinterOutlined />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {locked && (
-                        <Tooltip title="Gestionar pagos de participantes">
-                          <IconButton size="small" color="success"
-                            onClick={() => setPagosDialogId(g.idGanadorPremio)}>
-                            <WalletOutlined />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {grupos.length === 0 ? (
+        <Alert severity="info">No se encontraron resultados para "{searchTerm}".</Alert>
+      ) : grupos.map(([ofertaNombre, premios]) => {
+        const isOpen = expandidos.has(ofertaNombre);
+        // Comprobar si hay impresas para estilos
+        const allImpresas = premios.every(p => getDivisionStatus(p) === 'impresa');
+        
+        return (
+          <Box key={ofertaNombre} sx={{ mb: 2 }}>
+            <Box sx={{
+              px: 2, py: 1.5,
+              borderRadius: isOpen ? '8px 8px 0 0' : 1.5,
+              background: allImpresas 
+                ? 'linear-gradient(135deg, rgba(56,158,13,0.10), rgba(56,158,13,0.03))' 
+                : 'linear-gradient(135deg, rgba(24,144,255,0.08), rgba(24,144,255,0.02))',
+              border: `1px solid ${allImpresas ? 'rgba(56,158,13,0.30)' : 'rgba(24,144,255,0.25)'}`,
+              display: 'flex', alignItems: 'center', gap: 1.5,
+            }}>
+              <TrophyOutlined style={{ color: allImpresas ? '#389e0d' : '#1890ff', fontSize: 18 }} />
+              <Typography variant="subtitle2" fontWeight={700} color={allImpresas ? "success.dark" : "primary.main"} sx={{ flex: 1 }}>
+                {ofertaNombre}
+              </Typography>
+              <Chip
+                label={isOpen ? `▲ ${premios.length} premio(s)` : `▼ ${premios.length} premio(s)`}
+                size="small"
+                color={allImpresas ? "success" : "primary"}
+                variant={isOpen ? 'filled' : 'outlined'}
+                onClick={() => toggleExpandido(ofertaNombre)}
+                sx={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
+              />
+            </Box>
+
+            {isOpen && (
+              <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${allImpresas ? 'rgba(56,158,13,0.30)' : 'rgba(24,144,255,0.25)'}`, borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      <TableCell>Proyecto</TableCell>
+                      <TableCell>Evento</TableCell>
+                      <TableCell>Área</TableCell>
+                      <TableCell>Premio</TableCell>
+                      <TableCell align="right">Monto total</TableCell>
+                      <TableCell align="center">Participantes</TableCell>
+                      <TableCell align="center">Estado</TableCell>
+                      <TableCell align="center">Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {premios.map(g => {
+                      const cp     = g.candidatoPremio;
+                      const status = getDivisionStatus(g);
+                      const chip   = STATUS_CHIP[status];
+                      const locked = status === 'impresa';
+                      const asigs  = g.asignaciones || [];
+                      const hasDivision = asigs.length > 0;
+                      const pagadosCount = asigs.filter(a => (localPagos[a.idAsignacionPremio]?.estado ?? a.estadoPago) === 'pagado').length;
+                      const monto  = parseFloat(cp.premio.monto);
+                      const lugar  = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
+                      const fmt    = (n) => n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                      return (
+                        <TableRow key={g.idGanadorPremio} hover>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{cp.premio.evento?.nombre}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{cp.premio.area?.nombre}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{lugar}</Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" fontWeight={700} color="success.main">Bs. {fmt(monto)}</Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Typography variant="body2">
+                              {(cp.proyecto.participantes || []).length}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack spacing={0.5} alignItems="center">
+                              <Chip label={chip.label} size="small" color={chip.color}
+                                variant="outlined" sx={{ borderRadius: '999px', fontWeight: 700 }} />
+                              {locked && hasDivision && (
+                                <Chip
+                                  label={`${pagadosCount}/${asigs.length} pag.`}
+                                  size="small"
+                                  color={pagadosCount === asigs.length ? 'success' : pagadosCount > 0 ? 'warning' : 'default'}
+                                  variant="outlined"
+                                  sx={{ fontSize: 10, borderRadius: '999px' }}
+                                />
+                              )}
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack direction="row" gap={0.5} justifyContent="center">
+                              <Tooltip title={locked ? 'Ver división (bloqueada)' : hasDivision ? 'Editar división' : 'Dividir premio'}>
+                                <IconButton size="small" color="primary"
+                                  onClick={() => setDialogGanador(g)}>
+                                  <DollarCircleOutlined />
+                                </IconButton>
+                              </Tooltip>
+                              {hasDivision && (
+                                <Tooltip title="Imprimir comprobantes">
+                                  <IconButton size="small" color="secondary"
+                                    onClick={() => setPrintConfirm(g)}>
+                                    <PrinterOutlined />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {locked && (
+                                <Tooltip title="Gestionar pagos de participantes">
+                                  <IconButton size="small" color="success"
+                                    onClick={() => setPagosDialogId(g.idGanadorPremio)}>
+                                    <WalletOutlined />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        );
+      })}
 
       <DivisionDialog
         open={!!dialogGanador}

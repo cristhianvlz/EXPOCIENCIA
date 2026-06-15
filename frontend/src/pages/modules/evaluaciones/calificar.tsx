@@ -62,6 +62,7 @@ interface Acta {
   horaFin: string;
   notaFinal: string;
   estado: boolean;
+  consolidada: boolean;
   proyecto: {
     idProyecto: string;
     titulo: string;
@@ -91,6 +92,7 @@ const GET_DATA = gql`
       horaFin
       notaFinal
       estado
+      consolidada
       proyecto {
         idProyecto titulo estado
         ofertaEaCarrera {
@@ -543,6 +545,14 @@ export default function PanelCalificacionPage() {
       setBlockAlert({
         open: true,
         message: 'Ya calificaste este proyecto. Si necesitas corregir tu nota o calificar nuevamente, solicita un permiso especial al administrador.'
+      });
+      return;
+    }
+
+    if (acta.consolidada && !detalle.permisoCalificacionTardia) {
+      setBlockAlert({
+        open: true,
+        message: 'El acta ya fue consolidada por el administrador. Solicita permiso especial para registrar o modificar tu calificación.'
       });
       return;
     }

@@ -245,7 +245,7 @@ function JuradosDialog({ open, onClose, acta, tribunales, onAdd, onRemove, onTog
                   </Button>
                 </Tooltip>
                 <Tooltip title="Quitar jurado">
-                  <IconButton size="small" color="error" onClick={() => onRemove(d.id)}>
+                  <IconButton size="small" color="error" onClick={() => onRemove(d)}>
                     <DeleteOutlined style={{ fontSize: 13 }} />
                   </IconButton>
                 </Tooltip>
@@ -409,19 +409,27 @@ export default function ActasEvaluacionPage() {
     setSaving(false);
   };
 
-  const handleRemoveJurado = async (idDetalle) => {
-    if (!window.confirm('¿Quitar este jurado del acta?')) return;
-    setSaving(true);
-    try {
-      const res = (await eliminarDetalle({ variables: { idDetalleEvaluacion: idDetalle } })).data?.eliminarDetalleEvaluacion;
-      if (res?.ok) {
-        showNotif('Jurado removido');
-        const updated = await refetch();
-        const updatedActa = updated.data?.todasLasActas?.find(a => a.idActaEvaluacion === juradosDialog.acta.idActaEvaluacion);
-        if (updatedActa) setJuradosDialog(p => ({ ...p, acta: updatedActa }));
-      } else showNotif(res?.error || 'Error', 'error');
-    } catch { showNotif('Error de conexión', 'error'); }
-    setSaving(false);
+  const handleRemoveJurado = (detalle) => {
+    setConfirmDlg({
+      open: true,
+      title: '¿Quitar Jurado?',
+      message: `¿Deseas quitar al jurado ${detalle.tribunal.nombre} ${detalle.tribunal.apellido} de esta acta?`,
+      type: 'error',
+      onConfirm: async () => {
+        setConfirming(true);
+        try {
+          const res = (await eliminarDetalle({ variables: { idDetalleEvaluacion: detalle.id } })).data?.eliminarDetalleEvaluacion;
+          if (res?.ok) {
+            showNotif('Jurado removido');
+            const updated = await refetch();
+            const updatedActa = updated.data?.todasLasActas?.find(a => a.idActaEvaluacion === juradosDialog.acta.idActaEvaluacion);
+            if (updatedActa) setJuradosDialog(p => ({ ...p, acta: updatedActa }));
+          } else showNotif(res?.error || 'Error', 'error');
+        } catch { showNotif('Error de conexión', 'error'); }
+        setConfirming(false);
+        setConfirmDlg(p => ({ ...p, open: false }));
+      }
+    });
   };
 
   const handleTogglePermiso = async (idDetalle, permiso) => {

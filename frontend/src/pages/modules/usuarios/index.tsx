@@ -25,9 +25,10 @@ import {
   CircularProgress,
   TablePagination,
   Pagination,
-  Stack
+  Stack,
+  InputAdornment
 } from '@mui/material';
-import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, FilterOutlined, LockOutlined, ClearOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, FilterOutlined, LockOutlined, ClearOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { MenuItem, Select, InputLabel, FormControl, Grid, Chip, Avatar, Tooltip } from '@mui/material';
 import { UserOutlined, MailOutlined, CheckCircleOutlined, StopOutlined, RedoOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
@@ -117,9 +118,11 @@ export default function UsuariosPage() {
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
-  const [formData, setFormData] = useState({ username: '', email: '', password: '', estado: true });
+  const [formData, setFormData] = useState({ username: '', email: '', password: '', confirmPassword: '', estado: true });
   const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'success' });
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Filtros
   const [filterTipo, setFilterTipo] = useState('todos');
@@ -177,11 +180,13 @@ export default function UsuariosPage() {
   const handleOpenDialog = (user: Usuario | null = null) => {
     if (user) {
       setEditingUser(user);
-      setFormData({ username: user.username, email: user.email, password: '', estado: user.estado });
+      setFormData({ username: user.username, email: user.email, password: '', confirmPassword: '', estado: user.estado });
     } else {
       setEditingUser(null);
-      setFormData({ username: '', email: '', password: '', estado: true });
+      setFormData({ username: '', email: '', password: '', confirmPassword: '', estado: true });
     }
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setOpenDialog(true);
   };
 
@@ -196,6 +201,17 @@ export default function UsuariosPage() {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+  // Validaciones de contraseña
+  const passwordRules = {
+    minLength: formData.password.length >= 8,
+    hasUppercase: /[A-Z]/.test(formData.password),
+    hasLowercase: /[a-z]/.test(formData.password),
+  };
+  const passwordValid = passwordRules.minLength && passwordRules.hasUppercase && passwordRules.hasLowercase;
+  const passwordsMatch = formData.password === formData.confirmPassword;
+  const showPasswordHints = formData.password.length > 0;
+  const needsPasswordValidation = !editingUser || formData.password.length > 0;
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -709,16 +725,109 @@ export default function UsuariosPage() {
               required
               sx={{ mt: 1 }}
             />
-            <TextField
-              label={editingUser ? 'Contraseña (dejar en blanco para no cambiar)' : 'Contraseña'}
-              name="password"
-              type="password"
-              value={formData.password}
-              onChange={handleChange}
-              fullWidth
-              required={!editingUser}
-              sx={{ mt: 1 }}
-            />
+            <Box>
+              <TextField
+                label={editingUser ? 'Contraseña (dejar en blanco para no cambiar)' : 'Contraseña'}
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={handleChange}
+                fullWidth
+                required={!editingUser}
+                error={showPasswordHints && !passwordValid}
+                sx={{ mt: 1 }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword((v) => !v)}
+                        edge="end"
+                        size="small"
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+              {showPasswordHints && (
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: 'action.hover',
+                    border: '1px solid',
+                    borderColor: passwordValid ? 'success.light' : 'warning.light',
+                    transition: 'border-color 0.3s'
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.75 }}>
+                    Requisitos de la contraseña:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: passwordRules.minLength ? 'success.main' : 'error.main', flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ color: passwordRules.minLength ? 'success.main' : 'error.main', fontWeight: 500 }}>
+                        Mínimo 8 caracteres
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: passwordRules.hasUppercase ? 'success.main' : 'error.main', flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ color: passwordRules.hasUppercase ? 'success.main' : 'error.main', fontWeight: 500 }}>
+                        Al menos una letra mayúscula (A-Z)
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: passwordRules.hasLowercase ? 'success.main' : 'error.main', flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ color: passwordRules.hasLowercase ? 'success.main' : 'error.main', fontWeight: 500 }}>
+                        Al menos una letra minúscula (a-z)
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+            {(showPasswordHints || !editingUser) && (
+              <TextField
+                label="Confirmar Contraseña"
+                name="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                fullWidth
+                required={!editingUser || formData.password.length > 0}
+                error={formData.confirmPassword.length > 0 && !passwordsMatch}
+                helperText={
+                  formData.confirmPassword.length > 0 && !passwordsMatch
+                    ? 'Las contraseñas no coinciden'
+                    : formData.confirmPassword.length > 0 && passwordsMatch
+                    ? 'Las contraseñas coinciden ✓'
+                    : ''
+                }
+                FormHelperTextProps={{
+                  sx: {
+                    color: formData.confirmPassword.length > 0 && passwordsMatch ? 'success.main' : undefined,
+                    fontWeight: 600
+                  }
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowConfirmPassword((v) => !v)}
+                        edge="end"
+                        size="small"
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        {showConfirmPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+            )}
             {editingUser && (
               <Box
                 sx={{
@@ -773,7 +882,14 @@ export default function UsuariosPage() {
           <Button
             onClick={handleSubmit}
             variant="contained"
-            disabled={!formData.username || !formData.email || (!editingUser && !formData.password) || saving}
+            disabled={
+              !formData.username ||
+              !formData.email ||
+              (!editingUser && !formData.password) ||
+              (needsPasswordValidation && !passwordValid) ||
+              (needsPasswordValidation && !passwordsMatch) ||
+              saving
+            }
             sx={{
               fontWeight: 500,
               borderRadius: '6px',

@@ -64,12 +64,14 @@ class PlanillaEvaluativa {
 class ActaEvaluacion {
   final String idActa;
   final String? fecha;
+  final bool consolidada;
   final PlanillaEvaluativa planilla;
   final Proyecto proyecto;
 
   ActaEvaluacion({
     required this.idActa,
     this.fecha,
+    required this.consolidada,
     required this.planilla,
     required this.proyecto,
   });
@@ -77,6 +79,7 @@ class ActaEvaluacion {
   factory ActaEvaluacion.fromJson(Map<String, dynamic> json) => ActaEvaluacion(
         idActa: json['idActaEvaluacion'].toString(),
         fecha: json['fecha'],
+        consolidada: json['consolidada'] as bool? ?? false,
         planilla: PlanillaEvaluativa.fromJson(
             json['planillaEvaluativa'] as Map<String, dynamic>),
         proyecto: Proyecto.fromJson(json['proyecto'] as Map<String, dynamic>),
@@ -87,12 +90,14 @@ class DetalleEvaluacion {
   final String idDetalle;
   final bool yaEvaluo;
   final double? puntuacion;
+  final bool permisoCalificacionTardia;
   final ActaEvaluacion acta;
 
   DetalleEvaluacion({
     required this.idDetalle,
     required this.yaEvaluo,
     this.puntuacion,
+    required this.permisoCalificacionTardia,
     required this.acta,
   });
 
@@ -103,6 +108,8 @@ class DetalleEvaluacion {
         puntuacion: json['puntuacion'] != null
             ? double.tryParse(json['puntuacion'].toString())
             : null,
+        permisoCalificacionTardia:
+            json['permisoCalificacionTardia'] as bool? ?? false,
         acta: ActaEvaluacion.fromJson(
             json['actaEvaluacion'] as Map<String, dynamic>),
       );

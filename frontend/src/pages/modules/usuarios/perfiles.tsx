@@ -35,7 +35,16 @@ import {
   OutlinedInput,
   Tooltip
 } from '@mui/material';
-import { EditOutlined, DeleteOutlined, UserOutlined, ReloadOutlined, StopOutlined, RedoOutlined, LockOutlined, ClearOutlined } from '@ant-design/icons';
+import {
+  EditOutlined,
+  DeleteOutlined,
+  UserOutlined,
+  ReloadOutlined,
+  StopOutlined,
+  RedoOutlined,
+  LockOutlined,
+  ClearOutlined
+} from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 import { useMutation, useQuery, gql } from '@apollo/client';
 import Swal from 'sweetalert2';
@@ -573,32 +582,55 @@ function StatusIcon({ type }: { type: string }) {
 function ConfirmDialog({ open, title, message, onConfirm, onClose, loading, type = 'error' }: any) {
   const isError = type === 'error';
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
-      PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.12)' } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xs"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.12)' } }}
+    >
       <Box sx={{ pt: 5, pb: 1, textAlign: 'center', position: 'relative' }}>
-        <Box sx={{
-          position: 'absolute', left: '50%', top: 16, transform: 'translateX(-50%)',
-          width: 130, height: 130, borderRadius: '50%',
-          background: isError 
-            ? 'radial-gradient(circle, rgba(255,77,79,0.1) 0%, transparent 70%)'
-            : 'radial-gradient(circle, rgba(82,196,26,0.1) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }} />
+        <Box
+          sx={{
+            position: 'absolute',
+            left: '50%',
+            top: 16,
+            transform: 'translateX(-50%)',
+            width: 130,
+            height: 130,
+            borderRadius: '50%',
+            background: isError
+              ? 'radial-gradient(circle, rgba(255,77,79,0.1) 0%, transparent 70%)'
+              : 'radial-gradient(circle, rgba(82,196,26,0.1) 0%, transparent 70%)',
+            pointerEvents: 'none'
+          }}
+        />
         <StatusIcon type={type} />
       </Box>
       <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
-        <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>{title}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>{message}</Typography>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>
+          {title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+          {message}
+        </Typography>
       </Box>
       <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
-        <Button onClick={onClose} disabled={loading} variant="outlined" sx={{ minWidth: 100, borderRadius: 2 }}>Cancelar</Button>
-        <Button onClick={onConfirm} disabled={loading} variant="contained"
+        <Button onClick={onClose} disabled={loading} variant="outlined" sx={{ minWidth: 100, borderRadius: 2 }}>
+          Cancelar
+        </Button>
+        <Button
+          onClick={onConfirm}
+          disabled={loading}
+          variant="contained"
           sx={{
-            minWidth: 100, borderRadius: 2,
+            minWidth: 100,
+            borderRadius: 2,
             background: isError ? 'linear-gradient(135deg, #ff4d4f, #b91c1c)' : 'linear-gradient(135deg, #52c41a, #237804)',
-            boxShadow: isError ? '0 4px 14px rgba(255,77,79,0.4)' : '0 4px 14px rgba(82,196,26,0.4)',
-          }}>
-          {loading ? <CircularProgress size={20} color="inherit" /> : (isError ? 'Eliminar' : 'Restaurar')}
+            boxShadow: isError ? '0 4px 14px rgba(255,77,79,0.4)' : '0 4px 14px rgba(82,196,26,0.4)'
+          }}
+        >
+          {loading ? <CircularProgress size={20} color="inherit" /> : isError ? 'Eliminar' : 'Restaurar'}
         </Button>
       </Box>
     </Dialog>
@@ -611,7 +643,9 @@ function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPag
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="body2" color="text.secondary">Mostrar</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Mostrar
+        </Typography>
         <Select
           size="small"
           value={rowsPerPage}
@@ -622,16 +656,16 @@ function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPag
             borderRadius: '6px',
             bgcolor: 'transparent',
             '.MuiOutlinedInput-notchedOutline': {
-              borderColor: 'rgba(255,255,255,0.1)',
+              borderColor: 'rgba(255,255,255,0.1)'
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: 'rgba(255,255,255,0.2)',
+              borderColor: 'rgba(255,255,255,0.2)'
             },
             '.MuiSelect-select': {
               py: 0.5,
               px: 1.5,
               fontSize: '0.875rem',
-              color: 'text.primary',
+              color: 'text.primary'
             }
           }}
         >
@@ -639,11 +673,13 @@ function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPag
           <MenuItem value={10}>10</MenuItem>
           <MenuItem value={25}>25</MenuItem>
         </Select>
-        <Typography variant="body2" color="text.secondary">registros</Typography>
+        <Typography variant="body2" color="text.secondary">
+          registros
+        </Typography>
       </Box>
-      <Pagination 
-        count={totalPages} 
-        page={page + 1} 
+      <Pagination
+        count={totalPages}
+        page={page + 1}
         onChange={(e, value) => onPageChange(e, value - 1)}
         shape="rounded"
         color="primary"
@@ -654,13 +690,13 @@ function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPag
             color: 'text.secondary',
             borderRadius: '6px',
             minWidth: 32,
-            height: 32,
+            height: 32
           },
           '& .Mui-selected': {
             bgcolor: '#1677ff !important',
             color: '#fff',
             border: 'none',
-            boxShadow: '0 2px 8px rgba(22, 119, 255, 0.4)',
+            boxShadow: '0 2px 8px rgba(22, 119, 255, 0.4)'
           }
         }}
       />
@@ -714,7 +750,11 @@ const PerfilesPage: React.FC = () => {
   const [errorFieldPersonal, setErrorFieldPersonal] = useState('');
 
   // Floating snackbar for errors
-  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'success' });
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
   const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setNotification({ open: true, message, severity });
   };
@@ -773,8 +813,8 @@ const PerfilesPage: React.FC = () => {
     setConfirmDlg({
       open: true,
       title: isActiva ? `¿Eliminar ${tipo}?` : `¿Restaurar ${tipo}?`,
-      message: isActiva 
-        ? `¿Deseas eliminar a ${nombre}? Esta acción lo marcará como inactivo.` 
+      message: isActiva
+        ? `¿Deseas eliminar a ${nombre}? Esta acción lo marcará como inactivo.`
         : `¿Deseas restaurar a ${nombre}? Volverá a estar activo en el sistema.`,
       type: isActiva ? 'error' : 'success',
       onConfirm: async () => {
@@ -794,7 +834,7 @@ const PerfilesPage: React.FC = () => {
           showNotification(err.message, 'error');
         }
         setConfirming(false);
-        setConfirmDlg(p => ({ ...p, open: false }));
+        setConfirmDlg((p) => ({ ...p, open: false }));
       }
     });
   };
@@ -813,11 +853,11 @@ const PerfilesPage: React.FC = () => {
       const matchNombre = searchNombre ? item.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) : true;
       const matchApellido = searchApellido ? item.apellido?.toLowerCase().includes(searchApellido.toLowerCase()) : true;
       const searchLower = searchCI ? searchCI.toLowerCase() : '';
-      const matchCI = searchCI ? (
-        item.ci?.toLowerCase().includes(searchLower) ||
-        item.codigoEspecifico?.toLowerCase().includes(searchLower) ||
-        item.codEmpleado?.toLowerCase().includes(searchLower)
-      ) : true;
+      const matchCI = searchCI
+        ? item.ci?.toLowerCase().includes(searchLower) ||
+          item.codigoEspecifico?.toLowerCase().includes(searchLower) ||
+          item.codEmpleado?.toLowerCase().includes(searchLower)
+        : true;
       const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
       let matchArea = true;
       if (tabValue === 2 && searchArea !== 'Todas') {
@@ -839,16 +879,53 @@ const PerfilesPage: React.FC = () => {
   const renderFilters = () => (
     <Grid container spacing={2} sx={{ mb: 2 }}>
       <Grid item xs={12} sm={tabValue === 2 ? 3 : 3} md={tabValue === 2 ? 2 : 3}>
-        <TextField fullWidth size="small" label="Nombre" value={searchNombre} onChange={e => { setSearchNombre(e.target.value); setPage(0); }} />
+        <TextField
+          fullWidth
+          size="small"
+          label="Nombre"
+          value={searchNombre}
+          onChange={(e) => {
+            setSearchNombre(e.target.value);
+            setPage(0);
+          }}
+        />
       </Grid>
       <Grid item xs={12} sm={tabValue === 2 ? 3 : 3} md={tabValue === 2 ? 2 : 3}>
-        <TextField fullWidth size="small" label="Apellidos" value={searchApellido} onChange={e => { setSearchApellido(e.target.value); setPage(0); }} />
+        <TextField
+          fullWidth
+          size="small"
+          label="Apellidos"
+          value={searchApellido}
+          onChange={(e) => {
+            setSearchApellido(e.target.value);
+            setPage(0);
+          }}
+        />
       </Grid>
       <Grid item xs={12} sm={tabValue === 2 ? 2 : 3} md={tabValue === 2 ? 2 : 2}>
-        <TextField fullWidth size="small" label="C.I. / Código" value={searchCI} onChange={e => { setSearchCI(e.target.value); setPage(0); }} />
+        <TextField
+          fullWidth
+          size="small"
+          label="C.I. / Código"
+          value={searchCI}
+          onChange={(e) => {
+            setSearchCI(e.target.value);
+            setPage(0);
+          }}
+        />
       </Grid>
       <Grid item xs={12} sm={tabValue === 2 ? 2 : 2} md={tabValue === 2 ? 2 : 3}>
-        <TextField fullWidth size="small" select label="Estado" value={searchEstado} onChange={e => { setSearchEstado(e.target.value); setPage(0); }}>
+        <TextField
+          fullWidth
+          size="small"
+          select
+          label="Estado"
+          value={searchEstado}
+          onChange={(e) => {
+            setSearchEstado(e.target.value);
+            setPage(0);
+          }}
+        >
           <MenuItem value="Todos">Todos</MenuItem>
           <MenuItem value="Activo">Activo</MenuItem>
           <MenuItem value="Inactivo">Inactivo</MenuItem>
@@ -856,24 +933,37 @@ const PerfilesPage: React.FC = () => {
       </Grid>
       {tabValue === 2 && (
         <Grid item xs={12} sm={2} md={3}>
-          <TextField fullWidth size="small" select label="Área" value={searchArea} onChange={e => { setSearchArea(e.target.value); setPage(0); }}>
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label="Área"
+            value={searchArea}
+            onChange={(e) => {
+              setSearchArea(e.target.value);
+              setPage(0);
+            }}
+          >
             <MenuItem value="Todas">Todas</MenuItem>
             {dataAreas?.todasLasAreas?.map((a: any) => (
-              <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>
+              <MenuItem key={a.idArea} value={a.idArea}>
+                {a.nombre}
+              </MenuItem>
             ))}
           </TextField>
         </Grid>
       )}
       <Grid item xs={12} sm={1} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Tooltip title="Limpiar Filtros">
-          <IconButton 
-            onClick={handleClearFilters} 
-            color="secondary" 
-            sx={{ 
-              border: '1px solid', 
-              borderColor: 'divider', 
+          <IconButton
+            onClick={handleClearFilters}
+            color="secondary"
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
               borderRadius: '8px',
-              visibility: (searchNombre || searchApellido || searchCI || searchEstado !== 'Todos' || searchArea !== 'Todas') ? 'visible' : 'hidden'
+              visibility:
+                searchNombre || searchApellido || searchCI || searchEstado !== 'Todos' || searchArea !== 'Todas' ? 'visible' : 'hidden'
             }}
           >
             <ClearOutlined />
@@ -1290,41 +1380,67 @@ const PerfilesPage: React.FC = () => {
                   applyFilters(dataParticipantes.todosLosParticipantes)
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((row: any) => (
-                    <TableRow key={row.idParticipante}>
-                      <TableCell>{row.idParticipante}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          {renderUsuarioStatus(row)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {row.ci} {row.expedicion}
-                      </TableCell>
-                      <TableCell>
-                        {row.codigoEspecifico || '-'}
-                      </TableCell>
-                      <TableCell>{row.celular}</TableCell>
-                      <TableCell>
-                        {renderChip(row.participanteExt ? 'Externo' : 'Interno', row.participanteExt ? 'warning' : 'info')}
-                      </TableCell>
-                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
-                      <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenParticipante(row)}>
-                          <EditOutlined />
-                        </IconButton>
-                        {row.estado ? (
-                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Participante', 'idParticipante', eliminarParticipante, editarParticipante, refetchParticipantes)} title="Eliminar">
-                            <DeleteOutlined />
+                      <TableRow key={row.idParticipante}>
+                        <TableCell>{row.idParticipante}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {row.nombre} {row.apellido}
+                            </Typography>
+                            {renderUsuarioStatus(row)}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {row.ci} {row.expedicion}
+                        </TableCell>
+                        <TableCell>{row.codigoEspecifico || '-'}</TableCell>
+                        <TableCell>{row.celular}</TableCell>
+                        <TableCell>
+                          {renderChip(row.participanteExt ? 'Externo' : 'Interno', row.participanteExt ? 'warning' : 'info')}
+                        </TableCell>
+                        <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
+                        <TableCell align="right">
+                          <IconButton color="primary" onClick={() => handleOpenParticipante(row)}>
+                            <EditOutlined />
                           </IconButton>
-                        ) : (
-                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Participante', 'idParticipante', eliminarParticipante, editarParticipante, refetchParticipantes)} title="Restaurar">
-                            <ReloadOutlined />
-                          </IconButton>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                          {row.estado ? (
+                            <IconButton
+                              color="error"
+                              onClick={() =>
+                                handleToggleEstado(
+                                  row,
+                                  'Participante',
+                                  'idParticipante',
+                                  eliminarParticipante,
+                                  editarParticipante,
+                                  refetchParticipantes
+                                )
+                              }
+                              title="Eliminar"
+                            >
+                              <DeleteOutlined />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              color="success"
+                              onClick={() =>
+                                handleToggleEstado(
+                                  row,
+                                  'Participante',
+                                  'idParticipante',
+                                  eliminarParticipante,
+                                  editarParticipante,
+                                  refetchParticipantes
+                                )
+                              }
+                              title="Restaurar"
+                            >
+                              <ReloadOutlined />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} align="center">
@@ -1339,7 +1455,10 @@ const PerfilesPage: React.FC = () => {
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={(e: any, newPage: number) => setPage(newPage)}
-              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+              onRowsPerPageChange={(e: any) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
             />
           </TableContainer>
         </CustomTabPanel>
@@ -1371,36 +1490,46 @@ const PerfilesPage: React.FC = () => {
                   applyFilters(dataTutores.todosLosTutores)
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((row: any) => (
-                    <TableRow key={row.idTutor}>
-                      <TableCell>{row.idTutor}</TableCell>
-                      <TableCell>{row.codEmpleado}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          {renderUsuarioStatus(row)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {row.ci} {row.expedicion}
-                      </TableCell>
-                      <TableCell>{row.celular}</TableCell>
-                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
-                      <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenTutor(row)}>
-                          <EditOutlined />
-                        </IconButton>
-                        {row.estado ? (
-                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Tutor', 'idTutor', eliminarTutor, editarTutor, refetchTutores)} title="Eliminar">
-                            <DeleteOutlined />
+                      <TableRow key={row.idTutor}>
+                        <TableCell>{row.idTutor}</TableCell>
+                        <TableCell>{row.codEmpleado}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {row.nombre} {row.apellido}
+                            </Typography>
+                            {renderUsuarioStatus(row)}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {row.ci} {row.expedicion}
+                        </TableCell>
+                        <TableCell>{row.celular}</TableCell>
+                        <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
+                        <TableCell align="right">
+                          <IconButton color="primary" onClick={() => handleOpenTutor(row)}>
+                            <EditOutlined />
                           </IconButton>
-                        ) : (
-                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Tutor', 'idTutor', eliminarTutor, editarTutor, refetchTutores)} title="Restaurar">
-                            <ReloadOutlined />
-                          </IconButton>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                          {row.estado ? (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleToggleEstado(row, 'Tutor', 'idTutor', eliminarTutor, editarTutor, refetchTutores)}
+                              title="Eliminar"
+                            >
+                              <DeleteOutlined />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              color="success"
+                              onClick={() => handleToggleEstado(row, 'Tutor', 'idTutor', eliminarTutor, editarTutor, refetchTutores)}
+                              title="Restaurar"
+                            >
+                              <ReloadOutlined />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
@@ -1415,7 +1544,10 @@ const PerfilesPage: React.FC = () => {
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={(e: any, newPage: number) => setPage(newPage)}
-              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+              onRowsPerPageChange={(e: any) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
             />
           </TableContainer>
         </CustomTabPanel>
@@ -1447,36 +1579,50 @@ const PerfilesPage: React.FC = () => {
                   applyFilters(dataTribunales.todosLosTribunales)
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((row: any) => (
-                    <TableRow key={row.idTribunal}>
-                      <TableCell>{row.idTribunal}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          {renderUsuarioStatus(row)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{row.especialidad}</TableCell>
-                      <TableCell>
-                        {row.ci} {row.expedicion}
-                      </TableCell>
-                      <TableCell>{row.celular}</TableCell>
-                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
-                      <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenTribunal(row)}>
-                          <EditOutlined />
-                        </IconButton>
-                        {row.estado ? (
-                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Tribunal', 'idTribunal', eliminarTribunal, editarTribunal, refetchTribunales)} title="Eliminar">
-                            <DeleteOutlined />
+                      <TableRow key={row.idTribunal}>
+                        <TableCell>{row.idTribunal}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {row.nombre} {row.apellido}
+                            </Typography>
+                            {renderUsuarioStatus(row)}
+                          </Box>
+                        </TableCell>
+                        <TableCell>{row.especialidad}</TableCell>
+                        <TableCell>
+                          {row.ci} {row.expedicion}
+                        </TableCell>
+                        <TableCell>{row.celular}</TableCell>
+                        <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
+                        <TableCell align="right">
+                          <IconButton color="primary" onClick={() => handleOpenTribunal(row)}>
+                            <EditOutlined />
                           </IconButton>
-                        ) : (
-                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Tribunal', 'idTribunal', eliminarTribunal, editarTribunal, refetchTribunales)} title="Restaurar">
-                            <ReloadOutlined />
-                          </IconButton>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                          {row.estado ? (
+                            <IconButton
+                              color="error"
+                              onClick={() =>
+                                handleToggleEstado(row, 'Tribunal', 'idTribunal', eliminarTribunal, editarTribunal, refetchTribunales)
+                              }
+                              title="Eliminar"
+                            >
+                              <DeleteOutlined />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              color="success"
+                              onClick={() =>
+                                handleToggleEstado(row, 'Tribunal', 'idTribunal', eliminarTribunal, editarTribunal, refetchTribunales)
+                              }
+                              title="Restaurar"
+                            >
+                              <ReloadOutlined />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
@@ -1491,7 +1637,10 @@ const PerfilesPage: React.FC = () => {
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={(e: any, newPage: number) => setPage(newPage)}
-              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+              onRowsPerPageChange={(e: any) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
             />
           </TableContainer>
         </CustomTabPanel>
@@ -1522,36 +1671,50 @@ const PerfilesPage: React.FC = () => {
                   applyFilters(dataPersonal.todoElPersonal)
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((row: any) => (
-                    <TableRow key={row.idPersonal}>
-                      <TableCell>{row.idPersonal}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                          <Typography variant="body2" fontWeight={500}>{row.nombre} {row.apellido}</Typography>
-                          {renderUsuarioStatus(row)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {row.ci} {row.expedicion}
-                      </TableCell>
-                      <TableCell>{row.cargo}</TableCell>
-                      <TableCell>{row.celular}</TableCell>
-                      <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
-                      <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleOpenPersonal(row)}>
-                          <EditOutlined />
-                        </IconButton>
-                        {row.estado ? (
-                          <IconButton color="error" onClick={() => handleToggleEstado(row, 'Personal', 'idPersonal', eliminarPersonal, editarPersonal, refetchPersonal)} title="Eliminar">
-                            <DeleteOutlined />
+                      <TableRow key={row.idPersonal}>
+                        <TableCell>{row.idPersonal}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {row.nombre} {row.apellido}
+                            </Typography>
+                            {renderUsuarioStatus(row)}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {row.ci} {row.expedicion}
+                        </TableCell>
+                        <TableCell>{row.cargo}</TableCell>
+                        <TableCell>{row.celular}</TableCell>
+                        <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
+                        <TableCell align="right">
+                          <IconButton color="primary" onClick={() => handleOpenPersonal(row)}>
+                            <EditOutlined />
                           </IconButton>
-                        ) : (
-                          <IconButton color="success" onClick={() => handleToggleEstado(row, 'Personal', 'idPersonal', eliminarPersonal, editarPersonal, refetchPersonal)} title="Restaurar">
-                            <ReloadOutlined />
-                          </IconButton>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                          {row.estado ? (
+                            <IconButton
+                              color="error"
+                              onClick={() =>
+                                handleToggleEstado(row, 'Personal', 'idPersonal', eliminarPersonal, editarPersonal, refetchPersonal)
+                              }
+                              title="Eliminar"
+                            >
+                              <DeleteOutlined />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              color="success"
+                              onClick={() =>
+                                handleToggleEstado(row, 'Personal', 'idPersonal', eliminarPersonal, editarPersonal, refetchPersonal)
+                              }
+                              title="Restaurar"
+                            >
+                              <ReloadOutlined />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
@@ -1566,7 +1729,10 @@ const PerfilesPage: React.FC = () => {
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={(e: any, newPage: number) => setPage(newPage)}
-              onRowsPerPageChange={(e: any) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+              onRowsPerPageChange={(e: any) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
             />
           </TableContainer>
         </CustomTabPanel>
@@ -1625,7 +1791,9 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldParticipante === 'password'}
-                      helperText={errorFieldParticipante === 'password' ? errorParticipante : "Mín. 8 caracteres, mayúscula, minúscula y número"}
+                      helperText={
+                        errorFieldParticipante === 'password' ? errorParticipante : 'Mín. 8 caracteres, mayúscula, minúscula y número'
+                      }
                     />
                   </Grid>
                 </Grid>
@@ -1845,7 +2013,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldTutor === 'password'}
-                      helperText={errorFieldTutor === 'password' ? errorTutor : "Mín. 8 caracteres, mayúscula, minúscula y número"}
+                      helperText={errorFieldTutor === 'password' ? errorTutor : 'Mín. 8 caracteres, mayúscula, minúscula y número'}
                     />
                   </Grid>
                 </Grid>
@@ -2024,7 +2192,7 @@ const PerfilesPage: React.FC = () => {
                 fontWeight: 500,
                 fontSize: '0.72rem',
                 color: 'text.secondary',
-                borderColor: 'divider',
+                borderColor: 'divider'
               }}
             />
           </Box>
@@ -2084,7 +2252,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldTribunal === 'password'}
-                      helperText={errorFieldTribunal === 'password' ? errorTribunal : "Mín. 8 caracteres, mayúscula, minúscula y número"}
+                      helperText={errorFieldTribunal === 'password' ? errorTribunal : 'Mín. 8 caracteres, mayúscula, minúscula y número'}
                       InputProps={{
                         sx: {
                           borderRadius: '6px',
@@ -2251,7 +2419,7 @@ const PerfilesPage: React.FC = () => {
                 />
               </Grid>
             </Grid>
-            
+
             <SectionLabel>Asignación de Áreas</SectionLabel>
             <Grid container spacing={2} sx={{ mb: 1 }}>
               <Grid item xs={12}>
@@ -2271,7 +2439,7 @@ const PerfilesPage: React.FC = () => {
                           return <Chip key={value} label={area ? area.nombre : value} size="small" />;
                         })}
                       </Box>
-                    ),
+                    )
                   }}
                   InputProps={{
                     sx: {
@@ -2304,7 +2472,7 @@ const PerfilesPage: React.FC = () => {
                 textTransform: 'none',
                 fontWeight: 500,
                 fontSize: '0.85rem',
-                mr: 1,
+                mr: 1
               }}
             >
               Cancelar
@@ -2319,7 +2487,7 @@ const PerfilesPage: React.FC = () => {
                 fontWeight: 500,
                 fontSize: '0.85rem',
                 borderRadius: '6px',
-                boxShadow: 'none',
+                boxShadow: 'none'
               }}
             >
               {activeTribunal ? 'Guardar Cambios' : 'Registrar Miembro'}
@@ -2380,7 +2548,7 @@ const PerfilesPage: React.FC = () => {
                       required
                       size="small"
                       error={errorFieldPersonal === 'password'}
-                      helperText={errorFieldPersonal === 'password' ? errorPersonal : "Mín. 8 caracteres, mayúscula, minúscula y número"}
+                      helperText={errorFieldPersonal === 'password' ? errorPersonal : 'Mín. 8 caracteres, mayúscula, minúscula y número'}
                     />
                   </Grid>
                 </Grid>
@@ -2517,7 +2685,7 @@ const PerfilesPage: React.FC = () => {
           {notification.message}
         </Alert>
       </Snackbar>
-      <ConfirmDialog {...confirmDlg} onClose={() => setConfirmDlg(p => ({ ...p, open: false }))} loading={confirming} />
+      <ConfirmDialog {...confirmDlg} onClose={() => setConfirmDlg((p) => ({ ...p, open: false }))} loading={confirming} />
     </MainCard>
   );
 };

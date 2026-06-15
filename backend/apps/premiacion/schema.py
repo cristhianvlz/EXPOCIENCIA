@@ -364,6 +364,7 @@ class EditarPremio(graphene.Mutation):
         monto = graphene.Decimal()
         numero_ganadores = graphene.Int()
         estado = graphene.Boolean()
+        id_descriptores = graphene.List(graphene.ID)
 
     premio = graphene.Field(PremioType)
     ok = graphene.Boolean()
@@ -393,6 +394,17 @@ class EditarPremio(graphene.Mutation):
                 setattr(premio, field, kwargs[field])
 
         premio.save()
+
+        if 'id_descriptores' in kwargs and kwargs['id_descriptores'] is not None:
+            # Recrear los descriptores asociados
+            PremioDescriptor.objects.filter(premio=premio).delete()
+            for id_desc in kwargs['id_descriptores']:
+                try:
+                    desc = Descriptor.objects.get(pk=id_desc)
+                    PremioDescriptor.objects.create(premio=premio, descriptor=desc)
+                except Exception:
+                    pass
+
         return EditarPremio(premio=premio, ok=True, error=None) # type: ignore
 
 class EliminarPremio(graphene.Mutation):

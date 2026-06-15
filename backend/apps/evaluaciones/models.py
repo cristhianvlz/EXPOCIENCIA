@@ -69,6 +69,9 @@ class ActaEvaluacion(models.Model):
     hora_inicio = models.TimeField()
     hora_fin = models.TimeField()
     estado = models.BooleanField(default=True)
+    # Cuando True, la nota ya fue consolidada: nadie puede modificar calificaciones
+    # salvo jurados con permiso_calificacion_tardia activo.
+    consolidada = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'acta_evaluacion'
