@@ -80,10 +80,10 @@ class Evento(models.Model):
         on_delete=models.PROTECT,
         related_name='eventos',
     )
-    membrete = models.ForeignKey(
+    membretes = models.ManyToManyField(
         Membrete,
-        on_delete=models.PROTECT,
         related_name='eventos',
+        blank=True,
     )
     nombre = models.CharField(max_length=200)
     # versión numérica de la edición del evento (ej. 1, 2, 3...)
@@ -94,6 +94,9 @@ class Evento(models.Model):
     gestion = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(2000), MaxValueValidator(2100)],
     )
+    max_participantes = models.PositiveSmallIntegerField(default=0)
+    max_tribunal = models.PositiveSmallIntegerField(default=0)
+    max_tutores = models.PositiveSmallIntegerField(default=0)
     estado = models.BooleanField(default=True)
 
     class Meta:

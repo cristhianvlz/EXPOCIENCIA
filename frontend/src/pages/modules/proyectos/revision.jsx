@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import mammoth from 'mammoth';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -11,7 +12,9 @@ import {
   EyeOutlined, TableOutlined, AppstoreOutlined, UserOutlined, TeamOutlined,
   FileProtectOutlined, InfoCircleOutlined, BankOutlined, FilePdfOutlined,
   CalendarOutlined, DownloadOutlined, SearchOutlined, LockOutlined,
-  ExclamationCircleOutlined, CheckCircleOutlined, ClearOutlined
+  ExclamationCircleOutlined, CheckCircleOutlined, ClearOutlined,
+  CloseCircleOutlined, ClockCircleOutlined, TagOutlined, ThunderboltOutlined,
+  PartitionOutlined, ApartmentOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -21,9 +24,22 @@ const GET_ALL = gql`
     todosLosProyectos {
       idProyecto titulo resumen estado fechaInscripcion fechaConfirmacion observacion activo archivo
       ofertaEaCarrera {
-        id carrera
-        oferta { nombre }
-        entidadAcademica { nombre }
+        id
+        oferta {
+          nombre
+          categoriaEvento {
+            evento    { nombre version }
+            categoria { nombre }
+          }
+          modalidadArea {
+            modalidad { nombre }
+            area      { nombre }
+          }
+        }
+        eaCarrera {
+          entidadAcademica { nombre }
+          carrera          { nombre plan }
+        }
       }
     }
     todosLosParticipantes {
@@ -112,6 +128,115 @@ function PersonRow({ nombre, apellido, sub, color = 'primary' }) {
         <Typography variant="body2" fontWeight={500}>{nombre} {apellido}</Typography>
         <Typography variant="caption" color="text.secondary">{sub}</Typography>
       </Box>
+    </Box>
+  );
+}
+
+// ── Visor de documento (DOCX con mammoth / PDF nativo) ───────────────────────
+function DocViewer({ archivo }) {
+  const [docHtml, setDocHtml]     = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
+  const loadedRef                 = useRef('');
+
+  const fileUrl  = archivo ? `http://localhost:8000/media/${archivo}` : null;
+  const fileName = archivo ? archivo.split('/').pop() : '';
+  const isDocx   = fileName.match(/\.(docx|doc)$/i);
+  const isPdf    = fileName.match(/\.pdf$/i);
+
+  useEffect(() => {
+    if (!archivo || !isDocx || loadedRef.current === archivo) return;
+    loadedRef.current = archivo;
+    setLoading(true);
+    setError('');
+    fetch(fileUrl)
+      .then(r => r.arrayBuffer())
+      .then(buf => mammoth.convertToHtml({ arrayBuffer: buf }))
+      .then(result => setDocHtml(result.value))
+      .catch(() => setError('No se pudo cargar el documento.'))
+      .finally(() => setLoading(false));
+  }, [archivo]);
+
+  if (!archivo) return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 1.5, color: 'text.disabled' }}>
+      <FilePdfOutlined style={{ fontSize: 44 }} />
+      <Typography variant="body2">Sin documento adjunto</Typography>
+      <Typography variant="caption">Este proyecto no tiene archivos subidos</Typography>
+    </Box>
+  );
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Barra superior con nombre + descarga */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2,
+                 bgcolor: 'action.hover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ width: 44, height: 44, borderRadius: 1.5, flexShrink: 0,
+                   bgcolor: isDocx ? 'primary.lighter' : 'error.lighter',
+                   display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <FilePdfOutlined style={{ fontSize: 22, color: isDocx ? '#1890ff' : '#d32f2f' }} />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={600} noWrap>{fileName}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {isDocx ? 'Documento Word — vista previa disponible' : 'Archivo PDF'}
+          </Typography>
+        </Box>
+        <Button size="small" variant="contained" startIcon={<DownloadOutlined />}
+          href={fileUrl} target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0 }}>
+          Descargar
+        </Button>
+      </Box>
+
+      {/* Visor */}
+      {isDocx && (
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+          <Box sx={{ px: 2, py: 1, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              VISTA PREVIA DEL DOCUMENTO
+            </Typography>
+          </Box>
+          <Box sx={{ maxHeight: 560, overflowY: 'auto', p: 3, bgcolor: 'background.paper' }}>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : error ? (
+              <Alert severity="error">{error}</Alert>
+            ) : (
+              <Box
+                dangerouslySetInnerHTML={{ __html: docHtml }}
+                sx={{
+                  fontFamily: 'inherit',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.8,
+                  color: 'text.primary',
+                  '& h1': { fontSize: '1.3rem', fontWeight: 700, mt: 2.5, mb: 1, color: 'text.primary' },
+                  '& h2': { fontSize: '1.1rem', fontWeight: 700, mt: 2, mb: 0.75, color: 'text.primary' },
+                  '& h3': { fontSize: '1rem',   fontWeight: 600, mt: 1.5, mb: 0.5 },
+                  '& p':  { mb: 1.2 },
+                  '& ul, & ol': { pl: 3, mb: 1 },
+                  '& li': { mb: 0.4 },
+                  '& strong, & b': { fontWeight: 700 },
+                  '& table': { width: '100%', borderCollapse: 'collapse', mb: 1.5 },
+                  '& td, & th': { border: '1px solid', borderColor: 'divider', p: 0.75 },
+                }}
+              />
+            )}
+          </Box>
+        </Box>
+      )}
+
+      {isPdf && (
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', height: 580 }}>
+          <iframe
+            src={fileUrl}
+            title="Vista previa PDF"
+            width="100%"
+            height="100%"
+            style={{ border: 'none', display: 'block' }}
+          />
+        </Box>
+      )}
     </Box>
   );
 }
@@ -220,8 +345,8 @@ export default function RevisionPage() {
       const key = `${p.ofertaEaCarrera?.id || 'sin'}`;
       if (!acc[key]) acc[key] = {
         oferta: p.ofertaEaCarrera?.oferta?.nombre || 'Sin Oferta',
-        carrera: p.ofertaEaCarrera?.carrera || '',
-        facultad: p.ofertaEaCarrera?.entidadAcademica?.nombre || '',
+        carrera: p.ofertaEaCarrera?.eaCarrera?.carrera?.nombre || '',
+        facultad: p.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre || '',
         proyectos: []
       };
       acc[key].proyectos.push(p);
@@ -342,7 +467,7 @@ export default function RevisionPage() {
                       {p.ofertaEaCarrera?.oferta?.nombre}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      {p.ofertaEaCarrera?.entidadAcademica?.nombre} · {p.ofertaEaCarrera?.carrera}
+                      {p.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre} · {p.ofertaEaCarrera?.eaCarrera?.carrera?.nombre}
                     </Typography>
                   </CardActionArea>
                 </Card>
@@ -502,7 +627,7 @@ export default function RevisionPage() {
 
                   {selected.resumen && (
                     <SectionCard title="Resumen del proyecto" icon={<InfoCircleOutlined />}>
-                      <Typography variant="body2" sx={{ py: 1.5, lineHeight: 1.7, color: 'text.secondary' }}>
+                      <Typography variant="body2" sx={{ py: 1.5, lineHeight: 1.8, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>
                         {selected.resumen}
                       </Typography>
                     </SectionCard>
@@ -520,14 +645,65 @@ export default function RevisionPage() {
 
               {/* ── Tab 1: Académico ── */}
               <TabPanel value={tab} index={1}>
-                <SectionCard title="Información académica" icon={<BankOutlined />}>
-                  <DataRow icon={<BankOutlined />}
-                    label="Oferta"   value={selected.ofertaEaCarrera?.oferta?.nombre} />
-                  <DataRow icon={<BankOutlined />}
-                    label="Carrera"  value={selected.ofertaEaCarrera?.carrera} />
-                  <DataRow icon={<BankOutlined />}
-                    label="Facultad" value={selected.ofertaEaCarrera?.entidadAcademica?.nombre} />
-                </SectionCard>
+                {(() => {
+                  const oec     = selected.ofertaEaCarrera;
+                  const oferta  = oec?.oferta;
+                  const ev      = oferta?.categoriaEvento?.evento;
+                  const catNom  = oferta?.categoriaEvento?.categoria?.nombre;
+                  const modNom  = oferta?.modalidadArea?.modalidad?.nombre;
+                  const areaNom = oferta?.modalidadArea?.area?.nombre;
+                  const carr    = oec?.eaCarrera?.carrera;
+                  const facNom  = oec?.eaCarrera?.entidadAcademica?.nombre;
+
+                  const BadgeCell = ({ icon, label, value, color = 'primary' }) => (
+                    <Box sx={{
+                      p: 1.5, borderRadius: 2, border: '1px solid', borderColor: 'divider',
+                      display: 'flex', flexDirection: 'column', gap: 0.5,
+                      bgcolor: 'action.hover',
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Box sx={{ color: `${color}.main`, fontSize: 13, lineHeight: 1 }}>{icon}</Box>
+                        <Typography variant="caption" color="text.secondary"
+                          sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7, fontSize: '0.6rem' }}>
+                          {label}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={600} color={value ? 'text.primary' : 'text.disabled'}>
+                        {value || '—'}
+                      </Typography>
+                    </Box>
+                  );
+
+                  return (
+                    <Stack gap={2}>
+                      {/* Sección evento */}
+                      <SectionCard title="Evento y Oferta" icon={<ThunderboltOutlined />}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, pt: 1.5 }}>
+                          <Box sx={{ gridColumn: '1 / -1' }}>
+                            <BadgeCell icon={<ThunderboltOutlined />} label="Evento"
+                              value={ev ? `${ev.nombre}  v${ev.version}` : '—'} color="warning" />
+                          </Box>
+                          <BadgeCell icon={<TagOutlined />}         label="Categoría"  value={catNom}   color="primary" />
+                          <BadgeCell icon={<PartitionOutlined />}   label="Modalidad"  value={modNom}   color="secondary" />
+                          <BadgeCell icon={<ApartmentOutlined />}   label="Área"       value={areaNom}  color="info" />
+                          <BadgeCell icon={<FileProtectOutlined />} label="Oferta"     value={oferta?.nombre} color="success" />
+                        </Box>
+                      </SectionCard>
+
+                      {/* Sección unidad académica */}
+                      <SectionCard title="Unidad Académica" icon={<BankOutlined />}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, pt: 1.5 }}>
+                          <Box sx={{ gridColumn: '1 / -1' }}>
+                            <BadgeCell icon={<BankOutlined />} label="Facultad" value={facNom} color="primary" />
+                          </Box>
+                          <BadgeCell icon={<AppstoreOutlined />} label="Carrera" value={carr?.nombre} color="info" />
+                          <BadgeCell icon={<TagOutlined />} label="Plan de Estudios"
+                            value={carr?.plan ? `Plan ${carr.plan}` : undefined} color="secondary" />
+                        </Box>
+                      </SectionCard>
+                    </Stack>
+                  );
+                })()}
               </TabPanel>
 
               {/* ── Tab 2: Equipo ── */}
@@ -565,87 +741,97 @@ export default function RevisionPage() {
 
               {/* ── Tab 3: Archivo ── */}
               <TabPanel value={tab} index={3}>
-                {selected.archivo ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* Preview del archivo */}
-                    <Box sx={{ bgcolor: 'background.paper', border: '1px solid',
-                               borderColor: 'divider', borderRadius: 2, p: 3,
-                               display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ width: 52, height: 52, borderRadius: 2,
-                                 bgcolor: 'error.lighter', display: 'flex',
-                                 alignItems: 'center', justifyContent: 'center' }}>
-                        <FilePdfOutlined style={{ fontSize: 26, color: '#d32f2f' }} />
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={600} noWrap>
-                          {selected.archivo.split('/').pop()}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Documento adjunto del proyecto
-                        </Typography>
-                      </Box>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<DownloadOutlined />}
-                        href={`http://localhost:8000/media/${selected.archivo}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{ flexShrink: 0 }}
-                      >
-                        Descargar
-                      </Button>
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-                             py: 5, gap: 1.5, color: 'text.disabled' }}>
-                    <FilePdfOutlined style={{ fontSize: 40 }} />
-                    <Typography variant="body2">Sin documento adjunto</Typography>
-                    <Typography variant="caption">Este proyecto no tiene archivos subidos</Typography>
-                  </Box>
-                )}
+                <DocViewer archivo={selected.archivo} />
               </TabPanel>
 
               {/* ── Acción del comité (siempre visible) ── */}
               <Divider sx={{ mt: 2, mb: 2 }} />
-              <Box sx={{ pb: 2 }}>
+              <Box sx={{ pb: 1 }}>
                 <Typography variant="caption" fontWeight={700} color="text.secondary"
-                  sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+                  sx={{ textTransform: 'uppercase', letterSpacing: 0.6, display: 'block', mb: 1.5 }}>
                   Acción del comité
                 </Typography>
+
                 {estadoFinalizado(selected?.estado) ? (
-                  <Alert
-                    severity={selected?.estado === 'aprobado' ? 'success' : 'error'}
-                    icon={<LockOutlined />}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    Este proyecto ya fue <strong>{ESTADO_CONFIG[selected?.estado]?.label}</strong>.
-                    El estado no puede modificarse una vez finalizado.
-                  </Alert>
+                  <Box sx={{
+                    p: 2, borderRadius: 2, border: '2px solid',
+                    borderColor: selected?.estado === 'aprobado' ? 'success.main' : 'error.main',
+                    bgcolor: selected?.estado === 'aprobado' ? 'success.lighter' : 'error.lighter',
+                    display: 'flex', alignItems: 'center', gap: 1.5,
+                  }}>
+                    <Box sx={{ fontSize: 28, color: selected?.estado === 'aprobado' ? 'success.main' : 'error.main', lineHeight: 1 }}>
+                      {selected?.estado === 'aprobado'
+                        ? <CheckCircleOutlined />
+                        : <CloseCircleOutlined />}
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" fontWeight={700}
+                        color={selected?.estado === 'aprobado' ? 'success.main' : 'error.main'}>
+                        Proyecto {ESTADO_CONFIG[selected?.estado]?.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        El estado no puede modificarse una vez finalizado.
+                      </Typography>
+                    </Box>
+                    <LockOutlined style={{ marginLeft: 'auto', color: '#8c8c8c' }} />
+                  </Box>
                 ) : (
-                  <Stack gap={1.5}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Cambiar Estado</InputLabel>
-                      <Select value={nuevoEstado} label="Cambiar Estado"
-                        onChange={e => setNuevoEstado(e.target.value)}>
-                        {ESTADOS.map(e => (
-                          <MenuItem key={e} value={e}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Chip label={ESTADO_CONFIG[e].label}
-                                color={ESTADO_CONFIG[e].color} size="small" />
+                  <Stack gap={2}>
+                    {/* Botones de acción */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5 }}>
+                      {[
+                        { value: 'revision',  label: 'En Revisión', icon: <ClockCircleOutlined />, color: 'warning',  bg: 'rgba(250,173,20,0.08)'  },
+                        { value: 'aprobado',  label: 'Aprobado',    icon: <CheckCircleOutlined />, color: 'success',  bg: 'rgba(82,196,26,0.08)'   },
+                        { value: 'rechazado', label: 'Rechazado',   icon: <CloseCircleOutlined />, color: 'error',    bg: 'rgba(255,77,79,0.08)'   },
+                      ].map(item => {
+                        const isSel = nuevoEstado === item.value;
+                        return (
+                          <Box key={item.value}
+                            onClick={() => setNuevoEstado(item.value)}
+                            sx={{
+                              p: 1.75, borderRadius: 2, cursor: 'pointer', textAlign: 'center',
+                              border: '2px solid',
+                              borderColor: isSel ? `${item.color}.main` : 'divider',
+                              bgcolor: isSel ? item.bg : 'transparent',
+                              transition: 'all 0.18s',
+                              '&:hover': { borderColor: `${item.color}.main`, bgcolor: item.bg },
+                            }}>
+                            <Box sx={{ fontSize: 26, lineHeight: 1, mb: 0.75,
+                              color: isSel ? `${item.color}.main` : 'text.disabled' }}>
+                              {item.icon}
                             </Box>
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      label="Observación / Retroalimentación"
-                      value={nuevaObservacion}
-                      onChange={e => setNuevaObservacion(e.target.value)}
-                      multiline rows={3} fullWidth size="small"
-                      placeholder="Escribe correcciones o comentarios para el equipo..."
-                    />
+                            <Typography variant="body2" fontWeight={isSel ? 700 : 400}
+                              color={isSel ? `${item.color}.main` : 'text.secondary'}>
+                              {item.label}
+                            </Typography>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+
+                    {/* Observación — solo visible al rechazar */}
+                    {nuevoEstado === 'rechazado' && (
+                      <Box sx={{
+                        animation: 'slideDown 0.22s ease-out',
+                        '@keyframes slideDown': {
+                          from: { opacity: 0, transform: 'translateY(-8px)' },
+                          to:   { opacity: 1, transform: 'translateY(0)' },
+                        }
+                      }}>
+                        <TextField
+                          label="Motivo del rechazo *"
+                          value={nuevaObservacion}
+                          onChange={e => setNuevaObservacion(e.target.value)}
+                          multiline rows={3} fullWidth size="small"
+                          required
+                          error={!nuevaObservacion.trim()}
+                          placeholder="Explica el motivo del rechazo al equipo del proyecto..."
+                          helperText={!nuevaObservacion.trim()
+                            ? 'Este campo es obligatorio para rechazar un proyecto.'
+                            : `${nuevaObservacion.length} caracteres`}
+                        />
+                      </Box>
+                    )}
                   </Stack>
                 )}
               </Box>
@@ -658,50 +844,158 @@ export default function RevisionPage() {
             {estadoFinalizado(selected?.estado) ? 'Cerrar' : 'Cancelar'}
           </Button>
           {!estadoFinalizado(selected?.estado) && (
-            <Button onClick={handleSaveClick} variant="contained" size="small" disabled={saving}
-              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}>
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+            <Button
+              onClick={handleSaveClick}
+              variant="contained"
+              size="small"
+              disabled={saving || (nuevoEstado === 'rechazado' && !nuevaObservacion.trim())}
+              color={nuevoEstado === 'aprobado' ? 'success' : nuevoEstado === 'rechazado' ? 'error' : 'primary'}
+              startIcon={saving
+                ? <CircularProgress size={14} color="inherit" />
+                : nuevoEstado === 'aprobado'
+                  ? <CheckCircleOutlined />
+                  : nuevoEstado === 'rechazado'
+                    ? <CloseCircleOutlined />
+                    : <ClockCircleOutlined />
+              }
+            >
+              {saving
+                ? 'Guardando...'
+                : nuevoEstado === 'aprobado'
+                  ? 'Confirmar Aprobación'
+                  : nuevoEstado === 'rechazado'
+                    ? 'Confirmar Rechazo'
+                    : 'Guardar cambios'}
             </Button>
           )}
         </DialogActions>
       </Dialog>
 
-      {/* ── Diálogo de confirmación de estado final ── */}
-      <Dialog open={confirmSave} onClose={() => setConfirmSave(false)} maxWidth="xs" fullWidth
-        PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}>
-        <Box sx={{ pt: 4, pb: 1, textAlign: 'center', position: 'relative' }}>
+      {/* ── Diálogo de confirmación animado ── */}
+      <Dialog
+        open={confirmSave}
+        onClose={() => setConfirmSave(false)}
+        maxWidth="xs" fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '20px', overflow: 'hidden',
+            animation: 'dlgSlideUp 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+            '@keyframes dlgSlideUp': {
+              from: { transform: 'translateY(32px) scale(0.93)', opacity: 0 },
+              to:   { transform: 'translateY(0) scale(1)',        opacity: 1 },
+            },
+          }
+        }}
+      >
+        {/* Header con gradiente de color */}
+        <Box sx={{
+          py: 4, textAlign: 'center', position: 'relative', overflow: 'hidden',
+          background: nuevoEstado === 'aprobado'
+            ? 'linear-gradient(160deg, rgba(82,196,26,0.18) 0%, rgba(82,196,26,0.04) 100%)'
+            : 'linear-gradient(160deg, rgba(255,77,79,0.18) 0%, rgba(255,77,79,0.04) 100%)',
+        }}>
+          {/* Círculos decorativos de fondo */}
           <Box sx={{
-            position: 'absolute', left: '50%', top: 12, transform: 'translateX(-50%)',
-            width: 120, height: 120, borderRadius: '50%', pointerEvents: 'none',
-            background: nuevoEstado === 'aprobado'
-              ? 'radial-gradient(circle, rgba(82,196,26,0.12) 0%, transparent 70%)'
-              : 'radial-gradient(circle, rgba(255,77,79,0.12) 0%, transparent 70%)',
+            position: 'absolute', top: -30, right: -30, width: 130, height: 130, borderRadius: '50%',
+            bgcolor: nuevoEstado === 'aprobado' ? 'rgba(82,196,26,0.08)' : 'rgba(255,77,79,0.08)',
+            pointerEvents: 'none',
           }} />
-          {nuevoEstado === 'aprobado'
-            ? <CheckCircleOutlined style={{ fontSize: 46, color: '#52c41a' }} />
-            : <ExclamationCircleOutlined style={{ fontSize: 46, color: '#ff4d4f' }} />}
+          <Box sx={{
+            position: 'absolute', bottom: -20, left: -20, width: 90, height: 90, borderRadius: '50%',
+            bgcolor: nuevoEstado === 'aprobado' ? 'rgba(82,196,26,0.06)' : 'rgba(255,77,79,0.06)',
+            pointerEvents: 'none',
+          }} />
+
+          {/* Ícono animado */}
+          <Box sx={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 88, height: 88, borderRadius: '50%',
+            bgcolor: nuevoEstado === 'aprobado' ? 'rgba(82,196,26,0.15)' : 'rgba(255,77,79,0.15)',
+            animation: nuevoEstado === 'aprobado'
+              ? 'iconBounce 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.1s both, pulseGreen 2.4s ease-in-out 0.7s infinite'
+              : 'iconShake 0.5s ease-out 0.1s both, pulseRed 2.4s ease-in-out 0.7s infinite',
+            '@keyframes iconBounce': {
+              '0%':   { transform: 'scale(0)', opacity: 0 },
+              '60%':  { transform: 'scale(1.18)', opacity: 1 },
+              '80%':  { transform: 'scale(0.92)' },
+              '100%': { transform: 'scale(1)' },
+            },
+            '@keyframes iconShake': {
+              '0%':   { transform: 'scale(0) rotate(-10deg)', opacity: 0 },
+              '50%':  { transform: 'scale(1.1) rotate(6deg)', opacity: 1 },
+              '70%':  { transform: 'scale(0.95) rotate(-3deg)' },
+              '100%': { transform: 'scale(1) rotate(0deg)' },
+            },
+            '@keyframes pulseGreen': {
+              '0%, 100%': { boxShadow: '0 0 0 0 rgba(82,196,26,0.35)' },
+              '50%':      { boxShadow: '0 0 0 18px rgba(82,196,26,0)' },
+            },
+            '@keyframes pulseRed': {
+              '0%, 100%': { boxShadow: '0 0 0 0 rgba(255,77,79,0.35)' },
+              '50%':      { boxShadow: '0 0 0 18px rgba(255,77,79,0)' },
+            },
+          }}>
+            {nuevoEstado === 'aprobado'
+              ? <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
+              : <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+            }
+          </Box>
         </Box>
-        <Box sx={{ px: 4, pt: 1.5, pb: 0.5, textAlign: 'center' }}>
+
+        {/* Contenido */}
+        <Box sx={{ px: 4, pt: 2.5, pb: 1, textAlign: 'center' }}>
           <Typography variant="h6" fontWeight={700} sx={{ mb: 0.75 }}>
             {nuevoEstado === 'aprobado' ? '¿Aprobar este proyecto?' : '¿Rechazar este proyecto?'}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-            <strong>{selected?.titulo}</strong> quedará marcado como{' '}
-            <Chip label={ESTADO_CONFIG[nuevoEstado]?.label} color={ESTADO_CONFIG[nuevoEstado]?.color} size="small" />.{' '}
-            Esta acción <strong>no podrá revertirse</strong>.
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.7 }}>
+            El proyecto <strong>"{selected?.titulo}"</strong> quedará marcado como{' '}
+            <Chip label={ESTADO_CONFIG[nuevoEstado]?.label} color={ESTADO_CONFIG[nuevoEstado]?.color} size="small" sx={{ mx: 0.5 }} />.
           </Typography>
+
+          {/* Motivo del rechazo en la confirmación */}
+          {nuevoEstado === 'rechazado' && nuevaObservacion && (
+            <Box sx={{
+              p: 1.5, mb: 1.5, borderRadius: 2, textAlign: 'left',
+              bgcolor: 'rgba(255,77,79,0.06)', border: '1px solid rgba(255,77,79,0.2)',
+            }}>
+              <Typography variant="caption" color="error.main" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Motivo del rechazo
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.6 }}>
+                {nuevaObservacion}
+              </Typography>
+            </Box>
+          )}
+
+          <Alert
+            severity="warning"
+            sx={{ textAlign: 'left', borderRadius: 2, mb: 1, fontSize: '0.8rem' }}
+          >
+            Esta acción <strong>no podrá revertirse</strong> una vez confirmada.
+          </Alert>
         </Box>
-        <Box sx={{ px: 3.5, py: 3, display: 'flex', gap: 1.5, justifyContent: 'center' }}>
-          <Button onClick={() => setConfirmSave(false)} variant="outlined" color="secondary"
-            sx={{ minWidth: 100, borderRadius: 2 }}>
+
+        {/* Botones */}
+        <Box sx={{ px: 3.5, pb: 3.5, pt: 1.5, display: 'flex', gap: 1.5 }}>
+          <Button
+            onClick={() => setConfirmSave(false)}
+            variant="outlined" color="secondary" fullWidth
+            sx={{ borderRadius: 2 }}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleSave} variant="contained"
+          <Button
+            onClick={handleSave}
+            variant="contained"
             color={nuevoEstado === 'aprobado' ? 'success' : 'error'}
-            disabled={saving}
-            sx={{ minWidth: 120, borderRadius: 2, boxShadow: 'none' }}>
+            disabled={saving} fullWidth
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : (
+              nuevoEstado === 'aprobado' ? <CheckCircleOutlined /> : <CloseCircleOutlined />
+            )}
+            sx={{ borderRadius: 2, boxShadow: 'none', fontWeight: 700 }}
+          >
             {saving
-              ? <CircularProgress size={20} color="inherit" />
+              ? 'Guardando...'
               : nuevoEstado === 'aprobado' ? 'Sí, Aprobar' : 'Sí, Rechazar'}
           </Button>
         </Box>

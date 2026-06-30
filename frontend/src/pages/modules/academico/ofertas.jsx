@@ -5,12 +5,13 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Switch,
   FormControlLabel, Snackbar, Alert, CircularProgress, Tabs, Tab, Chip,
   FormControl, InputLabel, Select, MenuItem, Stepper, Step, StepLabel,
-  Typography, Divider, Avatar, Pagination, Grid, Tooltip
+  Typography, Divider, Avatar, Pagination, Grid, Tooltip, Checkbox
 } from '@mui/material';
 import {
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined,
   SolutionOutlined, IdcardOutlined, CheckCircleOutlined,
-  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined, ClearOutlined
+  StopOutlined, RedoOutlined, ReloadOutlined, SearchOutlined, ClearOutlined,
+  CaretRightOutlined, CaretDownOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -28,7 +29,7 @@ const GET_ALL = gql`
         categoria { idCategoria nombre }
         evento    {
           idEvento nombre version gestion
-          membrete {
+          membretes {
             idMembrete titulo subtitulo direccion
             piePagina1 piePagina2 piePagina3
             logoUnidad logoInstitucion firma selloAutoridad
@@ -42,9 +43,18 @@ const GET_ALL = gql`
       }
     }
     todosLosOfertaEaCarreras {
-      id carrera plan estado
-      oferta           { idOferta nombre }
+      id estado
+      oferta    { idOferta nombre }
+      eaCarrera {
+        id
+        entidadAcademica { idEntidadAcademica nombre }
+        carrera          { idCarrera nombre plan }
+      }
+    }
+    todosLosEaCarreras {
+      id
       entidadAcademica { idEntidadAcademica nombre }
+      carrera          { idCarrera nombre plan }
     }
     todosLosCategoriaEventos {
       id
@@ -100,13 +110,13 @@ const DELETE_OFERTA = gql`
 `;
 
 const CREATE_OEC = gql`
-  mutation($idOferta: ID!, $idEntidadAcademica: ID!, $carrera: String, $plan: String) {
-    crearOfertaEaCarrera(idOferta: $idOferta, idEntidadAcademica: $idEntidadAcademica, carrera: $carrera, plan: $plan) { ok error }
+  mutation($idOferta: ID!, $idEaCarrera: ID!) {
+    crearOfertaEaCarrera(idOferta: $idOferta, idEaCarrera: $idEaCarrera) { ok error }
   }
 `;
 const EDIT_OEC = gql`
-  mutation($idOfertaEaCarrera: ID!, $carrera: String, $plan: String, $estado: Boolean) {
-    editarOfertaEaCarrera(idOfertaEaCarrera: $idOfertaEaCarrera, carrera: $carrera, plan: $plan, estado: $estado) { ok error }
+  mutation($idOfertaEaCarrera: ID!, $estado: Boolean) {
+    editarOfertaEaCarrera(idOfertaEaCarrera: $idOfertaEaCarrera, estado: $estado) { ok error }
   }
 `;
 const DELETE_OEC = gql`
@@ -117,7 +127,7 @@ const DELETE_OEC = gql`
 const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Datos de la Oferta', 'Carrera Autorizada'];
 
 const INIT_EDIT_OFERTA = { nombre: '', descripcion: '', estado: true, evento: '', categoria: '', modalidad: '', area: '' };
-const INIT_OEC         = { idOferta: '', idEntidadAcademica: '', carrera: '', plan: '' };
+const INIT_OEC         = { idOferta: '', idEntidadAcademica: '', idEaCarrera: '' };
 
 function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPageChange }) {
   const totalPages = Math.ceil(count / rowsPerPage);
@@ -219,9 +229,8 @@ export default function OfertasPage() {
   const [wizardArea, setWizardArea]           = useState('');
   const [wizardNombre, setWizardNombre]       = useState('');
   const [wizardDesc, setWizardDesc]           = useState('');
-  const [wizardEntidad, setWizardEntidad]     = useState('');
-  const [wizardCarrera, setWizardCarrera]     = useState('');
-  const [wizardPlan, setWizardPlan]           = useState('');
+  const [wizardEntidades, setWizardEntidades]   = useState([]);
+  const [wizardEaCarreras, setWizardEaCarreras] = useState([]);
   // IDs resueltos internamente (find-or-create)
   const [resolvedCatEvId, setResolvedCatEvId]     = useState('');
   const [resolvedModAreaId, setResolvedModAreaId] = useState('');
@@ -231,6 +240,12 @@ export default function OfertasPage() {
   const [openEditOferta, setOpenEditOferta]   = useState(false);
   const [editingOferta, setEditingOferta]     = useState(null);
   const [formEditOferta, setFormEditOferta]   = useState(INIT_EDIT_OFERTA);
+  // Gestión de carreras dentro del dialog de edición
+  const [editAddFacultades, setEditAddFacultades]       = useState([]);
+  const [editAddEaCarreras, setEditAddEaCarreras]       = useState([]);
+  const [showAddCarreraInEdit, setShowAddCarreraInEdit] = useState(false);
+  const [addingCarreraToEdit, setAddingCarreraToEdit]   = useState(false);
+  const [expandedEditFacs, setExpandedEditFacs]         = useState(new Set());
 
   // View oferta
   const [openViewOferta, setOpenViewOferta] = useState(false);
@@ -254,6 +269,7 @@ export default function OfertasPage() {
 
   const ofertas          = data?.todasLasOfertas              || [];
   const oecList          = data?.todosLosOfertaEaCarreras     || [];
+  const eaCarreras       = data?.todosLosEaCarreras           || [];
   const categoriaEventos = data?.todosLosCategoriaEventos     || [];
   const modalidadAreas   = data?.todosLosModalidadAreas       || [];
   const entidades        = data?.todasLasEntidadesAcademicas  || [];
@@ -276,9 +292,8 @@ export default function OfertasPage() {
     setWizardArea('');
     setWizardNombre('');
     setWizardDesc('');
-    setWizardEntidad('');
-    setWizardCarrera('');
-    setWizardPlan('');
+    setWizardEntidades([]);
+    setWizardEaCarreras([]);
     setResolvedCatEvId('');
     setResolvedModAreaId('');
   };
@@ -289,7 +304,7 @@ export default function OfertasPage() {
     if (wizardStep === 1) return !wizardCategoria;
     if (wizardStep === 2) return !wizardModalidad || !wizardArea;
     if (wizardStep === 3) return !wizardNombre.trim();
-    if (wizardStep === 4) return !wizardEntidad;
+    if (wizardStep === 4) return wizardEaCarreras.length === 0;
     return false;
   };
 
@@ -373,23 +388,18 @@ export default function OfertasPage() {
       }
       const idNuevaOferta = ofertaResult.oferta.idOferta;
 
-      // 2. Crear OfertaEaCarrera (carrera autorizada)
-      const oecRes = await crearOEC({
-        variables: {
-          idOferta:            idNuevaOferta,
-          idEntidadAcademica:  wizardEntidad,
-          carrera:             wizardCarrera,
-          plan:                wizardPlan,
-        }
-      });
-      const oecResult = oecRes.data?.crearOfertaEaCarrera;
-      if (!oecResult?.ok) {
-        showNotif(oecResult?.error || 'Error al asignar carrera', 'error');
-        setSaving(false);
-        return;
+      // 2. Crear una OfertaEaCarrera por cada EaCarrera seleccionada
+      const oecResults = await Promise.all(
+        wizardEaCarreras.map(idEaCarrera =>
+          crearOEC({ variables: { idOferta: idNuevaOferta, idEaCarrera } })
+        )
+      );
+      const failed = oecResults.filter(r => !r.data?.crearOfertaEaCarrera?.ok);
+      if (failed.length > 0) {
+        showNotif(`Oferta creada, pero ${failed.length} carrera(s) no pudieron asignarse`, 'warning');
+      } else {
+        showNotif(`Oferta creada con ${wizardEaCarreras.length} carrera(s) autorizada(s)`);
       }
-
-      showNotif('Oferta y carrera autorizada creadas exitosamente');
       await refetch();
       setOpenWizard(false);
       resetWizard();
@@ -467,6 +477,64 @@ export default function OfertasPage() {
     setSaving(false);
   };
 
+  const handleCloseEditOferta = () => {
+    setOpenEditOferta(false);
+    setShowAddCarreraInEdit(false);
+    setEditAddFacultades([]);
+    setEditAddEaCarreras([]);
+    setExpandedEditFacs(new Set());
+  };
+
+  const toggleExpandEditFac = (facId) => {
+    setExpandedEditFacs(prev => {
+      const next = new Set(prev);
+      if (next.has(facId)) next.delete(facId); else next.add(facId);
+      return next;
+    });
+  };
+
+  const handleAddCarrerasToEdit = async () => {
+    setAddingCarreraToEdit(true);
+    try {
+      const results = await Promise.all(
+        editAddEaCarreras.map(idEaCarrera =>
+          crearOEC({ variables: { idOferta: editingOferta.idOferta, idEaCarrera } })
+        )
+      );
+      const errors = results.filter(r => !r.data?.crearOfertaEaCarrera?.ok);
+      if (errors.length === 0) {
+        showNotif(`${editAddEaCarreras.length} carrera${editAddEaCarreras.length !== 1 ? 's' : ''} agregada${editAddEaCarreras.length !== 1 ? 's' : ''}`);
+        refetch();
+        setEditAddFacultades([]);
+        setEditAddEaCarreras([]);
+        setShowAddCarreraInEdit(false);
+      } else {
+        showNotif(`${errors.length} error(es) al agregar`, 'error');
+        refetch();
+      }
+    } catch { showNotif('Error de conexión', 'error'); }
+    setAddingCarreraToEdit(false);
+  };
+
+  const handleToggleOECInline = async (oec) => {
+    try {
+      let res, result;
+      if (oec.estado) {
+        res = await eliminarOEC({ variables: { idOfertaEaCarrera: oec.id } });
+        result = res.data?.eliminarOfertaEaCarrera;
+      } else {
+        res = await editarOEC({ variables: { idOfertaEaCarrera: oec.id, estado: true } });
+        result = res.data?.editarOfertaEaCarrera;
+      }
+      if (result?.ok) {
+        showNotif(`Carrera ${oec.estado ? 'desactivada' : 'activada'}`);
+        refetch();
+      } else {
+        showNotif(result?.error || 'Error', 'error');
+      }
+    } catch { showNotif('Error de conexión', 'error'); }
+  };
+
   const [confirmDlg, setConfirmDlg] = useState({ open: false, title: '', message: '', onConfirm: async () => {}, type: 'error' });
   const [confirming, setConfirming] = useState(false);
 
@@ -503,7 +571,7 @@ export default function OfertasPage() {
   const handleOpenOEC = (oec = null) => {
     setEditingOEC(oec);
     setFormOEC(oec
-      ? { idOferta: oec.oferta?.idOferta || '', idEntidadAcademica: oec.entidadAcademica?.idEntidadAcademica || '', carrera: oec.carrera, plan: oec.plan, estado: oec.estado }
+      ? { idOferta: oec.oferta?.idOferta || '', idEntidadAcademica: oec.eaCarrera?.entidadAcademica?.idEntidadAcademica || '', idEaCarrera: oec.eaCarrera?.id || '', estado: oec.estado }
       : INIT_OEC
     );
     setOpenOEC(true);
@@ -515,11 +583,11 @@ export default function OfertasPage() {
       let res, result;
       if (editingOEC) {
         res = await editarOEC({
-          variables: { idOfertaEaCarrera: editingOEC.id, carrera: formOEC.carrera, plan: formOEC.plan, estado: formOEC.estado }
+          variables: { idOfertaEaCarrera: editingOEC.id, estado: formOEC.estado }
         });
         result = res.data?.editarOfertaEaCarrera;
       } else {
-        res = await crearOEC({ variables: formOEC });
+        res = await crearOEC({ variables: { idOferta: formOEC.idOferta, idEaCarrera: formOEC.idEaCarrera } });
         result = res.data?.crearOfertaEaCarrera;
       }
       if (result?.ok) {
@@ -535,7 +603,7 @@ export default function OfertasPage() {
 
   const handleToggleEstadoOEC = (row) => {
     const isActiva = row.estado;
-    const nombreCarrera = row.carrera;
+    const nombreCarrera = row.eaCarrera?.carrera?.nombre || 'esta carrera';
     setConfirmDlg({
       open: true,
       title: isActiva ? `¿Desactivar Asignación?` : `¿Restaurar Asignación?`,
@@ -564,7 +632,7 @@ export default function OfertasPage() {
   };
 
   const oecFormValid = !editingOEC
-    ? (formOEC.idOferta && formOEC.idEntidadAcademica)
+    ? (formOEC.idOferta && formOEC.idEaCarrera)
     : true;
 
   // ── Wizard step content ───────────────────────────────────────────────────
@@ -653,6 +721,53 @@ export default function OfertasPage() {
         const selCategoria = categorias.find(c => c.idCategoria === wizardCategoria);
         const selModalidad = modalidades.find(m => m.idModalidad === wizardModalidad);
         const selArea      = areas.find(a => a.idArea === wizardArea);
+
+        const facDisponibles = entidades.filter(ea => ea.estado);
+        const allFacIds = facDisponibles.map(ea => ea.idEntidadAcademica);
+        const todasFacSel = allFacIds.length > 0 && allFacIds.every(id => wizardEntidades.includes(id));
+        const algunaFacSel = wizardEntidades.length > 0 && !todasFacSel;
+
+        const toggleFac = (id) => {
+          const next = wizardEntidades.includes(id)
+            ? wizardEntidades.filter(x => x !== id)
+            : [...wizardEntidades, id];
+          setWizardEntidades(next);
+          setWizardEaCarreras([]);
+        };
+        const toggleTodasFac = () => {
+          setWizardEntidades(todasFacSel ? [] : allFacIds);
+          setWizardEaCarreras([]);
+        };
+
+        const eacFiltradas = eaCarreras.filter(
+          eac => wizardEntidades.includes(eac.entidadAcademica?.idEntidadAcademica)
+        );
+        const allEacIds = eacFiltradas.map(eac => eac.id);
+        const todasEacSel = allEacIds.length > 0 && allEacIds.every(id => wizardEaCarreras.includes(id));
+        const algunaEacSel = wizardEaCarreras.length > 0 && !todasEacSel;
+
+        const toggleEac = (id) => {
+          setWizardEaCarreras(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+          );
+        };
+        const toggleTodasEac = () =>
+          setWizardEaCarreras(todasEacSel ? [] : allEacIds);
+
+        const rowSx = {
+          px: 1.5, py: 0.75, display: 'flex', alignItems: 'center', gap: 1,
+          cursor: 'pointer', '&:hover': { bgcolor: 'action.selected' },
+        };
+        const headerRowSx = {
+          ...rowSx, py: 1,
+          bgcolor: 'action.hover',
+          borderBottom: '1px solid', borderColor: 'divider',
+        };
+        const listSx = {
+          border: '1px solid', borderColor: 'divider', borderRadius: 1,
+          maxHeight: 180, overflowY: 'auto', mt: 0.75,
+        };
+
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -665,32 +780,69 @@ export default function OfertasPage() {
               <Typography variant="body2"><strong>Oferta:</strong> {wizardNombre}</Typography>
             </Box>
             <Divider />
-            <Alert severity="info" sx={{ mb: 0.5 }}>
-              Asigna la entidad que podrá inscribir proyectos a esta oferta. Seleccionar carrera y plan es opcional.
-            </Alert>
-            <FormControl fullWidth required>
-              <InputLabel>Facultad / Entidad Académica</InputLabel>
-              <Select value={wizardEntidad} label="Facultad / Entidad Académica"
-                onChange={e => setWizardEntidad(e.target.value)}>
-                {entidades.filter(ea => ea.estado).map(ea => (
-                  <MenuItem key={ea.idEntidadAcademica} value={ea.idEntidadAcademica}>
-                    {ea.nombre}
-                  </MenuItem>
+
+            {/* ── Selección de Facultades ── */}
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary', letterSpacing: 1 }}>
+                  Facultades
+                </Typography>
+                {wizardEntidades.length > 0 && (
+                  <Chip label={`${wizardEntidades.length} seleccionada${wizardEntidades.length !== 1 ? 's' : ''}`} size="small" color="primary" variant="outlined" />
+                )}
+              </Box>
+              <Box sx={listSx}>
+                <Box sx={headerRowSx} onClick={toggleTodasFac}>
+                  <Checkbox size="small" checked={todasFacSel} indeterminate={algunaFacSel}
+                    onChange={toggleTodasFac} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                  <Typography variant="body2" fontWeight={600}>Todas las facultades</Typography>
+                </Box>
+                {facDisponibles.map(ea => (
+                  <Box key={ea.idEntidadAcademica} sx={rowSx} onClick={() => toggleFac(ea.idEntidadAcademica)}>
+                    <Checkbox size="small" checked={wizardEntidades.includes(ea.idEntidadAcademica)}
+                      onChange={() => toggleFac(ea.idEntidadAcademica)} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                    <Typography variant="body2">{ea.nombre}</Typography>
+                  </Box>
                 ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Carrera (Opcional)" value={wizardCarrera} fullWidth
-              placeholder="ej. 187 - Ingeniería de Sistemas"
-              onChange={e => setWizardCarrera(e.target.value)}
-              helperText="Escribe el código de la carrera seguido del nombre"
-            />
-            <TextField
-              label="Plan (Opcional)" value={wizardPlan} fullWidth
-              placeholder="ej. 4"
-              onChange={e => setWizardPlan(e.target.value)}
-              helperText="Ingresa solo el número de plan si aplica"
-            />
+              </Box>
+            </Box>
+
+            {/* ── Selección de Carreras ── */}
+            {wizardEntidades.length > 0 && (
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary', letterSpacing: 1 }}>
+                    Carreras autorizadas
+                  </Typography>
+                  {wizardEaCarreras.length > 0 && (
+                    <Chip label={`${wizardEaCarreras.length} seleccionada${wizardEaCarreras.length !== 1 ? 's' : ''}`} size="small" color="secondary" variant="outlined" />
+                  )}
+                </Box>
+                {eacFiltradas.length === 0 ? (
+                  <Alert severity="warning" sx={{ mt: 0.75, fontSize: '0.8rem' }}>
+                    Las facultades seleccionadas no tienen carreras vinculadas.
+                  </Alert>
+                ) : (
+                  <Box sx={listSx}>
+                    <Box sx={headerRowSx} onClick={toggleTodasEac}>
+                      <Checkbox size="small" checked={todasEacSel} indeterminate={algunaEacSel}
+                        onChange={toggleTodasEac} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                      <Typography variant="body2" fontWeight={600}>Todas las carreras</Typography>
+                    </Box>
+                    {eacFiltradas.map(eac => (
+                      <Box key={eac.id} sx={rowSx} onClick={() => toggleEac(eac.id)}>
+                        <Checkbox size="small" checked={wizardEaCarreras.includes(eac.id)}
+                          onChange={() => toggleEac(eac.id)} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                        <Box>
+                          <Typography variant="body2">{eac.carrera?.nombre}{eac.carrera?.plan ? ` — Plan ${eac.carrera.plan}` : ''}</Typography>
+                          <Typography variant="caption" color="text.secondary">{eac.entidadAcademica?.nombre}</Typography>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            )}
           </Box>
         );
       }
@@ -722,7 +874,11 @@ export default function OfertasPage() {
   const paginatedOfertas = filteredOfertas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const filteredOec = oecList.filter((item) => {
-    const matchNombre = searchNombre ? (item.carrera?.toLowerCase().includes(searchNombre.toLowerCase()) || item.oferta?.nombre?.toLowerCase().includes(searchNombre.toLowerCase())) : true;
+    const matchNombre = searchNombre
+      ? (item.eaCarrera?.carrera?.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) ||
+         item.oferta?.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) ||
+         item.eaCarrera?.entidadAcademica?.nombre?.toLowerCase().includes(searchNombre.toLowerCase()))
+      : true;
     const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
     return matchNombre && matchEstado;
   });
@@ -927,9 +1083,9 @@ export default function OfertasPage() {
                               {grupo.items.map(oec => (
                                 <TableRow key={oec.id} hover>
                                   <TableCell>{oec.id}</TableCell>
-                                  <TableCell>{oec.entidadAcademica?.nombre}</TableCell>
-                                  <TableCell sx={{ fontWeight: 500 }}>{oec.carrera}</TableCell>
-                                  <TableCell>{oec.plan}</TableCell>
+                                  <TableCell>{oec.eaCarrera?.entidadAcademica?.nombre}</TableCell>
+                                  <TableCell sx={{ fontWeight: 500 }}>{oec.eaCarrera?.carrera?.nombre}</TableCell>
+                                  <TableCell>{oec.eaCarrera?.carrera?.plan || '—'}</TableCell>
                                   <TableCell>
                                     <Chip label={oec.estado ? 'Activo' : 'Inactivo'} color={oec.estado ? 'success' : 'error'} size="small" variant="outlined" />
                                   </TableCell>
@@ -1011,75 +1167,297 @@ export default function OfertasPage() {
               disabled={wizardNextDisabled() || saving}
               startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlined />}
             >
-              {saving ? 'Creando...' : 'Crear Oferta y Carrera'}
+              {saving ? 'Creando...' : `Crear Oferta (${wizardEaCarreras.length} carrera${wizardEaCarreras.length !== 1 ? 's' : ''})`}
             </Button>
           )}
         </DialogActions>
       </Dialog>
 
       {/* ── Dialog: Editar Oferta ── */}
-      <Dialog open={openEditOferta} onClose={() => setOpenEditOferta(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Editar Oferta</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <FormControl fullWidth required>
-              <InputLabel>Evento</InputLabel>
-              <Select value={formEditOferta.evento} label="Evento"
-                onChange={e => setFormEditOferta(p => ({ ...p, evento: e.target.value }))}>
-                {eventos.filter(ev => ev.estado && (!usedEventIds.has(ev.idEvento) || ev.idEvento === editingOferta?.categoriaEvento?.evento?.idEvento)).map(ev => (
-                  <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} v{ev.version}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>Categoría</InputLabel>
-              <Select value={formEditOferta.categoria} label="Categoría"
-                onChange={e => setFormEditOferta(p => ({ ...p, categoria: e.target.value }))}>
-                {categorias.filter(c => c.estado).map(c => (
-                  <MenuItem key={c.idCategoria} value={c.idCategoria}>{c.nombre}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>Modalidad</InputLabel>
-              <Select value={formEditOferta.modalidad} label="Modalidad"
-                onChange={e => setFormEditOferta(p => ({ ...p, modalidad: e.target.value }))}>
-                {modalidades.filter(m => m.estado).map(m => (
-                  <MenuItem key={m.idModalidad} value={m.idModalidad}>{m.nombre}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel>Área</InputLabel>
-              <Select value={formEditOferta.area} label="Área"
-                onChange={e => setFormEditOferta(p => ({ ...p, area: e.target.value }))}>
-                {areas.filter(a => a.estado).map(a => (
-                  <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Nombre" value={formEditOferta.nombre} fullWidth required autoFocus
-              onChange={e => setFormEditOferta(p => ({ ...p, nombre: e.target.value }))}
-            />
-            <TextField
-              label="Descripción" value={formEditOferta.descripcion} fullWidth multiline rows={3}
-              onChange={e => setFormEditOferta(p => ({ ...p, descripcion: e.target.value }))}
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formEditOferta.estado}
-                  onChange={e => setFormEditOferta(p => ({ ...p, estado: e.target.checked }))}
-                />
-              }
-              label={formEditOferta.estado ? 'Activa' : 'Inactiva'}
-            />
-          </Box>
+      <Dialog open={openEditOferta} onClose={handleCloseEditOferta} fullWidth maxWidth="md">
+        <DialogTitle sx={{ pb: 1 }}>Editar Oferta</DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {editingOferta && (() => {
+            const editOecList = oecList.filter(oec => oec.oferta?.idOferta === editingOferta.idOferta);
+            const linkedEacIds = editOecList.map(oec => oec.eaCarrera?.id);
+            return (
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, minHeight: 480 }}>
+
+                {/* ── Columna izquierda: datos de la oferta ── */}
+                <Box sx={{ flex: 1, p: 3, borderRight: { md: '1px solid' }, borderColor: { md: 'divider' }, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+
+                  {/* Sección: Información general */}
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                      Información General
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                      <TextField
+                        label="Nombre" value={formEditOferta.nombre} fullWidth required size="small"
+                        onChange={e => setFormEditOferta(p => ({ ...p, nombre: e.target.value }))}
+                      />
+                      <TextField
+                        label="Descripción" value={formEditOferta.descripcion} fullWidth multiline rows={2} size="small"
+                        onChange={e => setFormEditOferta(p => ({ ...p, descripcion: e.target.value }))}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch checked={formEditOferta.estado}
+                            onChange={e => setFormEditOferta(p => ({ ...p, estado: e.target.checked }))} />
+                        }
+                        label={<Typography variant="body2">{formEditOferta.estado ? 'Activa' : 'Inactiva'}</Typography>}
+                      />
+                    </Box>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Sección: Configuración académica */}
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                      Configuración Académica
+                    </Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1 }}>
+                      <FormControl fullWidth required size="small">
+                        <InputLabel>Evento</InputLabel>
+                        <Select value={formEditOferta.evento} label="Evento"
+                          onChange={e => setFormEditOferta(p => ({ ...p, evento: e.target.value }))}>
+                          {eventos.filter(ev => ev.estado && (!usedEventIds.has(ev.idEvento) || ev.idEvento === editingOferta?.categoriaEvento?.evento?.idEvento)).map(ev => (
+                            <MenuItem key={ev.idEvento} value={ev.idEvento}>{ev.nombre} v{ev.version}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth required size="small">
+                        <InputLabel>Categoría</InputLabel>
+                        <Select value={formEditOferta.categoria} label="Categoría"
+                          onChange={e => setFormEditOferta(p => ({ ...p, categoria: e.target.value }))}>
+                          {categorias.filter(c => c.estado).map(c => (
+                            <MenuItem key={c.idCategoria} value={c.idCategoria}>{c.nombre}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth required size="small">
+                        <InputLabel>Modalidad</InputLabel>
+                        <Select value={formEditOferta.modalidad} label="Modalidad"
+                          onChange={e => setFormEditOferta(p => ({ ...p, modalidad: e.target.value }))}>
+                          {modalidades.filter(m => m.estado).map(m => (
+                            <MenuItem key={m.idModalidad} value={m.idModalidad}>{m.nombre}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth required size="small">
+                        <InputLabel>Área</InputLabel>
+                        <Select value={formEditOferta.area} label="Área"
+                          onChange={e => setFormEditOferta(p => ({ ...p, area: e.target.value }))}>
+                          {areas.filter(a => a.estado).map(a => (
+                            <MenuItem key={a.idArea} value={a.idArea}>{a.nombre}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* ── Columna derecha: carreras autorizadas ── */}
+                {(() => {
+                  const groupedOecs = editOecList.reduce((acc, oec) => {
+                    const facId = oec.eaCarrera?.entidadAcademica?.idEntidadAcademica || '__none__';
+                    const facNombre = oec.eaCarrera?.entidadAcademica?.nombre || 'Sin facultad';
+                    if (!acc[facId]) acc[facId] = { facNombre, oecs: [] };
+                    acc[facId].oecs.push(oec);
+                    return acc;
+                  }, {});
+
+                  const facDisponibles = entidades.filter(ea => ea.estado);
+                  const allFacIds = facDisponibles.map(ea => ea.idEntidadAcademica);
+                  const todasFacsEdit = allFacIds.length > 0 && allFacIds.every(id => editAddFacultades.includes(id));
+                  const algunaFacEdit = editAddFacultades.length > 0 && !todasFacsEdit;
+
+                  const eacParaAgregar = eaCarreras.filter(
+                    eac => editAddFacultades.includes(eac.entidadAcademica?.idEntidadAcademica) &&
+                           !linkedEacIds.includes(eac.id)
+                  );
+                  const allEacIdsAdd = eacParaAgregar.map(eac => eac.id);
+                  const todasEacEdit = allEacIdsAdd.length > 0 && allEacIdsAdd.every(id => editAddEaCarreras.includes(id));
+                  const algunaEacEdit = editAddEaCarreras.length > 0 && !todasEacEdit;
+
+                  const toggleFacEdit = (id) => {
+                    setEditAddFacultades(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+                    setEditAddEaCarreras([]);
+                  };
+                  const toggleTodasFacsEdit = () => {
+                    setEditAddFacultades(todasFacsEdit ? [] : allFacIds);
+                    setEditAddEaCarreras([]);
+                  };
+                  const toggleEacEdit = (id) =>
+                    setEditAddEaCarreras(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+                  const toggleTodasEacEdit = () =>
+                    setEditAddEaCarreras(todasEacEdit ? [] : allEacIdsAdd);
+
+                  const listBoxSx = {
+                    border: '1px solid', borderColor: 'divider', borderRadius: 1,
+                    maxHeight: 150, overflowY: 'auto',
+                  };
+                  const rowSx = {
+                    px: 1, py: 0.6, display: 'flex', alignItems: 'center', gap: 1,
+                    cursor: 'pointer', '&:hover': { bgcolor: 'action.selected' },
+                  };
+                  const headerRowSx = {
+                    ...rowSx, bgcolor: 'action.hover',
+                    borderBottom: '1px solid', borderColor: 'divider',
+                  };
+
+                  return (
+                    <Box sx={{ width: { xs: '100%', md: 390 }, p: 3, display: 'flex', flexDirection: 'column', gap: 1.5, borderLeft: { md: '1px solid' }, borderColor: { md: 'divider' } }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 1.2 }}>
+                          Carreras Autorizadas
+                        </Typography>
+                        <Chip label={editOecList.length} size="small" color="primary" variant="outlined" />
+                      </Box>
+
+                      {/* Lista agrupada por facultad */}
+                      <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.5, maxHeight: 280 }}>
+                        {editOecList.length === 0 && !showAddCarreraInEdit && (
+                          <Alert severity="info" sx={{ fontSize: '0.8rem' }}>Sin carreras autorizadas.</Alert>
+                        )}
+                        {Object.entries(groupedOecs).map(([facId, { facNombre, oecs: facOecs }]) => (
+                          <Box key={facId} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+                            <Box onClick={() => toggleExpandEditFac(facId)}
+                              sx={{ px: 1.5, py: 0.9, display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
+                                   bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}>
+                              <Box sx={{ fontSize: 10, color: 'text.secondary', lineHeight: 1, flexShrink: 0 }}>
+                                {expandedEditFacs.has(facId) ? <CaretDownOutlined /> : <CaretRightOutlined />}
+                              </Box>
+                              <Typography variant="body2" fontWeight={700} sx={{ flex: 1 }} noWrap>{facNombre}</Typography>
+                              <Chip
+                                label={`${facOecs.filter(o => o.estado).length}/${facOecs.length}`}
+                                size="small"
+                                color={facOecs.some(o => !o.estado) ? 'warning' : 'success'}
+                                variant="outlined"
+                              />
+                            </Box>
+                            {expandedEditFacs.has(facId) && facOecs.map(oec => (
+                              <Box key={oec.id} sx={{
+                                px: 1.5, py: 0.8, display: 'flex', alignItems: 'center', gap: 1,
+                                borderTop: '1px solid', borderColor: 'divider',
+                                bgcolor: oec.estado ? 'transparent' : 'rgba(255,77,79,0.04)',
+                              }}>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography variant="body2" noWrap>{oec.eaCarrera?.carrera?.nombre}</Typography>
+                                  {oec.eaCarrera?.carrera?.plan && (
+                                    <Typography variant="caption" color="text.secondary">Plan {oec.eaCarrera.carrera.plan}</Typography>
+                                  )}
+                                </Box>
+                                <Tooltip title={oec.estado ? 'Desactivar' : 'Activar'}>
+                                  <Switch size="small" checked={oec.estado} onChange={() => handleToggleOECInline(oec)} />
+                                </Tooltip>
+                              </Box>
+                            ))}
+                          </Box>
+                        ))}
+                      </Box>
+
+                      {/* Panel de agregar — multi-select */}
+                      {showAddCarreraInEdit ? (
+                        <Box sx={{ border: '1px dashed', borderColor: 'primary.main', borderRadius: 1.5, p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                          <Typography variant="caption" fontWeight={700} color="primary.main">
+                            Agregar carreras autorizadas
+                          </Typography>
+
+                          {/* Facultades multi-select */}
+                          <Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary" fontWeight={600}>Facultades</Typography>
+                              {editAddFacultades.length > 0 && (
+                                <Chip label={`${editAddFacultades.length} sel.`} size="small" color="primary" variant="outlined" />
+                              )}
+                            </Box>
+                            <Box sx={listBoxSx}>
+                              <Box sx={headerRowSx} onClick={toggleTodasFacsEdit}>
+                                <Checkbox size="small" checked={todasFacsEdit} indeterminate={algunaFacEdit}
+                                  onChange={toggleTodasFacsEdit} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                                <Typography variant="body2" fontWeight={600}>Todas las facultades</Typography>
+                              </Box>
+                              {facDisponibles.map(ea => (
+                                <Box key={ea.idEntidadAcademica} sx={rowSx} onClick={() => toggleFacEdit(ea.idEntidadAcademica)}>
+                                  <Checkbox size="small" checked={editAddFacultades.includes(ea.idEntidadAcademica)}
+                                    onChange={() => toggleFacEdit(ea.idEntidadAcademica)} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                                  <Typography variant="body2" noWrap>{ea.nombre}</Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          </Box>
+
+                          {/* Carreras multi-select */}
+                          {editAddFacultades.length > 0 && (
+                            <Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary" fontWeight={600}>Carreras</Typography>
+                                {editAddEaCarreras.length > 0 && (
+                                  <Chip label={`${editAddEaCarreras.length} sel.`} size="small" color="secondary" variant="outlined" />
+                                )}
+                              </Box>
+                              {eacParaAgregar.length === 0 ? (
+                                <Alert severity="warning" sx={{ fontSize: '0.75rem', py: 0.5 }}>
+                                  Sin carreras disponibles para agregar.
+                                </Alert>
+                              ) : (
+                                <Box sx={listBoxSx}>
+                                  <Box sx={headerRowSx} onClick={toggleTodasEacEdit}>
+                                    <Checkbox size="small" checked={todasEacEdit} indeterminate={algunaEacEdit}
+                                      onChange={toggleTodasEacEdit} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                                    <Typography variant="body2" fontWeight={600}>Todas las carreras</Typography>
+                                  </Box>
+                                  {eacParaAgregar.map(eac => (
+                                    <Box key={eac.id} sx={rowSx} onClick={() => toggleEacEdit(eac.id)}>
+                                      <Checkbox size="small" checked={editAddEaCarreras.includes(eac.id)}
+                                        onChange={() => toggleEacEdit(eac.id)} onClick={e => e.stopPropagation()} sx={{ p: 0 }} />
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="body2" noWrap>
+                                          {eac.carrera?.nombre}{eac.carrera?.plan ? ` — Plan ${eac.carrera.plan}` : ''}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" noWrap display="block">
+                                          {eac.entidadAcademica?.nombre}
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+                                  ))}
+                                </Box>
+                              )}
+                            </Box>
+                          )}
+
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button size="small" variant="contained" fullWidth
+                              disabled={editAddEaCarreras.length === 0 || addingCarreraToEdit}
+                              onClick={handleAddCarrerasToEdit}>
+                              {addingCarreraToEdit
+                                ? <CircularProgress size={16} color="inherit" />
+                                : `Agregar${editAddEaCarreras.length > 0 ? ` (${editAddEaCarreras.length})` : ''}`}
+                            </Button>
+                            <Button size="small" color="secondary" variant="outlined"
+                              onClick={() => { setShowAddCarreraInEdit(false); setEditAddFacultades([]); setEditAddEaCarreras([]); }}>
+                              Cancelar
+                            </Button>
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Button size="small" variant="outlined" startIcon={<PlusOutlined />}
+                          onClick={() => setShowAddCarreraInEdit(true)} fullWidth>
+                          Agregar carreras
+                        </Button>
+                      )}
+                    </Box>
+                  );
+                })()}
+              </Box>
+            );
+          })()}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenEditOferta(false)} color="secondary">Cancelar</Button>
-          <Button onClick={handleSaveEditOferta} variant="contained" disabled={!formEditOferta.nombre.trim() || saving}>
+          <Button onClick={handleCloseEditOferta} color="secondary">Cancelar</Button>
+          <Button onClick={handleSaveEditOferta} variant="contained" disabled={!formEditOferta.nombre?.trim() || saving}>
             {saving ? <CircularProgress size={24} color="inherit" /> : 'Guardar'}
           </Button>
         </DialogActions>
@@ -1196,9 +1574,9 @@ export default function OfertasPage() {
                           display: 'flex', alignItems: 'center', gap: 2,
                         }}>
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={600}>{oec.carrera}</Typography>
+                            <Typography variant="body2" fontWeight={600}>{oec.eaCarrera?.carrera?.nombre}</Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {oec.entidadAcademica?.nombre} · Plan: {oec.plan}
+                              {oec.eaCarrera?.entidadAcademica?.nombre}{oec.eaCarrera?.carrera?.plan ? ` · Plan: ${oec.eaCarrera.carrera.plan}` : ''}
                             </Typography>
                           </Box>
                           <Chip
@@ -1214,7 +1592,7 @@ export default function OfertasPage() {
 
                 {/* ── Bloque 5: Membrete del Evento ── */}
                 {(() => {
-                  const membrete = viewOferta.categoriaEvento?.evento?.membrete;
+                  const membrete = (viewOferta.categoriaEvento?.evento?.membretes || [])[0];
                   if (!membrete) return null;
 
                   const pies = [membrete.piePagina1, membrete.piePagina2, membrete.piePagina3].filter(Boolean);
@@ -1323,9 +1701,7 @@ export default function OfertasPage() {
                     onChange={e => setFormOEC(p => ({ ...p, idOferta: e.target.value }))}
                   >
                     {ofertas.filter(of => of.estado).map(of => (
-                      <MenuItem key={of.idOferta} value={of.idOferta}>
-                        {of.nombre}
-                      </MenuItem>
+                      <MenuItem key={of.idOferta} value={of.idOferta}>{of.nombre}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1334,43 +1710,58 @@ export default function OfertasPage() {
                   <Select
                     value={formOEC.idEntidadAcademica}
                     label="Facultad / Entidad Académica"
-                    onChange={e => setFormOEC(p => ({ ...p, idEntidadAcademica: e.target.value }))}
+                    onChange={e => setFormOEC(p => ({ ...p, idEntidadAcademica: e.target.value, idEaCarrera: '' }))}
                   >
                     {entidades.filter(ea => ea.estado).map(ea => (
-                      <MenuItem key={ea.idEntidadAcademica} value={ea.idEntidadAcademica}>
-                        {ea.nombre}
-                      </MenuItem>
+                      <MenuItem key={ea.idEntidadAcademica} value={ea.idEntidadAcademica}>{ea.nombre}</MenuItem>
                     ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth required disabled={!formOEC.idEntidadAcademica}>
+                  <InputLabel>Carrera</InputLabel>
+                  <Select
+                    value={formOEC.idEaCarrera}
+                    label="Carrera"
+                    onChange={e => setFormOEC(p => ({ ...p, idEaCarrera: e.target.value }))}
+                  >
+                    {eaCarreras
+                      .filter(eac => eac.entidadAcademica?.idEntidadAcademica === formOEC.idEntidadAcademica)
+                      .map(eac => (
+                        <MenuItem key={eac.id} value={eac.id}>
+                          {eac.carrera?.nombre}{eac.carrera?.plan ? ` — Plan ${eac.carrera.plan}` : ''}
+                        </MenuItem>
+                      ))
+                    }
+                    {formOEC.idEntidadAcademica && eaCarreras.filter(eac => eac.entidadAcademica?.idEntidadAcademica === formOEC.idEntidadAcademica).length === 0 && (
+                      <MenuItem disabled>Sin carreras vinculadas a esta facultad</MenuItem>
+                    )}
                   </Select>
                 </FormControl>
               </>
             )}
             {editingOEC && (
-              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Oferta: {editingOEC.oferta?.nombre} · Facultad: {editingOEC.entidadAcademica?.nombre}
-                </Typography>
-              </Box>
-            )}
-            <TextField
-              label="Carrera" value={formOEC.carrera} fullWidth required
-              onChange={e => setFormOEC(p => ({ ...p, carrera: e.target.value }))}
-            />
-            <TextField
-              label="Plan" value={formOEC.plan} fullWidth required
-              placeholder="Ej. 188-4"
-              onChange={e => setFormOEC(p => ({ ...p, plan: e.target.value }))}
-            />
-            {editingOEC && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formOEC.estado}
-                    onChange={e => setFormOEC(p => ({ ...p, estado: e.target.checked }))}
-                  />
-                }
-                label={formOEC.estado ? 'Activo' : 'Inactivo'}
-              />
+              <>
+                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Oferta: <strong>{editingOEC.oferta?.nombre}</strong>
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" color="text.secondary">
+                    Facultad: <strong>{editingOEC.eaCarrera?.entidadAcademica?.nombre}</strong>
+                    {' · '}Carrera: <strong>{editingOEC.eaCarrera?.carrera?.nombre}</strong>
+                    {editingOEC.eaCarrera?.carrera?.plan ? ` — Plan ${editingOEC.eaCarrera.carrera.plan}` : ''}
+                  </Typography>
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formOEC.estado}
+                      onChange={e => setFormOEC(p => ({ ...p, estado: e.target.checked }))}
+                    />
+                  }
+                  label={formOEC.estado ? 'Activo' : 'Inactivo'}
+                />
+              </>
             )}
           </Box>
         </DialogContent>

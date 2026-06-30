@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // ─── Configuración de URL del Backend ───
 // IP ESTÁTICA de la PC servidor — cambiar solo si se cambia la IP del servidor
-const String kBackendUrl = 'http://192.168.0.3:8000/graphql/';
+const String kBackendUrl = 'http://192.168.0.5:8000/graphql/';
 
 class GraphQLConfig {
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();

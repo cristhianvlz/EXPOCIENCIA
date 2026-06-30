@@ -55,7 +55,10 @@ class CrearProyecto(graphene.Mutation):
     def mutate(root, info, id_oferta_ea_carrera, titulo, resumen="", observacion="", estado="revision", archivo=None):
         try:
             oferta_ea_carrera = OfertaEaCarrera.objects.select_related(
-                'oferta__categoria_evento__evento'
+                'oferta__categoria_evento__evento',
+                'oferta__modalidad_area__area',
+                'ea_carrera__entidad_academica',
+                'ea_carrera__carrera',
             ).get(pk=id_oferta_ea_carrera)
         except OfertaEaCarrera.DoesNotExist:
             return CrearProyecto(proyecto=None, ok=False, error="El registro de oferta-EA-carrera no existe.") # type: ignore

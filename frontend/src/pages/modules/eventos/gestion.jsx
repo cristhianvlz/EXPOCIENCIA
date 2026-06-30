@@ -3,7 +3,8 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Switch, FormControlLabel,
-  Snackbar, Alert, CircularProgress, Tabs, Tab, Chip, Select, MenuItem, FormControl, InputLabel, Typography, Grid, Divider, Avatar, Tooltip
+  Snackbar, Alert, CircularProgress, Tabs, Tab, Chip, Select, MenuItem, FormControl, InputLabel,
+  Typography, Grid, Divider, Avatar, Tooltip, Checkbox, ListItemText, OutlinedInput
 } from '@mui/material';
 import { 
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined, 
@@ -17,9 +18,10 @@ const GET_ALL = gql`
   query {
     todosLosEventos {
       idEvento nombre version gestion estado
+      maxParticipantes maxTribunal maxTutores
       tipoEvento { idTipoEvento nombre }
       nivelEvento { idNivelEvento nombre }
-      membrete { idMembrete titulo }
+      membretes { idMembrete titulo }
     }
     todosLosTiposEventos { idTipoEvento nombre estado }
     todosLosNivelesEventos { idNivelEvento nombre estado }
@@ -36,18 +38,18 @@ const EDIT_NIVEL   = gql`mutation($idNivelEvento: ID!, $nombre: String, $estado:
 const DELETE_NIVEL = gql`mutation($idNivelEvento: ID!) { eliminarNivelEvento(idNivelEvento: $idNivelEvento) { ok error } }`;
 
 const CREATE_EVENTO = gql`
-  mutation($idTipoEvento: ID!, $idNivelEvento: ID!, $idMembrete: ID!, $nombre: String!, $version: Int!, $gestion: Int!) {
-    crearEvento(idTipoEvento: $idTipoEvento, idNivelEvento: $idNivelEvento, idMembrete: $idMembrete, nombre: $nombre, version: $version, gestion: $gestion) { ok error }
+  mutation($idTipoEvento: ID!, $idNivelEvento: ID!, $idsMembretes: [ID]!, $nombre: String!, $version: Int!, $gestion: Int!, $maxParticipantes: Int, $maxTribunal: Int, $maxTutores: Int) {
+    crearEvento(idTipoEvento: $idTipoEvento, idNivelEvento: $idNivelEvento, idsMembretes: $idsMembretes, nombre: $nombre, version: $version, gestion: $gestion, maxParticipantes: $maxParticipantes, maxTribunal: $maxTribunal, maxTutores: $maxTutores) { ok error }
   }
 `;
 const EDIT_EVENTO = gql`
-  mutation($idEvento: ID!, $idTipoEvento: ID, $idNivelEvento: ID, $idMembrete: ID, $nombre: String, $version: Int, $gestion: Int, $estado: Boolean) {
-    editarEvento(idEvento: $idEvento, idTipoEvento: $idTipoEvento, idNivelEvento: $idNivelEvento, idMembrete: $idMembrete, nombre: $nombre, version: $version, gestion: $gestion, estado: $estado) { ok error }
+  mutation($idEvento: ID!, $idTipoEvento: ID, $idNivelEvento: ID, $idsMembretes: [ID], $nombre: String, $version: Int, $gestion: Int, $maxParticipantes: Int, $maxTribunal: Int, $maxTutores: Int, $estado: Boolean) {
+    editarEvento(idEvento: $idEvento, idTipoEvento: $idTipoEvento, idNivelEvento: $idNivelEvento, idsMembretes: $idsMembretes, nombre: $nombre, version: $version, gestion: $gestion, maxParticipantes: $maxParticipantes, maxTribunal: $maxTribunal, maxTutores: $maxTutores, estado: $estado) { ok error }
   }
 `;
 const DELETE_EVENTO = gql`mutation($idEvento: ID!) { eliminarEvento(idEvento: $idEvento) { ok error } }`;
 
-const INIT_EVENTO = { nombre: '', version: 1, gestion: new Date().getFullYear(), idTipoEvento: '', idNivelEvento: '', idMembrete: '', estado: true };
+const INIT_EVENTO = { nombre: '', version: 1, gestion: new Date().getFullYear(), idTipoEvento: '', idNivelEvento: '', idsMembretes: [], maxParticipantes: 0, maxTribunal: 0, maxTutores: 0, estado: true };
 const INIT_TIPO   = { nombre: '', estado: true };
 const INIT_NIVEL  = { nombre: '', estado: true };
 
@@ -242,9 +244,12 @@ export default function GestionEventosPage() {
       nombre: ev.nombre,
       version: ev.version,
       gestion: ev.gestion,
-      idTipoEvento:  ev.tipoEvento?.idTipoEvento  || '',
-      idNivelEvento: ev.nivelEvento?.idNivelEvento || '',
-      idMembrete:    ev.membrete?.idMembrete       || '',
+      idTipoEvento:     ev.tipoEvento?.idTipoEvento   || '',
+      idNivelEvento:    ev.nivelEvento?.idNivelEvento  || '',
+      idsMembretes:     (ev.membretes || []).map(m => m.idMembrete),
+      maxParticipantes: ev.maxParticipantes ?? 0,
+      maxTribunal:      ev.maxTribunal      ?? 0,
+      maxTutores:       ev.maxTutores       ?? 0,
       estado: ev.estado,
     } : INIT_EVENTO);
     setOpenEvento(true);
@@ -253,7 +258,14 @@ export default function GestionEventosPage() {
   const handleSubmitEvento = async () => {
     setSaving(true);
     try {
-      const base = { ...formEvento, version: parseInt(formEvento.version), gestion: parseInt(formEvento.gestion) };
+      const base = {
+        ...formEvento,
+        version: parseInt(formEvento.version),
+        gestion: parseInt(formEvento.gestion),
+        maxParticipantes: parseInt(formEvento.maxParticipantes) || 0,
+        maxTribunal: parseInt(formEvento.maxTribunal) || 0,
+        maxTutores: parseInt(formEvento.maxTutores) || 0,
+      };
       const vars = editingEvento ? { idEvento: editingEvento.idEvento, ...base } : base;
       const res = editingEvento
         ? await editarEvento({ variables: vars })
@@ -381,7 +393,7 @@ export default function GestionEventosPage() {
   };
 
   const eventoFormValid = formEvento.nombre && formEvento.version && formEvento.gestion
-    && formEvento.idTipoEvento && formEvento.idNivelEvento && formEvento.idMembrete;
+    && formEvento.idTipoEvento && formEvento.idNivelEvento && formEvento.idsMembretes.length > 0;
 
   const handleOpenView = (item, type) => {
     setViewItem(item);
@@ -502,7 +514,6 @@ export default function GestionEventosPage() {
                       <TableCell>Gestión</TableCell>
                       <TableCell>Tipo</TableCell>
                       <TableCell>Nivel</TableCell>
-                      <TableCell>Membrete</TableCell>
                       <TableCell>Estado</TableCell>
                       <TableCell align="right">Acciones</TableCell>
                     </TableRow>
@@ -516,13 +527,12 @@ export default function GestionEventosPage() {
                         <TableCell>{ev.gestion}</TableCell>
                         <TableCell>{ev.tipoEvento?.nombre}</TableCell>
                         <TableCell>{ev.nivelEvento?.nombre}</TableCell>
-                        <TableCell>{ev.membrete?.titulo}</TableCell>
                         <TableCell>
                           <Chip label={ev.estado ? 'Activo' : 'Inactivo'} color={ev.estado ? 'success' : 'error'} size="small" variant="outlined" />
                         </TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <Tooltip title="Ver"><IconButton size="small" color="info" onClick={() => handleOpenView(ev, 'Evento')}><EyeOutlined /></IconButton></Tooltip>
+                            <Tooltip title="Ver detalle"><IconButton size="small" color="info" onClick={() => handleOpenView(ev, 'Evento')}><EyeOutlined /></IconButton></Tooltip>
                             <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => handleOpenEvento(ev)}><EditOutlined /></IconButton></Tooltip>
                             <Tooltip title={ev.estado ? "Desactivar" : "Restaurar"}>
                               <IconButton size="small" color={ev.estado ? "error" : "success"} onClick={() => handleToggleEvento(ev)}>
@@ -534,7 +544,7 @@ export default function GestionEventosPage() {
                       </TableRow>
                     ))}
                     {eventos.length === 0 && (
-                      <TableRow><TableCell colSpan={9} align="center">No hay eventos registrados.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={8} align="center">No hay eventos registrados.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -768,15 +778,60 @@ export default function GestionEventosPage() {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Multi-select Membretes */}
             <FormControl fullWidth required>
-              <InputLabel>Membrete</InputLabel>
-              <Select value={formEvento.idMembrete} label="Membrete"
-                onChange={e => setFormEvento(p => ({ ...p, idMembrete: e.target.value }))}>
+              <InputLabel>Membretes</InputLabel>
+              <Select
+                multiple
+                value={formEvento.idsMembretes}
+                onChange={e => setFormEvento(p => ({ ...p, idsMembretes: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value }))}
+                input={<OutlinedInput label="Membretes" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map(id => {
+                      const m = membretes.find(x => x.idMembrete === id);
+                      return m ? <Chip key={id} label={m.titulo} size="small" /> : null;
+                    })}
+                  </Box>
+                )}
+              >
                 {membretes.filter(m => m.estado).map(m => (
-                  <MenuItem key={m.idMembrete} value={m.idMembrete}>{m.titulo}</MenuItem>
+                  <MenuItem key={m.idMembrete} value={m.idMembrete}>
+                    <Checkbox checked={formEvento.idsMembretes.includes(m.idMembrete)} size="small" />
+                    <ListItemText primary={m.titulo} />
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
+
+            {/* Límites de participación */}
+            <Divider sx={{ mt: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                Límites de Participación
+              </Typography>
+            </Divider>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Máx. Participantes" type="number" value={formEvento.maxParticipantes} fullWidth
+                helperText="0 = sin límite"
+                inputProps={{ min: 0 }}
+                onChange={e => setFormEvento(p => ({ ...p, maxParticipantes: e.target.value }))}
+              />
+              <TextField
+                label="Máx. Tribunal" type="number" value={formEvento.maxTribunal} fullWidth
+                helperText="0 = sin límite"
+                inputProps={{ min: 0 }}
+                onChange={e => setFormEvento(p => ({ ...p, maxTribunal: e.target.value }))}
+              />
+              <TextField
+                label="Máx. Tutores" type="number" value={formEvento.maxTutores} fullWidth
+                helperText="0 = sin límite"
+                inputProps={{ min: 0 }}
+                onChange={e => setFormEvento(p => ({ ...p, maxTutores: e.target.value }))}
+              />
+            </Box>
+
             {editingEvento && (
               <FormControlLabel
                 control={<Switch checked={formEvento.estado} onChange={e => setFormEvento(p => ({ ...p, estado: e.target.checked }))} />}
@@ -916,12 +971,40 @@ export default function GestionEventosPage() {
                 </Box>
               </Grid>
               <Grid item xs={12}>
-                <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                   <Avatar sx={{ bgcolor: 'action.hover', color: 'info.main' }}><FileTextOutlined /></Avatar>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Membrete Asignado</Typography>
-                    <Typography variant="subtitle1" color="text.primary" sx={{ mt: 0.5, fontWeight: 500 }}>{viewItem.membrete?.titulo || 'Ninguno'}</Typography>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Membretes Asignados</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                      {(viewItem.membretes || []).map(m => (
+                        <Chip key={m.idMembrete} label={m.titulo} size="small" />
+                      ))}
+                      {(!viewItem.membretes || viewItem.membretes.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">Ninguno</Typography>
+                      )}
+                    </Box>
                   </Box>
+                </Box>
+              </Grid>
+              <Grid item xs={12}>
+                <Divider sx={{ my: 0.5 }} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Máx. Participantes</Typography>
+                  <Typography variant="h6" color="primary.main" sx={{ fontWeight: 700 }}>{viewItem.maxParticipantes || '∞'}</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Máx. Tribunal</Typography>
+                  <Typography variant="h6" color="warning.main" sx={{ fontWeight: 700 }}>{viewItem.maxTribunal || '∞'}</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Máx. Tutores</Typography>
+                  <Typography variant="h6" color="success.main" sx={{ fontWeight: 700 }}>{viewItem.maxTutores || '∞'}</Typography>
                 </Box>
               </Grid>
             </Grid>

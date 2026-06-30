@@ -118,7 +118,7 @@ class Query(graphene.ObjectType):
             return None
 
     def resolve_todos_los_eventos(root, info):
-        return Evento.objects.select_related('tipo_evento', 'nivel_evento', 'membrete').all()
+        return Evento.objects.select_related('tipo_evento', 'nivel_evento').prefetch_related('membretes').all()
 
     def resolve_evento(root, info, id):
         try:
@@ -375,17 +375,21 @@ class CrearEvento(graphene.Mutation):
     class Arguments:
         id_tipo_evento = graphene.ID(required=True)
         id_nivel_evento = graphene.ID(required=True)
-        id_membrete = graphene.ID(required=True)
+        ids_membretes = graphene.List(graphene.ID, required=True)
         nombre = graphene.String(required=True)
         version = graphene.Int(required=True)
         gestion = graphene.Int(required=True)
+        max_participantes = graphene.Int()
+        max_tribunal = graphene.Int()
+        max_tutores = graphene.Int()
 
     evento = graphene.Field(EventoType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_tipo_evento, id_nivel_evento, id_membrete, nombre, version, gestion):
+    def mutate(root, info, id_tipo_evento, id_nivel_evento, ids_membretes, nombre, version, gestion,
+               max_participantes=0, max_tribunal=0, max_tutores=0):
         if Evento.objects.filter(nombre=nombre, version=version, gestion=gestion).exists():
             return CrearEvento(evento=None, ok=False, error="Ya existe un evento con este nombre, versión y gestión.") # type: ignore
 
@@ -393,25 +397,31 @@ class CrearEvento(graphene.Mutation):
             tipo_evento = TipoEvento.objects.get(pk=id_tipo_evento)
         except TipoEvento.DoesNotExist:
             return CrearEvento(evento=None, ok=False, error="El tipo de evento no existe.") # type: ignore
-            
+
         try:
             nivel_evento = NivelEvento.objects.get(pk=id_nivel_evento)
         except NivelEvento.DoesNotExist:
             return CrearEvento(evento=None, ok=False, error="El nivel de evento no existe.") # type: ignore
-            
-        try:
-            membrete = Membrete.objects.get(pk=id_membrete)
-        except Membrete.DoesNotExist:
-            return CrearEvento(evento=None, ok=False, error="El membrete no existe.") # type: ignore
+
+        membretes_objs = []
+        for mid in (ids_membretes or []):
+            try:
+                membretes_objs.append(Membrete.objects.get(pk=mid))
+            except Membrete.DoesNotExist:
+                return CrearEvento(evento=None, ok=False, error=f"El membrete {mid} no existe.") # type: ignore
 
         evento = Evento.objects.create(
             tipo_evento=tipo_evento,
             nivel_evento=nivel_evento,
-            membrete=membrete,
             nombre=nombre,
             version=version,
-            gestion=gestion
+            gestion=gestion,
+            max_participantes=max_participantes,
+            max_tribunal=max_tribunal,
+            max_tutores=max_tutores,
         )
+        if membretes_objs:
+            evento.membretes.set(membretes_objs)
         return CrearEvento(evento=evento, ok=True, error=None) # type: ignore
 
 class EditarEvento(graphene.Mutation):
@@ -419,10 +429,13 @@ class EditarEvento(graphene.Mutation):
         id_evento = graphene.ID(required=True)
         id_tipo_evento = graphene.ID()
         id_nivel_evento = graphene.ID()
-        id_membrete = graphene.ID()
+        ids_membretes = graphene.List(graphene.ID)
         nombre = graphene.String()
         version = graphene.Int()
         gestion = graphene.Int()
+        max_participantes = graphene.Int()
+        max_tribunal = graphene.Int()
+        max_tutores = graphene.Int()
         estado = graphene.Boolean()
 
     evento = graphene.Field(EventoType)
@@ -439,7 +452,7 @@ class EditarEvento(graphene.Mutation):
         new_nombre = kwargs.get('nombre', evento.nombre)
         new_version = kwargs.get('version', evento.version)
         new_gestion = kwargs.get('gestion', evento.gestion)
-        
+
         if 'nombre' in kwargs or 'version' in kwargs or 'gestion' in kwargs:
             if Evento.objects.filter(nombre=new_nombre, version=new_version, gestion=new_gestion).exclude(pk=id_evento).exists():
                 return EditarEvento(evento=None, ok=False, error="Ya existe otro evento con este nombre, versión y gestión.") # type: ignore
@@ -456,13 +469,18 @@ class EditarEvento(graphene.Mutation):
             except NivelEvento.DoesNotExist:
                 return EditarEvento(evento=None, ok=False, error="El nivel de evento no existe.") # type: ignore
 
-        if 'id_membrete' in kwargs and kwargs['id_membrete'] is not None:
-            try:
-                evento.membrete = Membrete.objects.get(pk=kwargs['id_membrete'])
-            except Membrete.DoesNotExist:
-                return EditarEvento(evento=None, ok=False, error="El membrete no existe.") # type: ignore
+        if 'ids_membretes' in kwargs and kwargs['ids_membretes'] is not None:
+            membretes_objs = []
+            for mid in kwargs['ids_membretes']:
+                try:
+                    membretes_objs.append(Membrete.objects.get(pk=mid))
+                except Membrete.DoesNotExist:
+                    return EditarEvento(evento=None, ok=False, error=f"El membrete {mid} no existe.") # type: ignore
+            evento.save()
+            evento.membretes.set(membretes_objs)
+            kwargs.pop('ids_membretes')
 
-        for field in ['nombre', 'version', 'gestion', 'estado']:
+        for field in ['nombre', 'version', 'gestion', 'max_participantes', 'max_tribunal', 'max_tutores', 'estado']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(evento, field, kwargs[field])
 

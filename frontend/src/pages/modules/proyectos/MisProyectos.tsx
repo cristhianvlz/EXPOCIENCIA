@@ -22,9 +22,11 @@ const GET_MIS_PROYECTOS = gql`
         proyectosInscritos {
           idProyecto titulo resumen estado fechaInscripcion fechaConfirmacion observacion archivo
           ofertaEaCarrera {
-            carrera
             oferta { nombre }
-            entidadAcademica { nombre }
+            eaCarrera {
+              entidadAcademica { nombre }
+              carrera          { nombre }
+            }
           }
           candidatosPremio {
             idCandidatoPremio nota estado observacion
@@ -33,7 +35,7 @@ const GET_MIS_PROYECTOS = gql`
               area { nombre }
               evento {
                 nombre
-                membrete {
+                membretes {
                   titulo subtitulo direccion
                   logoUnidad logoInstitucion firma selloAutoridad
                   piePagina1 piePagina2 piePagina3
@@ -66,7 +68,7 @@ const GET_MIS_PROYECTOS = gql`
                   area { nombre }
                   evento {
                     nombre
-                    membrete {
+                    membretes {
                       titulo subtitulo direccion
                       logoUnidad logoInstitucion firma selloAutoridad
                       piePagina1 piePagina2 piePagina3
@@ -167,7 +169,7 @@ function buildCertPage(cert: any): string {
   const texto = resolverContenido(cert.plantilla.contenido, cert.ganadorPremio);
   const cp = cert.ganadorPremio.candidatoPremio;
   const descriptores = (cp.premio.premioDescriptores || []).map((pd: any) => pd.descriptor.descripcion).join(' · ');
-  const membrete = cp.premio.evento?.membrete;
+  const membrete = (cp.premio.evento?.membretes || [])[0];
   const isHorizontal = cert.plantilla.orientacion !== 'vertical';
   const imgUrl = (path: string) => path ? `${BACKEND_MEDIA}${path}` : null;
   const logoUnidad      = imgUrl(membrete?.logoUnidad);
@@ -256,7 +258,7 @@ const LUGAR_MAP_COMP: Record<number, string> = { 1: '1er Lugar', 2: '2do Lugar',
 
 function buildComprobantePago(asig: any, ganador: any): string {
   const cp = ganador.candidatoPremio;
-  const membrete = cp.premio.evento?.membrete;
+  const membrete = (cp.premio.evento?.membretes || [])[0];
   const imgUrl = (path: string) => path ? `${BACKEND_MEDIA}${path}` : null;
 
   const logoUnidad      = imgUrl(membrete?.logoUnidad);
@@ -357,7 +359,7 @@ interface Proyecto {
   fechaConfirmacion?: string;
   observacion?: string;
   archivo?: string;
-  ofertaEaCarrera?: { carrera: string; entidadAcademica?: { nombre: string } };
+  ofertaEaCarrera?: { eaCarrera?: { entidadAcademica?: { nombre: string }; carrera?: { nombre: string } } };
   candidatosPremio?: CandidatoPremio[];
 }
 
@@ -882,8 +884,8 @@ export default function MisProyectos() {
                           {proyecto.titulo}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {proyecto.ofertaEaCarrera?.entidadAcademica?.nombre}
-                          {proyecto.ofertaEaCarrera?.carrera && ` • ${proyecto.ofertaEaCarrera.carrera}`}
+                          {proyecto.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre}
+                          {proyecto.ofertaEaCarrera?.eaCarrera?.carrera?.nombre && ` • ${proyecto.ofertaEaCarrera.eaCarrera.carrera.nombre}`}
                         </Typography>
                         <Typography variant="caption" color="text.disabled">
                           Inscrito el {fechaInscripcion}

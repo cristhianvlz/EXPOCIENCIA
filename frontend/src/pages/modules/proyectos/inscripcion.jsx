@@ -5,11 +5,12 @@ import {
   Alert, FormControl, InputLabel, Select, MenuItem, TextField, Chip,
   Divider, IconButton, Paper, Snackbar, FormControlLabel, Switch,
   ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent,
-  DialogActions, List, ListItem, ListItemText, ListItemIcon, Autocomplete, Avatar
+  DialogActions, List, ListItem, ListItemText, ListItemIcon, Autocomplete, Avatar, Radio
 } from '@mui/material';
 import {
   PlusOutlined, DeleteOutlined, CheckCircleOutlined, ProjectOutlined,
-  CloudUploadOutlined, FileTextOutlined, UserAddOutlined, UserOutlined
+  CloudUploadOutlined, FileTextOutlined, UserAddOutlined, UserOutlined,
+  RightOutlined, DownOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -17,12 +18,23 @@ import MainCard from 'components/MainCard';
 const GET_DATA = gql`
   query {
     todosLosOfertaEaCarreras {
-      id carrera plan estado
+      id estado
       oferta {
         idOferta nombre
-        categoriaEvento { evento { idEvento } }
+        categoriaEvento {
+          evento    { idEvento nombre version maxParticipantes maxTribunal maxTutores }
+          categoria { nombre }
+        }
+        modalidadArea {
+          modalidad { nombre }
+          area      { nombre }
+        }
       }
-      entidadAcademica { idEntidadAcademica nombre }
+      eaCarrera {
+        id
+        entidadAcademica { idEntidadAcademica nombre }
+        carrera          { idCarrera nombre plan }
+      }
     }
     todosLosParticipantes {
       idParticipante nombre apellido ci celular codigoEspecifico
@@ -121,6 +133,21 @@ const EMPTY_TUTOR = {
   celular: '', direccion: '', codEmpleado: '', email: ''
 };
 
+// ── Mini info field ───────────────────────────────────────────────────────────
+function InfoField({ label, value, icon }) {
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary"
+        sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, fontSize: '0.62rem' }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" fontWeight={500} sx={{ mt: 0.1 }}>
+        {value || <span style={{ color: '#888' }}>—</span>}
+      </Typography>
+    </Box>
+  );
+}
+
 // ── Drag-and-drop file area ────────────────────────────────────────────────────
 function FileDropZone({ file, onFile }) {
   const inputRef = useRef(null);
@@ -185,6 +212,8 @@ export default function InscripcionPage() {
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
 
   const [selectedOec, setSelectedOec] = useState('');
+  const [searchOferta, setSearchOferta] = useState('');
+  const [expandedEvs, setExpandedEvs] = useState(new Set());
   const [titulo, setTitulo]           = useState('');
   const [resumen, setResumen]         = useState('');
   const [archivoFile, setArchivoFile] = useState(null);
@@ -254,14 +283,29 @@ export default function InscripcionPage() {
     }
   };
 
+  // ── Límites del evento seleccionado ──────────────────────────────────────
+  const eventoLimits = (() => {
+    if (!selectedOec) return { maxParticipantes: 0, maxTribunal: 0, maxTutores: 0 };
+    const oec = ofertas.find(o => o.id === selectedOec);
+    const ev = oec?.oferta?.categoriaEvento?.evento;
+    return {
+      maxParticipantes: ev?.maxParticipantes || 0,
+      maxTribunal:      ev?.maxTribunal      || 0,
+      maxTutores:       ev?.maxTutores       || 0,
+    };
+  })();
+
+  const participanteLimitReached = eventoLimits.maxParticipantes > 0 && participantes.length >= eventoLimits.maxParticipantes;
+  const tutorLimitReached        = eventoLimits.maxTutores       > 0 && tutores.length       >= eventoLimits.maxTutores;
+
   // ── Participante helpers ──────────────────────────────────────────────────
-  const addParticipante    = () => setParticipantes(p => [...p, { ...EMPTY_PARTICIPANTE }]);
+  const addParticipante    = () => { if (!participanteLimitReached) setParticipantes(p => [...p, { ...EMPTY_PARTICIPANTE }]); };
   const removeParticipante = (i) => setParticipantes(p => p.filter((_, idx) => idx !== i));
   const updateParticipante = (i, field, value) =>
     setParticipantes(p => p.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
 
   // ── Tutor helpers ─────────────────────────────────────────────────────────
-  const addTutor    = () => setTutores(t => [...t, { ...EMPTY_TUTOR }]);
+  const addTutor    = () => { if (!tutorLimitReached) setTutores(t => [...t, { ...EMPTY_TUTOR }]); };
   const removeTutor = (i) => setTutores(t => t.filter((_, idx) => idx !== i));
   const updateTutor = (i, field, value) =>
     setTutores(t => t.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
@@ -345,6 +389,8 @@ export default function InscripcionPage() {
   const handleReset = () => {
     setActiveStep(0);
     setSelectedOec('');
+    setSearchOferta('');
+    setExpandedEvs(new Set());
     setTitulo('');
     setResumen('');
     setArchivoFile(null);
@@ -354,8 +400,37 @@ export default function InscripcionPage() {
   };
 
   // ── Step 0: Oferta ────────────────────────────────────────────────────────
-  const renderStep0 = () => (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+  const renderStep0 = () => {
+    // Agrupar: evento → oferta → [oecs]
+    const groups = ofertas.reduce((acc, oec) => {
+      const ev  = oec.oferta?.categoriaEvento?.evento;
+      const evId = ev?.idEvento || '__sin_ev';
+      const of  = oec.oferta;
+      const ofId = of?.idOferta || '__sin_of';
+      if (!acc[evId]) acc[evId] = { ev, ofertas: {} };
+      if (!acc[evId].ofertas[ofId]) acc[evId].ofertas[ofId] = { of, oecs: [] };
+      acc[evId].ofertas[ofId].oecs.push(oec);
+      return acc;
+    }, {});
+
+    // Filtrar por búsqueda
+    const q = searchOferta.toLowerCase().trim();
+    const visibleGroups = Object.entries(groups).reduce((acc, [evId, evGroup]) => {
+      const ofEntries = Object.entries(evGroup.ofertas).reduce((oa, [ofId, ofGroup]) => {
+        const matchOecs = ofGroup.oecs.filter(oec => !q || [
+          evGroup.ev?.nombre, ofGroup.of?.nombre,
+          oec.eaCarrera?.entidadAcademica?.nombre,
+          oec.eaCarrera?.carrera?.nombre,
+        ].filter(Boolean).join(' ').toLowerCase().includes(q));
+        if (matchOecs.length > 0) oa[ofId] = { ...ofGroup, oecs: matchOecs };
+        return oa;
+      }, {});
+      if (Object.keys(ofEntries).length > 0) acc[evId] = { ...evGroup, ofertas: ofEntries };
+      return acc;
+    }, {});
+
+    return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       <Typography variant="body2" color="text.secondary">
         Selecciona la oferta académica a la que se inscribe este proyecto.
       </Typography>
@@ -366,38 +441,215 @@ export default function InscripcionPage() {
           <strong>No hay ofertas disponibles en este momento.</strong> Actualmente no existen eventos con su período de inscripción abierto. Por favor, intenta más adelante.
         </Alert>
       ) : (
-        <FormControl fullWidth required>
-          <InputLabel>Oferta Académica</InputLabel>
-          <Select value={selectedOec} label="Oferta Académica" onChange={e => setSelectedOec(e.target.value)}>
-            {ofertas.map(oec => (
-              <MenuItem key={oec.id} value={oec.id}>
-                <Box>
-                  <Typography variant="body2" fontWeight={600}>{oec.oferta?.nombre}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {oec.entidadAcademica?.nombre} · {oec.carrera} · Plan: {oec.plan}
+        <Box>
+          {/* Buscador */}
+          <TextField
+            size="small" fullWidth
+            placeholder="Buscar por evento, oferta, facultad o carrera..."
+            value={searchOferta}
+            onChange={e => setSearchOferta(e.target.value)}
+            sx={{ mb: 1 }}
+            InputProps={{
+              startAdornment: (
+                <Box component="span" sx={{ color: 'text.disabled', mr: 1, fontSize: 16, display: 'flex' }}>⌕</Box>
+              ),
+              endAdornment: searchOferta ? (
+                <IconButton size="small" onClick={() => setSearchOferta('')} sx={{ p: 0.25 }}>
+                  <Box component="span" sx={{ fontSize: 14, lineHeight: 1 }}>✕</Box>
+                </IconButton>
+              ) : null,
+            }}
+          />
+
+          {/* Lista agrupada */}
+          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ maxHeight: 380, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {Object.keys(visibleGroups).length === 0 ? (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Sin resultados para <strong>"{searchOferta}"</strong>
                   </Typography>
                 </Box>
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+              ) : Object.entries(visibleGroups).map(([evId, evGroup]) => {
+                // Si hay búsqueda activa, siempre mostrar expandido
+                const isExpanded = q ? true : expandedEvs.has(evId);
+                const toggleEv = () => setExpandedEvs(prev => {
+                  const next = new Set(prev);
+                  next.has(evId) ? next.delete(evId) : next.add(evId);
+                  return next;
+                });
+                // Contar OECs seleccionadas dentro de este evento
+                const hasSelected = Object.values(evGroup.ofertas).some(og =>
+                  og.oecs.some(oec => oec.id === selectedOec)
+                );
+
+                return (
+                <Box key={evId} sx={{ border: '1px solid', borderColor: hasSelected ? 'primary.main' : 'divider', borderRadius: 1.5, overflow: 'hidden', transition: 'border-color 0.15s' }}>
+
+                  {/* Header del evento — clickable para colapsar */}
+                  <Box
+                    onClick={toggleEv}
+                    sx={{
+                      px: 2, py: 0.9,
+                      display: 'flex', alignItems: 'center', gap: 1,
+                      cursor: 'pointer',
+                      bgcolor: 'action.hover',
+                      '&:hover': { bgcolor: 'action.selected' },
+                      transition: 'background-color 0.12s',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {/* Flecha */}
+                    <Box sx={{ color: 'text.disabled', fontSize: 10, flexShrink: 0, transition: 'transform 0.2s', display: 'flex', alignItems: 'center' }}>
+                      {isExpanded
+                        ? <DownOutlined style={{ fontSize: 10 }} />
+                        : <RightOutlined style={{ fontSize: 10 }} />
+                      }
+                    </Box>
+                    <Typography variant="body2" fontWeight={600} color="text.primary" sx={{ fontSize: '0.82rem', flex: 1 }}>
+                      {evGroup.ev?.nombre || 'Sin evento'}{evGroup.ev?.version ? ` v${evGroup.ev.version}` : ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem', flexShrink: 0 }}>
+                      {evGroup.ev?.gestion}
+                    </Typography>
+                    {/* Badge con # de opciones */}
+                    <Box sx={{ bgcolor: 'action.selected', borderRadius: 0.75, px: 0.8, py: 0.15 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>
+                        {Object.values(evGroup.ofertas).reduce((s, og) => s + og.oecs.length, 0)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Contenido colapsable */}
+                  {isExpanded && (
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
+                      {Object.entries(evGroup.ofertas).map(([ofId, ofGroup], ofIdx) => (
+                        <Box key={ofId} sx={{ borderTop: ofIdx > 0 ? '1px solid' : 'none', borderColor: 'divider' }}>
+
+                          {/* Línea de oferta compacta */}
+                          <Box sx={{ px: 2, py: 0.45, pl: 3, display: 'flex', alignItems: 'center', gap: 0.75, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)' }}>
+                            <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ fontSize: '0.7rem', flexShrink: 0 }}>
+                              {ofGroup.of?.nombre}
+                            </Typography>
+                            {[
+                              ofGroup.of?.categoriaEvento?.categoria?.nombre,
+                              ofGroup.of?.modalidadArea?.modalidad?.nombre,
+                              ofGroup.of?.modalidadArea?.area?.nombre,
+                            ].filter(Boolean).map((tag, i) => (
+                              <Typography key={i} variant="caption" color="text.disabled" sx={{ fontSize: '0.63rem' }}>
+                                · {tag}
+                              </Typography>
+                            ))}
+                          </Box>
+
+                          {/* Filas de OEC */}
+                          {ofGroup.oecs.map((oec) => {
+                            const isSelected = selectedOec === oec.id;
+                            const carr = oec.eaCarrera?.carrera;
+                            return (
+                              <Box
+                                key={oec.id}
+                                onClick={() => setSelectedOec(oec.id)}
+                                sx={{
+                                  px: 2, py: 0.6, pl: 3.5,
+                                  cursor: 'pointer',
+                                  display: 'flex', alignItems: 'center',
+                                  borderTop: '1px solid', borderColor: 'divider',
+                                  bgcolor: isSelected ? 'action.selected' : 'transparent',
+                                  '&:hover': { bgcolor: isSelected ? 'action.selected' : 'action.hover' },
+                                  transition: 'background-color 0.12s',
+                                }}
+                              >
+                                <Radio
+                                  checked={isSelected} size="small"
+                                  sx={{ p: 0, mr: 1.2, color: 'text.disabled', '&.Mui-checked': { color: 'primary.main' } }}
+                                />
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="body2" fontWeight={isSelected ? 600 : 400} color={isSelected ? 'primary.main' : 'text.primary'} noWrap sx={{ fontSize: '0.8rem' }}>
+                                    {oec.eaCarrera?.entidadAcademica?.nombre}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" noWrap sx={{ fontSize: '0.7rem' }}>
+                                    {carr?.nombre}{carr?.plan ? ` · Plan ${carr.plan}` : ''}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+                );
+              })}
+            </Box>
+          </Paper>
+        </Box>
       )}
       {selectedOec && (() => {
-        const oec = ofertas.find(o => o.id === selectedOec);
-        return oec ? (
-          <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-              Oferta seleccionada
-            </Typography>
-            <Typography variant="subtitle1" sx={{ mt: 0.5 }}>{oec.oferta?.nombre}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {oec.entidadAcademica?.nombre} · {oec.carrera} · Plan {oec.plan}
-            </Typography>
+        const oec  = ofertas.find(o => o.id === selectedOec);
+        if (!oec) return null;
+        const ev   = oec.oferta?.categoriaEvento?.evento;
+        const carr = oec.eaCarrera?.carrera;
+        const campos = [
+          { label: 'Evento',    value: ev ? `${ev.nombre} v${ev.version}` : '—' },
+          { label: 'Categoría', value: oec.oferta?.categoriaEvento?.categoria?.nombre || '—' },
+          { label: 'Modalidad', value: oec.oferta?.modalidadArea?.modalidad?.nombre   || '—' },
+          { label: 'Área',      value: oec.oferta?.modalidadArea?.area?.nombre        || '—' },
+          { label: 'Facultad',  value: oec.eaCarrera?.entidadAcademica?.nombre        || '—' },
+          { label: 'Carrera',   value: carr ? `${carr.nombre}${carr.plan ? ` · Plan ${carr.plan}` : ''}` : '—' },
+        ];
+        return (
+          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            {/* Cabecera limpia — borde izquierdo de acento, sin color de fondo fuerte */}
+            <Box sx={{ px: 2, py: 1, borderLeft: '3px solid', borderLeftColor: 'primary.main', bgcolor: 'action.hover', display: 'flex', alignItems: 'baseline', gap: 1 }}>
+              <Typography variant="caption" color="primary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, fontSize: '0.62rem' }}>
+                Oferta seleccionada
+              </Typography>
+              <Typography variant="body2" fontWeight={600} color="text.primary">
+                {oec.oferta?.nombre}
+              </Typography>
+            </Box>
+            <Divider />
+            {/* Grid de campos 3×2 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+              {campos.map(({ label, value }, idx) => (
+                <Box key={label} sx={{
+                  px: 2, py: 1,
+                  borderRight: (idx + 1) % 3 !== 0 ? '1px solid' : 'none',
+                  borderBottom: idx < 3 ? '1px solid' : 'none',
+                  borderColor: 'divider',
+                }}>
+                  <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '0.6rem', letterSpacing: 0.5 }}>
+                    {label}
+                  </Typography>
+                  <Typography variant="body2" fontWeight={500} noWrap sx={{ fontSize: '0.8rem' }}>{value}</Typography>
+                </Box>
+              ))}
+            </Box>
+            {(ev?.maxParticipantes > 0 || ev?.maxTutores > 0 || ev?.maxTribunal > 0) && (
+              <>
+                <Divider />
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', bgcolor: 'action.hover' }}>
+                  {[
+                    { label: 'Máx. Participantes', value: ev?.maxParticipantes || '∞', color: 'primary.main' },
+                    { label: 'Máx. Tribunal',      value: ev?.maxTribunal      || '∞', color: 'warning.main' },
+                    { label: 'Máx. Tutores',       value: ev?.maxTutores       || '∞', color: 'success.main' },
+                  ].map(({ label, value, color }, idx) => (
+                    <Box key={label} sx={{ px: 2, py: 0.8, borderRight: idx < 2 ? '1px solid' : 'none', borderColor: 'divider', textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '0.58rem' }}>{label}</Typography>
+                      <Typography variant="body2" fontWeight={700} color={color} sx={{ fontSize: '0.82rem' }}>{value}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </>
+            )}
           </Paper>
-        ) : null;
+        );
       })()}
     </Box>
   );
+  };
 
   // ── Step 1: Datos del Proyecto ────────────────────────────────────────────
   const renderStep1 = () => (
@@ -475,17 +727,70 @@ export default function InscripcionPage() {
               renderInput={(params) => <TextField {...params} label="Buscar Participante" size="small" required />}
               renderOption={(props, option) => (
                 <li {...props} key={option.idParticipante}>
-                  <Box>
-                    <Typography variant="body2" fontWeight={500}>
-                      {option.nombre} {option.apellido}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      CI: {option.ci} · Cód: {option.codigoEspecifico}
-                    </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 13 }}>
+                      {option.nombre?.[0]}{option.apellido?.[0]}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {option.nombre} {option.apellido}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        CI: {option.ci} · Cód: {option.codigoEspecifico}
+                      </Typography>
+                    </Box>
                   </Box>
                 </li>
               )}
             />
+
+            {/* Tarjeta de info del participante seleccionado */}
+            {p.idParticipante && (() => {
+              const sel = disponibles.find(x => x.idParticipante === p.idParticipante);
+              const oec = ofertas.find(o => o.id === selectedOec);
+              if (!sel) return null;
+              return (
+                <Box sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+                  {/* Header */}
+                  <Box sx={{ px: 2, py: 1.2, bgcolor: 'action.hover', borderLeft: '3px solid', borderLeftColor: 'primary.main', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36, fontWeight: 700, fontSize: 14 }}>
+                      {sel.nombre?.[0]}{sel.apellido?.[0]}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2" fontWeight={700} color="text.primary">
+                        {sel.nombre} {sel.apellido}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Participante registrado
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Datos personales */}
+                  <Box sx={{ px: 2, py: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5, bgcolor: 'action.hover' }}>
+                    <InfoField label="Código / Registro" value={sel.codigoEspecifico} />
+                    <InfoField label="C.I." value={sel.ci} />
+                    <InfoField label="Nro. Celular" value={sel.celular || '—'} />
+                  </Box>
+
+                  {oec && (
+                    <>
+                      <Divider />
+                      {/* Datos académicos del OEC seleccionado */}
+                      <Box sx={{ px: 2, py: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                        <InfoField label="Facultad" value={oec.eaCarrera?.entidadAcademica?.nombre} />
+                        <InfoField
+                          label="Carrera / Plan"
+                          value={oec.eaCarrera?.carrera?.nombre
+                            ? `${oec.eaCarrera.carrera.nombre}${oec.eaCarrera.carrera.plan ? ` · Plan ${oec.eaCarrera.carrera.plan}` : ''}`
+                            : undefined}
+                        />
+                      </Box>
+                    </>
+                  )}
+                </Box>
+              );
+            })()}
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -540,12 +845,17 @@ export default function InscripcionPage() {
   const renderStep2 = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          Selecciona integrantes ya registrados o ingresa nuevos. Para nuevos, el CI será su usuario y contraseña inicial.
-        </Typography>
-        <Button startIcon={<PlusOutlined />} variant="outlined" size="small" onClick={addParticipante}>
-          Agregar
-        </Button>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+          {eventoLimits.maxParticipantes > 0 && (
+            <Typography variant="caption" color={participanteLimitReached ? 'error' : 'text.secondary'}>
+              {participantes.length} / {eventoLimits.maxParticipantes} participantes
+            </Typography>
+          )}
+          <Button startIcon={<PlusOutlined />} variant="outlined" size="small"
+            onClick={addParticipante} disabled={participanteLimitReached}>
+            Agregar
+          </Button>
+        </Box>
       </Box>
       {loading ? <CircularProgress size={24} /> : participantes.map((p, i) => renderParticipanteCard(p, i))}
     </Box>
@@ -598,17 +908,50 @@ export default function InscripcionPage() {
               renderInput={(params) => <TextField {...params} label="Buscar Tutor" size="small" required />}
               renderOption={(props, option) => (
                 <li {...props} key={option.idTutor}>
-                  <Box>
-                    <Typography variant="body2" fontWeight={500}>
-                      {option.nombre} {option.apellido}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      CI: {option.ci} · Cód: {option.codEmpleado}
-                    </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main', fontSize: 13 }}>
+                      {option.nombre?.[0]}{option.apellido?.[0]}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {option.nombre} {option.apellido}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        CI: {option.ci} · Cód: {option.codEmpleado}
+                      </Typography>
+                    </Box>
                   </Box>
                 </li>
               )}
             />
+
+            {/* Tarjeta de info del tutor seleccionado */}
+            {t.idTutor && (() => {
+              const sel = disponibles.find(x => x.idTutor === t.idTutor);
+              if (!sel) return null;
+              return (
+                <Box sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+                  <Box sx={{ px: 2, py: 1.2, bgcolor: 'action.hover', borderLeft: '3px solid', borderLeftColor: 'secondary.main', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Avatar sx={{ bgcolor: 'secondary.main', width: 36, height: 36, fontWeight: 700, fontSize: 14 }}>
+                      {sel.nombre?.[0]}{sel.apellido?.[0]}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2" fontWeight={700} color="text.primary">
+                        {sel.nombre} {sel.apellido}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Tutor registrado
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ px: 2, py: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5, bgcolor: 'action.hover' }}>
+                    <InfoField label="Cód. Empleado" value={sel.codEmpleado} />
+                    <InfoField label="C.I." value={sel.ci} />
+                    <InfoField label="Nro. Celular" value={sel.celular || '—'} />
+                  </Box>
+                </Box>
+              );
+            })()}
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -652,12 +995,17 @@ export default function InscripcionPage() {
   const renderStep3 = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          Selecciona un tutor ya registrado o ingresa uno nuevo. Para nuevos, el CI será su usuario y contraseña inicial.
-        </Typography>
-        <Button startIcon={<PlusOutlined />} variant="outlined" size="small" onClick={addTutor}>
-          Agregar
-        </Button>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+          {eventoLimits.maxTutores > 0 && (
+            <Typography variant="caption" color={tutorLimitReached ? 'error' : 'text.secondary'}>
+              {tutores.length} / {eventoLimits.maxTutores} tutores
+            </Typography>
+          )}
+          <Button startIcon={<PlusOutlined />} variant="outlined" size="small"
+            onClick={addTutor} disabled={tutorLimitReached}>
+            Agregar
+          </Button>
+        </Box>
       </Box>
       {loading ? <CircularProgress size={24} /> : tutores.map((t, i) => renderTutorCard(t, i))}
     </Box>
@@ -746,109 +1094,204 @@ export default function InscripcionPage() {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ p: 3, pt: 3, bgcolor: 'background.default' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
-            
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <CheckCircleOutlined style={{ color: '#1890ff', fontSize: 18 }} />
-                <Typography variant="subtitle2" fontWeight={700}>Oferta Académica y Proyecto</Typography>
-              </Box>
-              <Divider sx={{ mb: 1.5 }} />
-              
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Oferta Académica</Typography>
-              <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5 }}>
-                {ofertas.find(o => o.id === selectedOec)?.oferta?.nombre || '-'}
-              </Typography>
+          {(() => {
+            const oec = ofertas.find(o => o.id === selectedOec);
+            const oferta  = oec?.oferta;
+            const ev      = oferta?.categoriaEvento?.evento;
+            const catNom  = oferta?.categoriaEvento?.categoria?.nombre;
+            const modNom  = oferta?.modalidadArea?.modalidad?.nombre;
+            const areaNom = oferta?.modalidadArea?.area?.nombre;
+            const facNom  = oec?.eaCarrera?.entidadAcademica?.nombre;
+            const carr    = oec?.eaCarrera?.carrera;
+            const cardSx  = { p: 0, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', overflow: 'hidden' };
+            const sectionHeaderSx = { px: 2, py: 1.2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' };
 
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Título del Proyecto</Typography>
-              <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5 }}>{titulo || 'Sin título'}</Typography>
-              
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>Archivo Adjunto</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                <FileTextOutlined style={{ color: archivoFile ? '#52c41a' : '#bfbfbf' }} />
-                <Typography variant="body2" color={archivoFile ? 'text.primary' : 'text.disabled'}>
-                  {archivoFile ? archivoFile.name : 'No se adjuntó ningún archivo'}
-                </Typography>
-              </Box>
-            </Paper>
+            return (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
 
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <UserOutlined style={{ color: '#1890ff', fontSize: 18 }} />
-                  <Typography variant="subtitle2" fontWeight={700}>Integrantes</Typography>
-                </Box>
-                <Chip label={`${participantes.length} registrado(s)`} size="small" color="primary" variant="outlined" />
-              </Box>
-              <Divider sx={{ mb: 1.5 }} />
-              <List dense disablePadding>
-                {participantes.map((p, i) => {
-                  let nombreF = '';
-                  let ciF = '';
-                  if (p.modo === 'existente') {
-                    const fp = todosParticipantes.find(tp => tp.idParticipante === p.idParticipante);
-                    nombreF = fp ? `${fp.nombre} ${fp.apellido}` : 'Desconocido';
-                    ciF = fp ? fp.ci : '-';
-                  } else {
-                    nombreF = `${p.nombre} ${p.apellido}`;
-                    ciF = p.ci;
-                  }
-                  return (
-                    <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
-                      <ListItemIcon sx={{ minWidth: 40 }}>
-                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.lighter', color: 'primary.main', fontSize: 13, fontWeight: 600 }}>
-                          {i + 1}
-                        </Avatar>
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={<Typography variant="body2" fontWeight={600}>{nombreF || 'Sin nombre'}</Typography>}
-                        secondary={<Typography variant="caption" color="text.secondary">CI: {ciF || '-'}</Typography>}
-                      />
-                    </ListItem>
-                  );
-                })}
-              </List>
-            </Paper>
+                {/* ── Tarjeta: Oferta + Proyecto ── */}
+                <Paper variant="outlined" sx={cardSx}>
+                  <Box sx={sectionHeaderSx}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircleOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                      <Typography variant="subtitle2" fontWeight={700}>Oferta Académica y Proyecto</Typography>
+                    </Box>
+                  </Box>
 
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <UserAddOutlined style={{ color: '#52c41a', fontSize: 18 }} />
-                  <Typography variant="subtitle2" fontWeight={700}>Tutores</Typography>
-                </Box>
-                <Chip label={`${tutores.length} asignado(s)`} size="small" color="success" variant="outlined" />
-              </Box>
-              <Divider sx={{ mb: 1.5 }} />
-              <List dense disablePadding>
-                {tutores.map((t, i) => {
-                  let nombreF = '';
-                  let ciF = '';
-                  if (t.modo === 'existente') {
-                    const ft = todosTutores.find(tt => tt.idTutor === t.idTutor);
-                    nombreF = ft ? `${ft.nombre} ${ft.apellido}` : 'Desconocido';
-                    ciF = ft ? ft.ci : '-';
-                  } else {
-                    nombreF = `${t.nombre} ${t.apellido}`;
-                    ciF = t.ci;
-                  }
-                  return (
-                    <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
-                      <ListItemIcon sx={{ minWidth: 40 }}>
-                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'success.lighter', color: 'success.main', fontSize: 13, fontWeight: 600 }}>
-                          {i + 1}
-                        </Avatar>
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={<Typography variant="body2" fontWeight={600}>{nombreF || 'Sin nombre'}</Typography>}
-                        secondary={<Typography variant="caption" color="text.secondary">CI: {ciF || '-'}</Typography>}
-                      />
-                    </ListItem>
-                  );
-                })}
-              </List>
-            </Paper>
+                  {/* Evento */}
+                  <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>
+                      Evento
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {ev ? `${ev.nombre} v${ev.version}` : '—'}
+                    </Typography>
+                  </Box>
 
-          </Box>
+                  {/* Grid: Categoría / Modalidad / Área */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid', borderColor: 'divider' }}>
+                    {[
+                      { label: 'Categoría',  value: catNom },
+                      { label: 'Modalidad',  value: modNom },
+                      { label: 'Área',       value: areaNom },
+                    ].map(({ label, value }, idx) => (
+                      <Box key={label} sx={{ px: 2, py: 1.5, borderLeft: idx > 0 ? '1px solid' : 'none', borderColor: 'divider' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>
+                          {label}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500}>{value || '—'}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  {/* Grid: Facultad / Carrera */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ px: 2, py: 1.5 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Facultad</Typography>
+                      <Typography variant="body2" fontWeight={500}>{facNom || '—'}</Typography>
+                    </Box>
+                    <Box sx={{ px: 2, py: 1.5, borderLeft: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Carrera / Plan</Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {carr ? `${carr.nombre}${carr.plan ? ` · Plan ${carr.plan}` : ''}` : '—'}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Oferta nombre + Título + Archivo */}
+                  <Box sx={{ px: 2, py: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Oferta</Typography>
+                      <Typography variant="body2" fontWeight={600}>{oferta?.nombre || '—'}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Título del Proyecto</Typography>
+                      <Typography variant="body2" fontWeight={600}>{titulo || 'Sin título'}</Typography>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FileTextOutlined style={{ color: archivoFile ? '#52c41a' : '#bfbfbf', fontSize: 16 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Archivo Adjunto</Typography>
+                      <Typography variant="body2" color={archivoFile ? 'text.primary' : 'text.disabled'}>
+                        {archivoFile ? archivoFile.name : 'No se adjuntó ningún archivo'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Paper>
+
+                {/* ── Tarjeta: Integrantes ── */}
+                <Paper variant="outlined" sx={cardSx}>
+                  <Box sx={sectionHeaderSx}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <UserOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                      <Typography variant="subtitle2" fontWeight={700}>Integrantes</Typography>
+                    </Box>
+                    <Chip label={`${participantes.length} registrado(s)`} size="small" color="primary" variant="outlined" />
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    {participantes.map((p, i) => {
+                      let fp = null;
+                      let nombre = '', ci = '', cod = '', celular = '';
+                      if (p.modo === 'existente') {
+                        fp = todosParticipantes.find(tp => tp.idParticipante === p.idParticipante);
+                        nombre  = fp ? `${fp.nombre} ${fp.apellido}` : 'Desconocido';
+                        ci      = fp?.ci || '-';
+                        cod     = fp?.codigoEspecifico || '-';
+                        celular = fp?.celular || '-';
+                      } else {
+                        nombre  = `${p.nombre} ${p.apellido}`;
+                        ci      = p.ci;
+                        cod     = p.codigoEspecifico;
+                        celular = p.celular;
+                      }
+                      return (
+                        <Box key={i} sx={{ px: 2, py: 1.2, display: 'flex', alignItems: 'center', gap: 1.5, borderTop: i > 0 ? '1px solid' : 'none', borderColor: 'divider' }}>
+                          <Avatar sx={{ width: 30, height: 30, bgcolor: 'primary.lighter', color: 'primary.main', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                            {i + 1}
+                          </Avatar>
+                          <Box sx={{ flex: 1, display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 1 }}>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>Nombre</Typography>
+                              <Typography variant="body2" fontWeight={600} noWrap>{nombre}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>C.I.</Typography>
+                              <Typography variant="body2">{ci}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>Código</Typography>
+                              <Typography variant="body2">{cod}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>Celular</Typography>
+                              <Typography variant="body2">{celular}</Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Paper>
+
+                {/* ── Tarjeta: Tutores ── */}
+                <Paper variant="outlined" sx={cardSx}>
+                  <Box sx={sectionHeaderSx}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <UserAddOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                      <Typography variant="subtitle2" fontWeight={700}>Tutores</Typography>
+                    </Box>
+                    <Chip label={`${tutores.length} asignado(s)`} size="small" color="success" variant="outlined" />
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    {tutores.map((t, i) => {
+                      let ft = null;
+                      let nombre = '', ci = '', cod = '', celular = '';
+                      if (t.modo === 'existente') {
+                        ft = todosTutores.find(tt => tt.idTutor === t.idTutor);
+                        nombre  = ft ? `${ft.nombre} ${ft.apellido}` : 'Desconocido';
+                        ci      = ft?.ci || '-';
+                        cod     = ft?.codEmpleado || '-';
+                        celular = ft?.celular || '-';
+                      } else {
+                        nombre  = `${t.nombre} ${t.apellido}`;
+                        ci      = t.ci;
+                        cod     = t.codEmpleado;
+                        celular = t.celular;
+                      }
+                      return (
+                        <Box key={i} sx={{ px: 2, py: 1.2, display: 'flex', alignItems: 'center', gap: 1.5, borderTop: i > 0 ? '1px solid' : 'none', borderColor: 'divider' }}>
+                          <Avatar sx={{ width: 30, height: 30, bgcolor: 'success.lighter', color: 'success.main', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                            {i + 1}
+                          </Avatar>
+                          <Box sx={{ flex: 1, display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 1 }}>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>Nombre</Typography>
+                              <Typography variant="body2" fontWeight={600} noWrap>{nombre}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>C.I.</Typography>
+                              <Typography variant="body2">{ci}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>Cód. Empleado</Typography>
+                              <Typography variant="body2">{cod}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>Celular</Typography>
+                              <Typography variant="body2">{celular}</Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Paper>
+
+              </Box>
+            );
+          })()}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={() => setOpenConfirm(false)} color="inherit" disabled={saving}>

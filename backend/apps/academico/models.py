@@ -13,6 +13,40 @@ class EntidadAcademica(models.Model):
         return self.nombre
 
 
+class Carrera(models.Model):
+    id_carrera = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=200)
+    plan = models.CharField(max_length=100, blank=True)
+    codigo = models.CharField(max_length=50, blank=True)
+    estado = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'carrera'
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}" if self.codigo else self.nombre
+
+
+class EaCarrera(models.Model):
+    entidad_academica = models.ForeignKey(
+        EntidadAcademica,
+        on_delete=models.PROTECT,
+        related_name='ea_carreras',
+    )
+    carrera = models.ForeignKey(
+        Carrera,
+        on_delete=models.PROTECT,
+        related_name='ea_carreras',
+    )
+
+    class Meta:
+        db_table = 'ea_carrera'
+        unique_together = ('entidad_academica', 'carrera')
+
+    def __str__(self):
+        return f"{self.entidad_academica.nombre} — {self.carrera.nombre}"
+
+
 class Categoria(models.Model):
     id_categoria = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=150, unique=True)
@@ -119,18 +153,16 @@ class OfertaEaCarrera(models.Model):
         on_delete=models.CASCADE,
         related_name='oferta_ea_carreras',
     )
-    entidad_academica = models.ForeignKey(
-        EntidadAcademica,
+    ea_carrera = models.ForeignKey(
+        EaCarrera,
         on_delete=models.PROTECT,
         related_name='oferta_ea_carreras',
     )
-    carrera = models.CharField(max_length=200)
-    plan = models.CharField(max_length=100)
     estado = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'oferta_ea_carrera'
-        unique_together = ('oferta', 'entidad_academica', 'carrera')
+        unique_together = ('oferta', 'ea_carrera')
 
     def __str__(self):
-        return f"{self.carrera} ({self.plan}) — {self.entidad_academica.nombre}"
+        return f"{self.oferta.nombre} — {self.ea_carrera}"

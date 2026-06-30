@@ -5,7 +5,7 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert,
   CircularProgress, Tabs, Tab, Chip, FormControl, InputLabel, Select, MenuItem, Typography
 } from '@mui/material';
-import { DeleteOutlined, PlusOutlined, LinkOutlined, FlagOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, LinkOutlined, FlagOutlined, BookOutlined } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
 // ── GQL ──────────────────────────────────────────────────────────────────────
@@ -21,10 +21,17 @@ const GET_ALL = gql`
       categoria { idCategoria nombre }
       evento    { idEvento nombre }
     }
-    todasLasModalidades { idModalidad nombre estado }
-    todasLasAreas       { idArea nombre estado }
-    todasLasCategorias  { idCategoria nombre estado }
-    todosLosEventos     { idEvento nombre estado }
+    todosLosEaCarreras {
+      id
+      entidadAcademica { idEntidadAcademica nombre }
+      carrera          { idCarrera nombre plan codigo }
+    }
+    todasLasModalidades         { idModalidad nombre estado }
+    todasLasAreas               { idArea nombre estado }
+    todasLasCategorias          { idCategoria nombre estado }
+    todosLosEventos             { idEvento nombre estado }
+    todasLasEntidadesAcademicas { idEntidadAcademica nombre estado }
+    todasLasCarreras            { idCarrera nombre plan codigo estado }
   }
 `;
 
@@ -50,9 +57,21 @@ const DELETE_CE = gql`
   }
 `;
 
+const CREATE_EAC = gql`
+  mutation($idEntidadAcademica: ID!, $idCarrera: ID!) {
+    crearEaCarrera(idEntidadAcademica: $idEntidadAcademica, idCarrera: $idCarrera) { ok error }
+  }
+`;
+const DELETE_EAC = gql`
+  mutation($idEaCarrera: ID!) {
+    eliminarEaCarrera(idEaCarrera: $idEaCarrera) { ok error }
+  }
+`;
+
 // ── Main component ────────────────────────────────────────────────────────────
-const INIT_MA = { idModalidad: '', idArea: '' };
-const INIT_CE = { idCategoria: '', idEvento: '' };
+const INIT_MA  = { idModalidad: '', idArea: '' };
+const INIT_CE  = { idCategoria: '', idEvento: '' };
+const INIT_EAC = { idEntidadAcademica: '', idCarrera: '' };
 
 export default function EstructurasPage() {
   const [tab, setTab] = useState(0);
@@ -62,6 +81,8 @@ export default function EstructurasPage() {
   const [eliminarMA] = useMutation(DELETE_MA);
   const [crearCE]    = useMutation(CREATE_CE);
   const [eliminarCE] = useMutation(DELETE_CE);
+  const [crearEAC]   = useMutation(CREATE_EAC);
+  const [eliminarEAC]= useMutation(DELETE_EAC);
 
   // Modalidad × Área dialog
   const [openMA, setOpenMA] = useState(false);
@@ -71,15 +92,22 @@ export default function EstructurasPage() {
   const [openCE, setOpenCE] = useState(false);
   const [formCE, setFormCE] = useState(INIT_CE);
 
+  // Facultad × Carrera dialog
+  const [openEAC, setOpenEAC] = useState(false);
+  const [formEAC, setFormEAC] = useState(INIT_EAC);
+
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
 
-  const modalidadAreas    = data?.todosLosModalidadAreas    || [];
-  const categoriaEventos  = data?.todosLosCategoriaEventos  || [];
-  const modalidades        = data?.todasLasModalidades       || [];
-  const areas              = data?.todasLasAreas             || [];
-  const categorias         = data?.todasLasCategorias        || [];
-  const eventos            = data?.todosLosEventos           || [];
+  const modalidadAreas   = data?.todosLosModalidadAreas    || [];
+  const categoriaEventos = data?.todosLosCategoriaEventos  || [];
+  const eaCarreras       = data?.todosLosEaCarreras        || [];
+  const modalidades      = data?.todasLasModalidades        || [];
+  const areas            = data?.todasLasAreas              || [];
+  const categorias       = data?.todasLasCategorias         || [];
+  const eventos          = data?.todosLosEventos            || [];
+  const entidades        = data?.todasLasEntidadesAcademicas|| [];
+  const carreras         = data?.todasLasCarreras           || [];
 
   const showNotif = (message, severity = 'success') =>
     setNotification({ open: true, message, severity });
@@ -138,11 +166,41 @@ export default function EstructurasPage() {
     } catch { showNotif('Error de conexión', 'error'); }
   };
 
+  // ── Facultad × Carrera ────────────────────────────────────────────────────
+  const handleSubmitEAC = async () => {
+    setSaving(true);
+    try {
+      const res = await crearEAC({ variables: formEAC });
+      const result = res.data?.crearEaCarrera;
+      if (result?.ok) {
+        showNotif('Vínculo Facultad × Carrera creado');
+        refetch();
+        setOpenEAC(false);
+        setFormEAC(INIT_EAC);
+      } else {
+        showNotif(result?.error || 'Error al guardar', 'error');
+      }
+    } catch { showNotif('Error de conexión', 'error'); }
+    setSaving(false);
+  };
+
+  const handleDeleteEAC = async (id) => {
+    if (!window.confirm('¿Eliminar este vínculo Facultad × Carrera?')) return;
+    try {
+      const res = await eliminarEAC({ variables: { idEaCarrera: id } });
+      if (res.data?.eliminarEaCarrera?.ok) { showNotif('Vínculo eliminado'); refetch(); }
+      else showNotif(res.data?.eliminarEaCarrera?.error || 'Error', 'error');
+    } catch { showNotif('Error de conexión', 'error'); }
+  };
+
   const tabActions = [
     <Button key="ma" variant="contained" startIcon={<PlusOutlined />} onClick={() => setOpenMA(true)}>
       Nuevo Vínculo
     </Button>,
     <Button key="ce" variant="contained" startIcon={<PlusOutlined />} onClick={() => setOpenCE(true)}>
+      Nuevo Vínculo
+    </Button>,
+    <Button key="eac" variant="contained" startIcon={<PlusOutlined />} onClick={() => setOpenEAC(true)}>
       Nuevo Vínculo
     </Button>,
   ];
@@ -151,8 +209,9 @@ export default function EstructurasPage() {
     <MainCard title="Estructuras y Relaciones" secondary={tabActions[tab]}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="Modalidad × Área"    icon={<LinkOutlined />} iconPosition="start" />
-          <Tab label="Categoría × Evento"  icon={<FlagOutlined />} iconPosition="start" />
+          <Tab label="Modalidad × Área"    icon={<LinkOutlined />}  iconPosition="start" />
+          <Tab label="Categoría × Evento"  icon={<FlagOutlined />}  iconPosition="start" />
+          <Tab label="Facultad × Carrera"  icon={<BookOutlined />}  iconPosition="start" />
         </Tabs>
       </Box>
 
@@ -237,6 +296,49 @@ export default function EstructurasPage() {
                   {categoriaEventos.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                        Sin vínculos registrados.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {/* ── Tab 2: Facultad × Carrera ── */}
+          {tab === 2 && (
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell width={80}>ID</TableCell>
+                    <TableCell>Facultad</TableCell>
+                    <TableCell>Carrera</TableCell>
+                    <TableCell>Plan</TableCell>
+                    <TableCell>Código</TableCell>
+                    <TableCell align="right" width={90}>Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {eaCarreras.map(eac => (
+                    <TableRow key={eac.id} hover>
+                      <TableCell>{eac.id}</TableCell>
+                      <TableCell>
+                        <Chip label={eac.entidadAcademica?.nombre} size="small" color="primary" variant="outlined" />
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>{eac.carrera?.nombre}</TableCell>
+                      <TableCell>{eac.carrera?.plan || '—'}</TableCell>
+                      <TableCell>{eac.carrera?.codigo || '—'}</TableCell>
+                      <TableCell align="right">
+                        <IconButton color="error" size="small" onClick={() => handleDeleteEAC(eac.id)}>
+                          <DeleteOutlined />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {eaCarreras.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                         Sin vínculos registrados.
                       </TableCell>
                     </TableRow>
@@ -344,6 +446,59 @@ export default function EstructurasPage() {
             onClick={handleSubmitCE}
             variant="contained"
             disabled={!formCE.idCategoria || !formCE.idEvento || saving}
+          >
+            {saving ? <CircularProgress size={24} color="inherit" /> : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Dialog: Nueva Facultad × Carrera ── */}
+      <Dialog open={openEAC} onClose={() => { setOpenEAC(false); setFormEAC(INIT_EAC); }} fullWidth maxWidth="xs">
+        <DialogTitle>Vincular Facultad × Carrera</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <FormControl fullWidth required>
+              <InputLabel>Facultad</InputLabel>
+              <Select
+                value={formEAC.idEntidadAcademica}
+                label="Facultad"
+                onChange={e => setFormEAC(p => ({ ...p, idEntidadAcademica: e.target.value }))}
+              >
+                {entidades.filter(e => e.estado).map(e => (
+                  <MenuItem key={e.idEntidadAcademica} value={e.idEntidadAcademica}>{e.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth required>
+              <InputLabel>Carrera</InputLabel>
+              <Select
+                value={formEAC.idCarrera}
+                label="Carrera"
+                onChange={e => setFormEAC(p => ({ ...p, idCarrera: e.target.value }))}
+              >
+                {carreras.filter(c => c.estado).map(c => (
+                  <MenuItem key={c.idCarrera} value={c.idCarrera}>
+                    {c.nombre}{c.plan ? ` — ${c.plan}` : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {formEAC.idEntidadAcademica && formEAC.idCarrera && (
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                Se vinculará:{' '}
+                <strong>{entidades.find(e => e.idEntidadAcademica === formEAC.idEntidadAcademica)?.nombre}</strong>
+                {' → '}
+                <strong>{carreras.find(c => c.idCarrera === formEAC.idCarrera)?.nombre}</strong>
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOpenEAC(false); setFormEAC(INIT_EAC); }} color="secondary">Cancelar</Button>
+          <Button
+            onClick={handleSubmitEAC}
+            variant="contained"
+            disabled={!formEAC.idEntidadAcademica || !formEAC.idCarrera || saving}
           >
             {saving ? <CircularProgress size={24} color="inherit" /> : 'Guardar'}
           </Button>

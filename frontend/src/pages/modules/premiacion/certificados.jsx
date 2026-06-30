@@ -39,7 +39,7 @@ const GET_DATA = gql`
             monto numeroGanadores
             evento {
               nombre
-              membrete {
+              membretes {
                 titulo subtitulo direccion
                 logoUnidad logoInstitucion firma selloAutoridad
                 piePagina1 piePagina2 piePagina3
@@ -72,7 +72,7 @@ const GET_DATA = gql`
           monto numeroGanadores
           evento {
             nombre
-            membrete {
+            membretes {
               titulo subtitulo direccion
               logoUnidad logoInstitucion firma selloAutoridad
               piePagina1 piePagina2 piePagina3
@@ -203,7 +203,7 @@ function buildCertPage(cert) {
   const texto = resolverContenido(cert.plantilla.contenido, cert.ganadorPremio);
   const cp = cert.ganadorPremio.candidatoPremio;
   const descriptores = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(' · ');
-  const membrete = cp.premio.evento?.membrete;
+  const membrete = (cp.premio.evento?.membretes || [])[0];
   const isHorizontal = cert.plantilla.orientacion?.toLowerCase() !== 'vertical';
 
   const imgUrl = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
@@ -530,7 +530,7 @@ const COMP_CSS = `
 
 function buildComprobantePago(asig, ganador) {
   const cp = ganador.candidatoPremio;
-  const membrete = cp.premio.evento?.membrete;
+  const membrete = (cp.premio.evento?.membretes || [])[0];
   const imgUrl = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
 
   const logoUnidad      = imgUrl(membrete?.logoUnidad);
@@ -633,7 +633,7 @@ function imprimirComprobantes(ganador, showNotif) {
 
 function imprimirComprobantePagado(asig, ganador, fechaPagoStr, showNotif) {
   const cp       = ganador.candidatoPremio;
-  const membrete = cp.premio.evento?.membrete;
+  const membrete = (cp.premio.evento?.membretes || [])[0];
   const imgUrl   = (path) => path ? `${BACKEND_MEDIA}${path}` : null;
 
   const fechaObj  = fechaPagoStr ? new Date(fechaPagoStr) : new Date();
@@ -1114,7 +1114,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
     ? resolverContenido(selectedPlantilla.contenido, selectedGanador) : null;
 
   // Membrete del ganador seleccionado (para mostrar en vista previa)
-  const previewMembrete = selectedGanador?.candidatoPremio?.premio?.evento?.membrete;
+  const previewMembrete = (selectedGanador?.candidatoPremio?.premio?.evento?.membretes || [])[0];
 
   const certPorOferta = certActivos.reduce((acc, cert) => {
     const oferta = cert.ganadorPremio?.candidatoPremio?.proyecto?.ofertaEaCarrera?.oferta;
@@ -1213,7 +1213,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                   <TableBody>
                     {certsOrdenados.map(cert => {
                       const cp = cert.ganadorPremio.candidatoPremio;
-                      const membrete = cp.premio?.evento?.membrete;
+                      const membrete = (cp.premio?.evento?.membretes || [])[0];
                       return (
                         <TableRow key={cert.idCertificado} hover>
                           <TableCell align="center">
@@ -1385,7 +1385,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
             <Box>
               {ganadores_pendientes.map(g => {
                 const cp = g.candidatoPremio;
-                const membrete = cp.premio?.evento?.membrete;
+                const membrete = (cp.premio?.evento?.membretes || [])[0];
                 return (
                   <Box key={g.idGanadorPremio} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Typography fontSize={16}>{posLabel(cp.premio?.numeroGanadores)}</Typography>
