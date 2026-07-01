@@ -31,7 +31,7 @@ const GET_DATA = gql`
           nota
           proyecto {
             idProyecto titulo
-            ofertaEaCarrera { oferta { idOferta nombre } }
+            ofertaEaCarrera { oferta { idOferta categoriaEvento { evento { nombre version } categoria { nombre } } modalidadArea { area { nombre } } } }
             participantes { nombre apellido }
             tutores { nombre apellido }
           }
@@ -64,7 +64,7 @@ const GET_DATA = gql`
         nota
         proyecto {
           idProyecto titulo
-          ofertaEaCarrera { oferta { idOferta nombre } }
+          ofertaEaCarrera { oferta { idOferta categoriaEvento { evento { nombre version } categoria { nombre } } modalidadArea { area { nombre } } } }
           participantes { idParticipante nombre apellido ci }
           tutores { nombre apellido }
         }
@@ -169,7 +169,7 @@ function resolverContenido(contenido, ganador) {
   const descriptores  = (cp.premio.premioDescriptores || []).map(pd => pd.descriptor.descripcion).join(', ');
   const participantes = (cp.proyecto.participantes || []).map(p => `${p.nombre} ${p.apellido}`).join(', ');
   const tutores       = (cp.proyecto.tutores || []).map(t => `${t.nombre} ${t.apellido}`).join(', ');
-  const oferta        = cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre;
+  const oferta        = cp.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre || cp.premio.area.nombre;
   const lugar         = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
 
   let resultado = contenido
@@ -1176,7 +1176,9 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
               <FilePdfOutlined style={{ color: '#1890ff', fontSize: 17 }} />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="subtitle2" fontWeight={700} color="primary.main">
-                  {grupo.oferta?.nombre || 'Sin Oferta'}
+                  {grupo.oferta?.categoriaEvento?.evento?.nombre
+                    ? `${grupo.oferta.categoriaEvento.evento.nombre} v${grupo.oferta.categoriaEvento.evento.version || ''} · ${grupo.oferta.categoriaEvento?.categoria?.nombre || ''}`
+                    : 'Sin Oferta'}
                 </Typography>
               </Box>
               <Tooltip title={`Imprimir los ${grupo.certs.length} certificado(s) de esta oferta`}>
@@ -1294,7 +1296,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                         <Box sx={{ flex: 1 }}>
                           <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {posLabel(cp.premio?.numeroGanadores)} — {cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
+                            {posLabel(cp.premio?.numeroGanadores)} — {cp.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
                           </Typography>
                         </Box>
                       </Box>
@@ -1392,7 +1394,7 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
                     <Box sx={{ flex: 1 }}>
                       <Typography variant="body2" fontWeight={500}>{cp.proyecto.titulo}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
+                        {cp.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre || cp.premio.area.nombre} · Nota: {cp.nota}
                         {membrete && <> · Membrete: {membrete.titulo}</>}
                       </Typography>
                     </Box>
@@ -2088,7 +2090,7 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
     const cp = g.candidatoPremio;
     const title = cp?.proyecto?.titulo?.toLowerCase() || '';
     const evento = cp?.premio?.evento?.nombre?.toLowerCase() || '';
-    const oferta = cp?.proyecto?.ofertaEaCarrera?.oferta?.nombre?.toLowerCase() || '';
+    const oferta = cp?.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre?.toLowerCase() || '';
     const area = cp?.premio?.area?.nombre?.toLowerCase() || '';
     return title.includes(term) || evento.includes(term) || oferta.includes(term) || area.includes(term);
   });
@@ -2096,7 +2098,7 @@ function DivisionTab({ ganadores, refetch, showNotif }) {
   // Agrupación por Oferta (fallback a Evento)
   const gruposOferta = filtered.reduce((acc, g) => {
     const cp = g.candidatoPremio;
-    const oferta = cp?.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp?.premio?.evento?.nombre || 'Sin Oferta';
+    const oferta = cp?.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre || cp?.premio?.evento?.nombre || 'Sin Oferta';
     if (!acc[oferta]) acc[oferta] = [];
     acc[oferta].push(g);
     return acc;

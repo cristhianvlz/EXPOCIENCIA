@@ -23,7 +23,7 @@ const imgUrl = (path) => (path ? `${MEDIA_BASE}${path}` : null);
 const GET_ALL = gql`
   query {
     todasLasOfertas {
-      idOferta nombre descripcion estado
+      idOferta descripcion estado
       categoriaEvento {
         id
         categoria { idCategoria nombre }
@@ -44,7 +44,17 @@ const GET_ALL = gql`
     }
     todosLosOfertaEaCarreras {
       id estado
-      oferta    { idOferta nombre }
+      oferta {
+        idOferta
+        categoriaEvento {
+          categoria { nombre }
+          evento    { nombre version }
+        }
+        modalidadArea {
+          modalidad { nombre }
+          area      { nombre }
+        }
+      }
       eaCarrera {
         id
         entidadAcademica { idEntidadAcademica nombre }
@@ -75,8 +85,8 @@ const GET_ALL = gql`
 `;
 
 const CREATE_OFERTA = gql`
-  mutation($idCategoriaEvento: ID!, $idModalidadArea: ID!, $nombre: String!, $descripcion: String) {
-    crearOferta(idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, nombre: $nombre, descripcion: $descripcion) {
+  mutation($idCategoriaEvento: ID!, $idModalidadArea: ID!, $descripcion: String) {
+    crearOferta(idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, descripcion: $descripcion) {
       oferta { idOferta }
       ok error
     }
@@ -101,8 +111,8 @@ const CREAR_MOD_AREA = gql`
   }
 `;
 const EDIT_OFERTA = gql`
-  mutation($idOferta: ID!, $idCategoriaEvento: ID, $idModalidadArea: ID, $nombre: String, $descripcion: String, $estado: Boolean) {
-    editarOferta(idOferta: $idOferta, idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, nombre: $nombre, descripcion: $descripcion, estado: $estado) { ok error }
+  mutation($idOferta: ID!, $idCategoriaEvento: ID, $idModalidadArea: ID, $descripcion: String, $estado: Boolean) {
+    editarOferta(idOferta: $idOferta, idCategoriaEvento: $idCategoriaEvento, idModalidadArea: $idModalidadArea, descripcion: $descripcion, estado: $estado) { ok error }
   }
 `;
 const DELETE_OFERTA = gql`
@@ -124,9 +134,9 @@ const DELETE_OEC = gql`
 `;
 
 // ── Wizard steps labels ───────────────────────────────────────────────────────
-const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Datos de la Oferta', 'Carrera Autorizada'];
+const WIZARD_STEPS = ['Evento', 'Categoría', 'Modalidad × Área', 'Descripción', 'Carrera Autorizada'];
 
-const INIT_EDIT_OFERTA = { nombre: '', descripcion: '', estado: true, evento: '', categoria: '', modalidad: '', area: '' };
+const INIT_EDIT_OFERTA = { descripcion: '', estado: true, evento: '', categoria: '', modalidad: '', area: '' };
 const INIT_OEC         = { idOferta: '', idEntidadAcademica: '', idEaCarrera: '' };
 
 function CustomPagination({ count, rowsPerPage, page, onPageChange, onRowsPerPageChange }) {
@@ -227,7 +237,6 @@ export default function OfertasPage() {
   const [wizardCategoria, setWizardCategoria] = useState('');
   const [wizardModalidad, setWizardModalidad] = useState('');
   const [wizardArea, setWizardArea]           = useState('');
-  const [wizardNombre, setWizardNombre]       = useState('');
   const [wizardDesc, setWizardDesc]           = useState('');
   const [wizardEntidades, setWizardEntidades]   = useState([]);
   const [wizardEaCarreras, setWizardEaCarreras] = useState([]);
@@ -290,7 +299,6 @@ export default function OfertasPage() {
     setWizardCategoria('');
     setWizardModalidad('');
     setWizardArea('');
-    setWizardNombre('');
     setWizardDesc('');
     setWizardEntidades([]);
     setWizardEaCarreras([]);
@@ -303,7 +311,6 @@ export default function OfertasPage() {
     if (wizardStep === 0) return !wizardEvento;
     if (wizardStep === 1) return !wizardCategoria;
     if (wizardStep === 2) return !wizardModalidad || !wizardArea;
-    if (wizardStep === 3) return !wizardNombre.trim();
     if (wizardStep === 4) return wizardEaCarreras.length === 0;
     return false;
   };
@@ -376,7 +383,6 @@ export default function OfertasPage() {
         variables: {
           idCategoriaEvento: resolvedCatEvId,
           idModalidadArea:   resolvedModAreaId,
-          nombre:            wizardNombre,
           descripcion:       wizardDesc,
         }
       });
@@ -410,9 +416,8 @@ export default function OfertasPage() {
   // ── Edit Oferta (non-wizard) ──────────────────────────────────────────────
   const handleOpenEditOferta = (oferta) => {
     setEditingOferta(oferta);
-    setFormEditOferta({ 
-      nombre: oferta.nombre, 
-      descripcion: oferta.descripcion || '', 
+    setFormEditOferta({
+      descripcion: oferta.descripcion || '',
       estado: oferta.estado,
       evento: oferta.categoriaEvento?.evento?.idEvento || '',
       categoria: oferta.categoriaEvento?.categoria?.idCategoria || '',
@@ -456,13 +461,12 @@ export default function OfertasPage() {
       }
 
       const res = await editarOferta({
-        variables: { 
-          idOferta: editingOferta.idOferta, 
+        variables: {
+          idOferta: editingOferta.idOferta,
           idCategoriaEvento: catEvId,
           idModalidadArea: modAreaId,
-          nombre: formEditOferta.nombre, 
-          descripcion: formEditOferta.descripcion, 
-          estado: formEditOferta.estado 
+          descripcion: formEditOferta.descripcion,
+          estado: formEditOferta.estado
         }
       });
       const result = res.data?.editarOferta;
@@ -543,9 +547,9 @@ export default function OfertasPage() {
     setConfirmDlg({
       open: true,
       title: isActiva ? `¿Desactivar Oferta?` : `¿Restaurar Oferta?`,
-      message: isActiva 
-        ? `¿Deseas desactivar la oferta "${row.nombre}"? Esta acción la marcará como inactiva.` 
-        : `¿Deseas restaurar la oferta "${row.nombre}"? Volverá a estar activa.`,
+      message: isActiva
+        ? `¿Deseas desactivar esta oferta? Esta acción la marcará como inactiva.`
+        : `¿Deseas restaurar esta oferta? Volverá a estar activa.`,
       type: isActiva ? 'error' : 'success',
       onConfirm: async () => {
         setConfirming(true);
@@ -705,10 +709,6 @@ export default function OfertasPage() {
             </Box>
             <Divider />
             <TextField
-              label="Nombre de la Oferta" value={wizardNombre} fullWidth required autoFocus
-              onChange={e => setWizardNombre(e.target.value)}
-            />
-            <TextField
               label="Descripción (opcional)" value={wizardDesc} fullWidth multiline rows={3}
               onChange={e => setWizardDesc(e.target.value)}
             />
@@ -777,7 +777,6 @@ export default function OfertasPage() {
               <Typography variant="body2"><strong>Evento:</strong> {selEvento?.nombre} v{selEvento?.version}</Typography>
               <Typography variant="body2"><strong>Categoría:</strong> {selCategoria?.nombre}</Typography>
               <Typography variant="body2"><strong>Modalidad / Área:</strong> {selModalidad?.nombre} / {selArea?.nombre}</Typography>
-              <Typography variant="body2"><strong>Oferta:</strong> {wizardNombre}</Typography>
             </Box>
             <Divider />
 
@@ -867,17 +866,24 @@ export default function OfertasPage() {
   ];
 
   const filteredOfertas = ofertas.filter((item) => {
-    const matchNombre = searchNombre ? item.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) : true;
+    const q = searchNombre.toLowerCase();
+    const matchNombre = searchNombre ? (
+      item.categoriaEvento?.evento?.nombre?.toLowerCase().includes(q) ||
+      item.categoriaEvento?.categoria?.nombre?.toLowerCase().includes(q) ||
+      item.modalidadArea?.modalidad?.nombre?.toLowerCase().includes(q) ||
+      item.modalidadArea?.area?.nombre?.toLowerCase().includes(q)
+    ) : true;
     const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
     return matchNombre && matchEstado;
   });
   const paginatedOfertas = filteredOfertas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const filteredOec = oecList.filter((item) => {
+    const q = searchNombre.toLowerCase();
     const matchNombre = searchNombre
-      ? (item.eaCarrera?.carrera?.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) ||
-         item.oferta?.nombre?.toLowerCase().includes(searchNombre.toLowerCase()) ||
-         item.eaCarrera?.entidadAcademica?.nombre?.toLowerCase().includes(searchNombre.toLowerCase()))
+      ? (item.eaCarrera?.carrera?.nombre?.toLowerCase().includes(q) ||
+         item.oferta?.categoriaEvento?.evento?.nombre?.toLowerCase().includes(q) ||
+         item.eaCarrera?.entidadAcademica?.nombre?.toLowerCase().includes(q))
       : true;
     const matchEstado = searchEstado !== 'Todos' ? (searchEstado === 'Activo' ? item.estado : !item.estado) : true;
     return matchNombre && matchEstado;
@@ -898,7 +904,7 @@ export default function OfertasPage() {
           <Grid item xs={12} sm={4}>
             <TextField
               size="small" fullWidth
-              placeholder="Buscar por nombre..."
+              placeholder="Buscar por evento, categoría, área..."
               value={searchNombre}
               onChange={(e) => { setSearchNombre(e.target.value); setPage(0); }}
               InputProps={{ startAdornment: <SearchOutlined style={{ color: '#888', marginRight: 8 }} /> }}
@@ -947,7 +953,6 @@ export default function OfertasPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell width={60}>ID</TableCell>
-                    <TableCell>Nombre</TableCell>
                     <TableCell>Evento / Categoría</TableCell>
                     <TableCell>Modalidad / Área</TableCell>
                     <TableCell width={100}>Estado</TableCell>
@@ -958,7 +963,6 @@ export default function OfertasPage() {
                   {paginatedOfertas.map(of => (
                     <TableRow key={of.idOferta} hover>
                       <TableCell>{of.idOferta}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{of.nombre}</TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
                           {of.categoriaEvento?.evento?.nombre} v{of.categoriaEvento?.evento?.version}
@@ -990,7 +994,7 @@ export default function OfertasPage() {
                   ))}
                   {ofertas.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                      <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                         Sin ofertas registradas.
                       </TableCell>
                     </TableRow>
@@ -1050,7 +1054,9 @@ export default function OfertasPage() {
                       }}>
                         <SolutionOutlined style={{ color: '#1890ff', fontSize: 17 }} />
                         <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
-                          {grupo.oferta ? grupo.oferta.nombre : 'Sin oferta asignada'}
+                          {grupo.oferta
+                            ? `${grupo.oferta.categoriaEvento?.evento?.nombre || ''} v${grupo.oferta.categoriaEvento?.evento?.version || ''} · ${grupo.oferta.categoriaEvento?.categoria?.nombre || ''} · ${grupo.oferta.modalidadArea?.modalidad?.nombre || ''} / ${grupo.oferta.modalidadArea?.area?.nombre || ''}`
+                            : 'Sin oferta asignada'}
                         </Typography>
                         <Chip
                           label={
@@ -1192,10 +1198,6 @@ export default function OfertasPage() {
                       Información General
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-                      <TextField
-                        label="Nombre" value={formEditOferta.nombre} fullWidth required size="small"
-                        onChange={e => setFormEditOferta(p => ({ ...p, nombre: e.target.value }))}
-                      />
                       <TextField
                         label="Descripción" value={formEditOferta.descripcion} fullWidth multiline rows={2} size="small"
                         onChange={e => setFormEditOferta(p => ({ ...p, descripcion: e.target.value }))}
@@ -1457,7 +1459,7 @@ export default function OfertasPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseEditOferta} color="secondary">Cancelar</Button>
-          <Button onClick={handleSaveEditOferta} variant="contained" disabled={!formEditOferta.nombre?.trim() || saving}>
+          <Button onClick={handleSaveEditOferta} variant="contained" disabled={saving}>
             {saving ? <CircularProgress size={24} color="inherit" /> : 'Guardar'}
           </Button>
         </DialogActions>
@@ -1480,8 +1482,13 @@ export default function OfertasPage() {
                     <SolutionOutlined style={{ fontSize: 24 }} />
                   </Avatar>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="h5" fontWeight={700}>{viewOferta.nombre}</Typography>
-                    <Typography variant="caption" color="text.secondary">Oferta Académica #{viewOferta.idOferta}</Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      {viewOferta.categoriaEvento?.evento?.nombre} v{viewOferta.categoriaEvento?.evento?.version}
+                      {' · '}{viewOferta.categoriaEvento?.categoria?.nombre}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Oferta #{viewOferta.idOferta} · {viewOferta.modalidadArea?.modalidad?.nombre} / {viewOferta.modalidadArea?.area?.nombre}
+                    </Typography>
                   </Box>
                   <Chip
                     label={viewOferta.estado ? 'ACTIVA' : 'INACTIVA'}
@@ -1701,7 +1708,9 @@ export default function OfertasPage() {
                     onChange={e => setFormOEC(p => ({ ...p, idOferta: e.target.value }))}
                   >
                     {ofertas.filter(of => of.estado).map(of => (
-                      <MenuItem key={of.idOferta} value={of.idOferta}>{of.nombre}</MenuItem>
+                      <MenuItem key={of.idOferta} value={of.idOferta}>
+                        {of.categoriaEvento?.evento?.nombre} v{of.categoriaEvento?.evento?.version} · {of.categoriaEvento?.categoria?.nombre} · {of.modalidadArea?.modalidad?.nombre} / {of.modalidadArea?.area?.nombre}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1743,7 +1752,7 @@ export default function OfertasPage() {
               <>
                 <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Oferta: <strong>{editingOEC.oferta?.nombre}</strong>
+                    Oferta: <strong>{editingOEC.oferta?.categoriaEvento?.evento?.nombre} · {editingOEC.oferta?.categoriaEvento?.categoria?.nombre}</strong>
                   </Typography>
                   <br />
                   <Typography variant="caption" color="text.secondary">

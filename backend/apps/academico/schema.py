@@ -667,7 +667,6 @@ class CrearOferta(graphene.Mutation):
     class Arguments:
         id_categoria_evento = graphene.ID(required=True)
         id_modalidad_area = graphene.ID(required=True)
-        nombre = graphene.String(required=True)
         descripcion = graphene.String()
 
     oferta = graphene.Field(OfertaType)
@@ -675,7 +674,7 @@ class CrearOferta(graphene.Mutation):
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_categoria_evento, id_modalidad_area, nombre, descripcion=""):
+    def mutate(root, info, id_categoria_evento, id_modalidad_area, descripcion=""):
         try:
             categoria_evento = CategoriaEvento.objects.get(pk=id_categoria_evento)
         except CategoriaEvento.DoesNotExist:
@@ -689,7 +688,6 @@ class CrearOferta(graphene.Mutation):
         oferta = Oferta.objects.create(
             categoria_evento=categoria_evento,
             modalidad_area=modalidad_area,
-            nombre=nombre,
             descripcion=descripcion,
         )
         return CrearOferta(oferta=oferta, ok=True, error=None)  # type: ignore
@@ -700,7 +698,6 @@ class EditarOferta(graphene.Mutation):
         id_oferta = graphene.ID(required=True)
         id_categoria_evento = graphene.ID()
         id_modalidad_area = graphene.ID()
-        nombre = graphene.String()
         descripcion = graphene.String()
         estado = graphene.Boolean()
 
@@ -727,7 +724,7 @@ class EditarOferta(graphene.Mutation):
             except ModalidadArea.DoesNotExist:
                 return EditarOferta(oferta=None, ok=False, error="El vínculo modalidad-área no existe.")  # type: ignore
 
-        for field in ['nombre', 'descripcion', 'estado']:
+        for field in ['descripcion', 'estado']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(oferta, field, kwargs[field])
 

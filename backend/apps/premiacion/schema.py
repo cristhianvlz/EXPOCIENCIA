@@ -1,5 +1,6 @@
 import graphene
 from graphene_django import DjangoObjectType
+from django.db.models import F
 from apps.premiacion.models import (
     TipoDescriptor, Descriptor, Premio, PremioDescriptor,
     CandidatoPremio, GanadorPremio, Plantilla, Certificado, AsignacionPremio
@@ -758,7 +759,7 @@ class CerrarActaResultados(graphene.Mutation):
         actas_list = list(ActaEvaluacion.objects.filter(
             proyecto__oferta_ea_carrera__oferta=oferta,
             estado=True,
-        ).order_by('-nota_final').select_related('proyecto'))
+        ).order_by('-nota_final', F('desempate_prioridad').asc(nulls_last=True)).select_related('proyecto'))
 
         if not actas_list:
             return CerrarActaResultados(ok=False, error="No hay proyectos evaluados para esta oferta.", ganadores=[], empates=[]) # type: ignore
@@ -807,10 +808,17 @@ class CerrarActaResultados(graphene.Mutation):
 
         rank_groups_disponibles = []
         current_nota = None
+        current_prio = None
         for acta in actas_disponibles:
-            if acta.nota_final != current_nota:
+            nota = acta.nota_final
+            prio = acta.desempate_prioridad
+            # Iniciar nuevo grupo si cambia la nota, o si ambas actas tienen
+            # prioridad de desempate asignada pero distinta (empate ya resuelto).
+            nuevo_grupo = (nota != current_nota) or (prio is not None and prio != current_prio)
+            if nuevo_grupo:
                 rank_groups_disponibles.append([])
-                current_nota = acta.nota_final
+                current_nota = nota
+                current_prio = prio
             rank_groups_disponibles[-1].append(acta)
 
         for i, premio in enumerate(premios_pendientes):

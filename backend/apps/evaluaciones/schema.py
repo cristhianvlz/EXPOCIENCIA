@@ -534,6 +534,7 @@ class EditarActaEvaluacion(graphene.Mutation):
         estado = graphene.Boolean()
         observacion = graphene.String()
         consolidada = graphene.Boolean()
+        desempate_prioridad = graphene.Int()
 
     acta = graphene.Field(ActaEvaluacionType)
     ok = graphene.Boolean()
@@ -569,7 +570,7 @@ class EditarActaEvaluacion(graphene.Mutation):
             except Proyecto.DoesNotExist:
                 return EditarActaEvaluacion(acta=None, ok=False, error="El proyecto no existe.") # type: ignore
 
-        for field in ['nota_final', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'observacion', 'consolidada']:
+        for field in ['nota_final', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'observacion', 'consolidada', 'desempate_prioridad']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(acta, field, kwargs[field])
 

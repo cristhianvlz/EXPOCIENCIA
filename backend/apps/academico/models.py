@@ -136,7 +136,6 @@ class Oferta(models.Model):
         on_delete=models.PROTECT,
         related_name='ofertas',
     )
-    nombre = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True)
     estado = models.BooleanField(default=True)
 
@@ -144,7 +143,7 @@ class Oferta(models.Model):
         db_table = 'oferta'
 
     def __str__(self):
-        return f"{self.nombre} [{self.modalidad_area}]"
+        return f"{self.categoria_evento} [{self.modalidad_area}]"
 
 
 class OfertaEaCarrera(models.Model):
@@ -165,4 +164,4 @@ class OfertaEaCarrera(models.Model):
         unique_together = ('oferta', 'ea_carrera')
 
     def __str__(self):
-        return f"{self.oferta.nombre} — {self.ea_carrera}"
+        return f"{self.oferta} — {self.ea_carrera}"

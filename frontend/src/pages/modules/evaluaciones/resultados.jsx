@@ -28,7 +28,7 @@ const GET_ACTAS = gql`
         titulo
         estado
         ofertaEaCarrera {
-          oferta { idOferta nombre }
+          oferta { idOferta categoriaEvento { evento { nombre version } categoria { nombre } } }
         }
       }
       planillaEvaluativa { idPlanillaEvaluativa nombre notaMaxima }
@@ -304,7 +304,9 @@ export default function ResultadosNotasPage() {
                     }}>
                       <ScheduleOutlined style={{ color: '#1890ff', fontSize: 17 }} />
                       <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
-                        {grupo.oferta ? grupo.oferta.nombre : 'Sin oferta asignada'}
+                        {grupo.oferta
+                          ? `${grupo.oferta.categoriaEvento?.evento?.nombre || ''} v${grupo.oferta.categoriaEvento?.evento?.version || ''} · ${grupo.oferta.categoriaEvento?.categoria?.nombre || ''}`
+                          : 'Sin oferta asignada'}
                       </Typography>
                       {activeFilter !== null ? (
                         <Chip label={`${grupo.items.length} acta${grupo.items.length !== 1 ? 's' : ''}`}

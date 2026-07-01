@@ -25,7 +25,13 @@ const GET_DATA = gql`
       estado
       proyecto {
         idProyecto titulo estado
-        ofertaEaCarrera { oferta { idOferta nombre modalidadArea { area { idArea } } } }
+        ofertaEaCarrera {
+          oferta {
+            idOferta
+            categoriaEvento { evento { nombre version } categoria { nombre } }
+            modalidadArea { area { idArea nombre } modalidad { nombre } }
+          }
+        }
       }
       planillaEvaluativa { idPlanillaEvaluativa nombre notaMaxima }
       detallesEvaluacion {
@@ -38,7 +44,13 @@ const GET_DATA = gql`
     }
     todosLosProyectos {
       idProyecto titulo estado
-      ofertaEaCarrera { oferta { idOferta nombre estado modalidadArea { area { idArea } } } }
+      ofertaEaCarrera {
+        oferta {
+          idOferta estado
+          categoriaEvento { evento { nombre version } categoria { nombre } }
+          modalidadArea { area { idArea nombre } modalidad { nombre } }
+        }
+      }
     }
     todasLasPlanillas { idPlanillaEvaluativa nombre notaMaxima }
     todosLosTribunales { idTribunal nombre apellido especialidad areas { idArea } }
@@ -125,7 +137,9 @@ function ActaDialog({ open, onClose, onSave, saving, initial, proyectos, planill
               >
                 <MenuItem value=""><em>Todas las ofertas</em></MenuItem>
                 {ofertasUnicas.map(o => (
-                  <MenuItem key={o.idOferta} value={o.idOferta}>{o.nombre}</MenuItem>
+                  <MenuItem key={o.idOferta} value={o.idOferta}>
+                    {o.categoriaEvento?.evento?.nombre} v{o.categoriaEvento?.evento?.version} · {o.categoriaEvento?.categoria?.nombre}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -495,7 +509,9 @@ export default function ActasEvaluacionPage() {
                   >
                     <MenuItem value="">Todas las Ofertas</MenuItem>
                     {ofertasUnicas.map(o => (
-                      <MenuItem key={o.idOferta} value={o.idOferta}>{o.nombre}</MenuItem>
+                      <MenuItem key={o.idOferta} value={o.idOferta}>
+                    {o.categoriaEvento?.evento?.nombre} v{o.categoriaEvento?.evento?.version} · {o.categoriaEvento?.categoria?.nombre}
+                  </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -554,7 +570,9 @@ export default function ActasEvaluacionPage() {
                 }}>
                   <BankOutlined style={{ color: '#1890ff', fontSize: 16 }} />
                   <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
-                    {grupo.oferta?.nombre || 'Sin Oferta'}
+                    {grupo.oferta
+                      ? `${grupo.oferta.categoriaEvento?.evento?.nombre || ''} v${grupo.oferta.categoriaEvento?.evento?.version || ''} · ${grupo.oferta.categoriaEvento?.categoria?.nombre || ''}`
+                      : 'Sin Oferta'}
                   </Typography>
                   <Chip
                     label={isOpen ? `▲ ${grupo.actas.length} acta(s)` : `▼ ${grupo.actas.length} acta(s)`}

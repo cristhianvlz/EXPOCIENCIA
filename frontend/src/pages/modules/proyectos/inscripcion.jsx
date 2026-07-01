@@ -20,7 +20,7 @@ const GET_DATA = gql`
     todosLosOfertaEaCarreras {
       id estado
       oferta {
-        idOferta nombre
+        idOferta
         categoriaEvento {
           evento    { idEvento nombre version maxParticipantes maxTribunal maxTutores }
           categoria { nombre }
@@ -418,7 +418,7 @@ export default function InscripcionPage() {
     const visibleGroups = Object.entries(groups).reduce((acc, [evId, evGroup]) => {
       const ofEntries = Object.entries(evGroup.ofertas).reduce((oa, [ofId, ofGroup]) => {
         const matchOecs = ofGroup.oecs.filter(oec => !q || [
-          evGroup.ev?.nombre, ofGroup.of?.nombre,
+          evGroup.ev?.nombre, ofGroup.of?.categoriaEvento?.categoria?.nombre,
           oec.eaCarrera?.entidadAcademica?.nombre,
           oec.eaCarrera?.carrera?.nombre,
         ].filter(Boolean).join(' ').toLowerCase().includes(q));
@@ -529,7 +529,7 @@ export default function InscripcionPage() {
                           {/* Línea de oferta compacta */}
                           <Box sx={{ px: 2, py: 0.45, pl: 3, display: 'flex', alignItems: 'center', gap: 0.75, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)' }}>
                             <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ fontSize: '0.7rem', flexShrink: 0 }}>
-                              {ofGroup.of?.nombre}
+                              {ofGroup.of?.categoriaEvento?.categoria?.nombre}
                             </Typography>
                             {[
                               ofGroup.of?.categoriaEvento?.categoria?.nombre,
@@ -607,7 +607,7 @@ export default function InscripcionPage() {
                 Oferta seleccionada
               </Typography>
               <Typography variant="body2" fontWeight={600} color="text.primary">
-                {oec.oferta?.nombre}
+                {oec.oferta?.categoriaEvento?.evento?.nombre} v{oec.oferta?.categoriaEvento?.evento?.version} · {oec.oferta?.categoriaEvento?.categoria?.nombre}
               </Typography>
             </Box>
             <Divider />
@@ -1161,8 +1161,8 @@ export default function InscripcionPage() {
                   {/* Oferta nombre + Título + Archivo */}
                   <Box sx={{ px: 2, py: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Oferta</Typography>
-                      <Typography variant="body2" fontWeight={600}>{oferta?.nombre || '—'}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Evento</Typography>
+                      <Typography variant="body2" fontWeight={600}>{ev ? `${ev.nombre} v${ev.version}` : '—'}</Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.8, fontSize: '0.62rem' }}>Título del Proyecto</Typography>

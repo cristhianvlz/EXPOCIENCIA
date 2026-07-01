@@ -26,7 +26,7 @@ const GET_ALL = gql`
       ofertaEaCarrera {
         id
         oferta {
-          nombre
+          idOferta estado
           categoriaEvento {
             evento    { nombre version }
             categoria { nombre }
@@ -272,13 +272,13 @@ export default function RevisionPage() {
 
   // Ofertas únicas para el selector de filtro
   const ofertasUnicas = [...new Map(
-    proyectos.map(p => [p.ofertaEaCarrera?.oferta?.nombre, p.ofertaEaCarrera?.oferta?.nombre])
-  ).entries()].map(([v]) => v).filter(Boolean).sort();
+    proyectos.map(p => [p.ofertaEaCarrera?.oferta?.idOferta, p.ofertaEaCarrera?.oferta])
+  ).values()].filter(Boolean);
 
   const proyectosFiltrados = proyectos.filter(p => {
     const matchEstado = filtroEstado ? p.estado === filtroEstado : true;
     const matchTitulo = searchTitulo ? p.titulo?.toLowerCase().includes(searchTitulo.toLowerCase()) : true;
-    const matchOferta = filtroOferta ? p.ofertaEaCarrera?.oferta?.nombre === filtroOferta : true;
+    const matchOferta = filtroOferta ? p.ofertaEaCarrera?.oferta?.idOferta === filtroOferta : true;
     return matchEstado && matchTitulo && matchOferta;
   });
   const totalPages = Math.ceil(proyectosFiltrados.length / rowsPerPage);
@@ -344,7 +344,7 @@ export default function RevisionPage() {
     const grupos = proyectosFiltrados.reduce((acc, p) => {
       const key = `${p.ofertaEaCarrera?.id || 'sin'}`;
       if (!acc[key]) acc[key] = {
-        oferta: p.ofertaEaCarrera?.oferta?.nombre || 'Sin Oferta',
+        oferta: (() => { const o = p.ofertaEaCarrera?.oferta; return o ? `${o.categoriaEvento?.evento?.nombre || ''} v${o.categoriaEvento?.evento?.version || ''} · ${o.categoriaEvento?.categoria?.nombre || ''}` : 'Sin Oferta'; })(),
         carrera: p.ofertaEaCarrera?.eaCarrera?.carrera?.nombre || '',
         facultad: p.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre || '',
         proyectos: []
@@ -464,7 +464,7 @@ export default function RevisionPage() {
                   <CardActionArea onClick={() => handleOpenProject(p)} sx={{ p: 1.5 }}>
                     <Typography variant="subtitle2" sx={{ lineHeight: 1.3, mb: 0.5 }}>{p.titulo}</Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      {p.ofertaEaCarrera?.oferta?.nombre}
+                      {p.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre} · {p.ofertaEaCarrera?.oferta?.categoriaEvento?.categoria?.nombre}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {p.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre} · {p.ofertaEaCarrera?.eaCarrera?.carrera?.nombre}
@@ -519,7 +519,9 @@ export default function RevisionPage() {
               onChange={e => { setFiltroOferta(e.target.value); setPage(0); }}>
               <MenuItem value="">Todas</MenuItem>
               {ofertasUnicas.map(o => (
-                <MenuItem key={o} value={o}>{o}</MenuItem>
+                <MenuItem key={o.idOferta} value={o.idOferta}>
+                  {o.categoriaEvento?.evento?.nombre} v{o.categoriaEvento?.evento?.version} · {o.categoriaEvento?.categoria?.nombre}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -686,7 +688,7 @@ export default function RevisionPage() {
                           <BadgeCell icon={<TagOutlined />}         label="Categoría"  value={catNom}   color="primary" />
                           <BadgeCell icon={<PartitionOutlined />}   label="Modalidad"  value={modNom}   color="secondary" />
                           <BadgeCell icon={<ApartmentOutlined />}   label="Área"       value={areaNom}  color="info" />
-                          <BadgeCell icon={<FileProtectOutlined />} label="Oferta"     value={oferta?.nombre} color="success" />
+                          <BadgeCell icon={<FileProtectOutlined />} label="Evento"     value={ev ? `${ev.nombre} v${ev.version}` : '—'} color="success" />
                         </Box>
                       </SectionCard>
 

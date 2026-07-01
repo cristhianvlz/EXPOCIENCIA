@@ -72,6 +72,7 @@ class ActaEvaluacion(models.Model):
     # Cuando True, la nota ya fue consolidada: nadie puede modificar calificaciones
     # salvo jurados con permiso_calificacion_tardia activo.
     consolidada = models.BooleanField(default=False)
+    desempate_prioridad = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'acta_evaluacion'

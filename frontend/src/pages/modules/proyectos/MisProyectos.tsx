@@ -22,7 +22,7 @@ const GET_MIS_PROYECTOS = gql`
         proyectosInscritos {
           idProyecto titulo resumen estado fechaInscripcion fechaConfirmacion observacion archivo
           ofertaEaCarrera {
-            oferta { nombre }
+            oferta { categoriaEvento { evento { nombre version } categoria { nombre } } }
             eaCarrera {
               entidadAcademica { nombre }
               carrera          { nombre }
@@ -59,7 +59,7 @@ const GET_MIS_PROYECTOS = gql`
                 nota
                 proyecto {
                   idProyecto titulo
-                  ofertaEaCarrera { oferta { nombre } }
+                  ofertaEaCarrera { oferta { categoriaEvento { evento { nombre version } categoria { nombre } } } }
                   participantes { nombre apellido }
                   tutores { nombre apellido }
                 }
@@ -105,7 +105,7 @@ function resolverContenido(contenido: string, ganador: any): string {
   const descriptores  = (cp.premio.premioDescriptores || []).map((pd: any) => pd.descriptor.descripcion).join(', ');
   const participantes = (cp.proyecto.participantes || []).map((p: any) => `${p.nombre} ${p.apellido}`).join(', ');
   const tutores       = (cp.proyecto.tutores || []).map((t: any) => `${t.nombre} ${t.apellido}`).join(', ');
-  const oferta        = cp.proyecto?.ofertaEaCarrera?.oferta?.nombre || cp.premio.area.nombre;
+  const oferta        = cp.proyecto?.ofertaEaCarrera?.oferta?.categoriaEvento?.evento?.nombre || cp.premio.area.nombre;
   const lugar         = LUGAR_MAP[cp.premio.numeroGanadores] || `${cp.premio.numeroGanadores}° Lugar`;
   let resultado = contenido
     .replace(/\{\{Nombre_Proyecto\}\}/g, cp.proyecto.titulo)

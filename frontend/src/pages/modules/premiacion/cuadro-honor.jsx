@@ -53,7 +53,7 @@ const GET_DATA = gql`
       }
       proyecto {
         idProyecto titulo
-        ofertaEaCarrera { oferta { idOferta nombre } }
+        ofertaEaCarrera { oferta { idOferta categoriaEvento { evento { idEvento nombre version } categoria { nombre } } modalidadArea { area { idArea nombre } modalidad { nombre } } } }
       }
       actaEvaluacion { idActaEvaluacion notaFinal }
       ganador { idGanadorPremio estado }
@@ -68,9 +68,9 @@ const GET_DATA = gql`
           tutores { idTutor nombre apellido ci }
           ofertaEaCarrera {
             oferta {
-              idOferta nombre
-              categoriaEvento { evento { idEvento nombre } }
-              modalidadArea { area { idArea nombre } }
+              idOferta
+              categoriaEvento { evento { idEvento nombre version } categoria { nombre } }
+              modalidadArea { modalidad { nombre } area { idArea nombre } }
             }
           }
         }
@@ -91,7 +91,7 @@ const GET_DATA = gql`
       }
     }
     todasLasActas {
-      idActaEvaluacion notaFinal fecha
+      idActaEvaluacion notaFinal desempatePrioridad fecha
       detallesEvaluacion {
         puntuacion
         yaEvaluo
@@ -103,15 +103,15 @@ const GET_DATA = gql`
         tutores { idTutor nombre apellido ci }
         ofertaEaCarrera {
           oferta {
-            idOferta nombre
-            categoriaEvento { evento { idEvento nombre } }
-            modalidadArea { area { idArea nombre } }
+            idOferta
+            categoriaEvento { evento { idEvento nombre version } categoria { nombre } }
+            modalidadArea { modalidad { nombre } area { idArea nombre } }
           }
         }
       }
     }
     todasLasOfertas {
-      idOferta nombre estado
+      idOferta estado
       categoriaEvento {
         evento { idEvento nombre version }
       }
@@ -167,8 +167,8 @@ const ELIMINAR_PREMIO = gql`mutation($idPremio: ID!) { eliminarPremio(idPremio: 
 
 
 const EDIT_ACTA = gql`
-  mutation($idActaEvaluacion: ID!, $notaFinal: Decimal, $observacion: String, $consolidada: Boolean) {
-    editarActaEvaluacion(idActaEvaluacion: $idActaEvaluacion, notaFinal: $notaFinal, observacion: $observacion, consolidada: $consolidada) {
+  mutation($idActaEvaluacion: ID!, $notaFinal: Decimal, $observacion: String, $consolidada: Boolean, $desempatePrioridad: Int) {
+    editarActaEvaluacion(idActaEvaluacion: $idActaEvaluacion, notaFinal: $notaFinal, observacion: $observacion, consolidada: $consolidada, desempatePrioridad: $desempatePrioridad) {
       ok error
     }
   }
@@ -506,7 +506,9 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
                 <GoldOutlined style={{ color: '#722ed1', fontSize: 17 }} />
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="subtitle2" fontWeight={700} color="secondary.main">
-                    {grupo.oferta?.nombre || `${grupo.evento?.nombre} — ${grupo.area?.nombre}`}
+                    {grupo.oferta?.categoriaEvento?.evento?.nombre
+                      ? `${grupo.oferta.categoriaEvento.evento.nombre} v${grupo.oferta.categoriaEvento.evento.version || ''} · ${grupo.oferta.categoriaEvento?.categoria?.nombre || ''}`
+                      : `${grupo.evento?.nombre} — ${grupo.area?.nombre}`}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {grupo.evento?.nombre}
@@ -737,7 +739,7 @@ function GestionPremiosTab({ tipos, descriptores, premios, ofertas, eventos, are
                     icon={<ExclamationCircleOutlined style={{ fontSize: 18 }} />}
                   >
                     El <strong>{positionLabel(premioForm.numeroGanadores)}</strong> ya tiene un premio registrado
-                    en la oferta <strong>{ofertaSel?.nombre}</strong>. Elige otro lugar o edita el premio existente.
+                    para esta oferta. Elige otro lugar o edita el premio existente.
                   </Alert>
                 )}
               </Stack>
@@ -841,7 +843,9 @@ function RankingTab({ actas, premios, ganadores, refetch, showNotif }) {
             }}>
               <TrophyOutlined style={{ color: '#1677ff', fontSize: 17 }} />
               <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ flex: 1 }}>
-                {grupo.oferta?.nombre || 'Sin Oferta'}
+                {grupo.oferta?.categoriaEvento?.evento?.nombre
+                  ? `${grupo.oferta.categoriaEvento.evento.nombre} v${grupo.oferta.categoriaEvento.evento.version || ''} · ${grupo.oferta.categoriaEvento?.categoria?.nombre || ''}`
+                  : 'Sin Oferta'}
               </Typography>
               {actaCerrada && (
                 <Chip
@@ -1035,7 +1039,7 @@ function DetalleProyectoModal({ item, tipo = 'ganador', lugar = null, onClose })
         <SectionLabel icon="📋" label="Datos del Proyecto" />
         <Typography variant="h6" fontWeight={700} sx={{ lineHeight:1.3 }}>{proyecto?.titulo}</Typography>
         {proyecto?.resumen && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt:1, lineHeight:1.7 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt:1, lineHeight:1.7, whiteSpace: 'pre-wrap' }}>
             {proyecto.resumen}
           </Typography>
         )}
@@ -1058,15 +1062,23 @@ function DetalleProyectoModal({ item, tipo = 'ganador', lugar = null, onClose })
         <SectionLabel icon="🎓" label="Evento y Área" />
         <Stack spacing={0.75}>
           <Box sx={{ display:'flex', gap:1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ minWidth:80 }}>Evento:</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth:90 }}>Evento:</Typography>
             <Typography variant="body2" fontWeight={600}>{evento?.nombre || premio?.evento?.nombre || '—'}</Typography>
           </Box>
           <Box sx={{ display:'flex', gap:1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ minWidth:80 }}>Oferta:</Typography>
-            <Typography variant="body2" fontWeight={600}>{oferta?.nombre || '—'}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth:90 }}>Oferta:</Typography>
+            <Typography variant="body2" fontWeight={600}>{oferta?.categoriaEvento?.evento?.nombre ? `${oferta.categoriaEvento.evento.nombre} v${oferta.categoriaEvento.evento.version || ''}` : '—'}</Typography>
           </Box>
           <Box sx={{ display:'flex', gap:1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ minWidth:80 }}>Área:</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth:90 }}>Categoría:</Typography>
+            <Typography variant="body2" fontWeight={600}>{oferta?.categoriaEvento?.categoria?.nombre || '—'}</Typography>
+          </Box>
+          <Box sx={{ display:'flex', gap:1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth:90 }}>Modalidad:</Typography>
+            <Typography variant="body2" fontWeight={600}>{oferta?.modalidadArea?.modalidad?.nombre || '—'}</Typography>
+          </Box>
+          <Box sx={{ display:'flex', gap:1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth:90 }}>Área:</Typography>
             <Typography variant="body2" fontWeight={600}>{area?.nombre || premio?.area?.nombre || '—'}</Typography>
           </Box>
         </Stack>
@@ -1201,7 +1213,7 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
   const [saving, setSaving] = useState(false);
   const [cerrarDialog, setCerrarDialog] = useState({ open: false, oferta: null });
   const [desempateDialog, setDesempateDialog] = useState({ open: false, candidato: null, otros: [], observacion: '' });
-  const [desempatePrevioDialog, setDesempatePrevioDialog] = useState({ open: false, acta: null, observacion: '' });
+  const [desempatePrevioDialog, setDesempatePrevioDialog] = useState({ open: false, acta: null, rankingPrevio: [], observacion: '' });
   
   const [expandidos, setExpandidos] = useState(new Set());
   const [detalleGanador, setDetalleGanador] = useState(null);
@@ -1258,21 +1270,28 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
   };
 
   const handleRomperEmpatePrevio = async () => {
-    const { acta, observacion } = desempatePrevioDialog;
+    const { acta, rankingPrevio: rp, observacion } = desempatePrevioDialog;
     if (!acta) return;
     setSaving(true);
     try {
-      const nuevaNota = parseFloat(acta.notaFinal) + 0.01;
-      const res = (await editarActa({
-        variables: { idActaEvaluacion: acta.idActaEvaluacion, notaFinal: nuevaNota, observacion, consolidada: true }
+      // Marcar el ganador elegido con prioridad 1 (sin tocar nota_final)
+      const resGanador = (await editarActa({
+        variables: { idActaEvaluacion: acta.idActaEvaluacion, desempatePrioridad: 1, observacion }
       })).data?.editarActaEvaluacion;
-      if (res?.ok) {
-        showNotif('Desempate aplicado a favor del proyecto elegido');
-        refetch();
-        setDesempatePrevioDialog({ open: false, acta: null, observacion: '' });
-      } else {
-        showNotif(res?.error || 'Error al desempatar', 'error');
+      if (!resGanador?.ok) { showNotif(resGanador?.error || 'Error al desempatar', 'error'); setSaving(false); return; }
+
+      // Marcar los demás empatados con prioridad 2 (misma notaFinal, distinto acta)
+      const empatados = rp.filter(a =>
+        a.idActaEvaluacion !== acta.idActaEvaluacion &&
+        parseFloat(a.notaFinal) === parseFloat(acta.notaFinal)
+      );
+      for (const otro of empatados) {
+        await editarActa({ variables: { idActaEvaluacion: otro.idActaEvaluacion, desempatePrioridad: 2 } });
       }
+
+      showNotif('Desempate registrado. La nota del docente no fue modificada.');
+      refetch();
+      setDesempatePrevioDialog({ open: false, acta: null, rankingPrevio: [], observacion: '' });
     } catch { showNotif('Error de conexión', 'error'); }
     setSaving(false);
   };
@@ -1325,7 +1344,9 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
             }}>
               {actaCerrada ? <GoldOutlined style={{ color: '#389e0d', fontSize: 18 }} /> : <TrophyOutlined style={{ color: '#1890ff', fontSize: 18 }} />}
               <Typography variant="subtitle2" fontWeight={700} color={actaCerrada ? "success.dark" : "primary.main"} sx={{ flex: 1 }}>
-                {oferta?.nombre || 'Sin Oferta'}
+                {oferta?.categoriaEvento
+                  ? `${oferta.categoriaEvento.evento?.nombre} v${oferta.categoriaEvento.evento?.version} · ${oferta.categoriaEvento.categoria?.nombre}`
+                  : 'Sin Oferta'}
               </Typography>
               
               {actaCerrada ? (
@@ -1349,7 +1370,13 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
             {isOpen && (
               <Paper elevation={0} sx={{ border: `1px solid ${actaCerrada ? 'rgba(56,158,13,0.30)' : 'rgba(24,144,255,0.25)'}`, borderTop: 'none', borderRadius: '0 0 8px 8px', p: 2 }}>
                 {!actaCerrada ? (() => {
-                  const rankingPrevio = [...grupo.actas].sort((a, b) => parseFloat(b.notaFinal) - parseFloat(a.notaFinal));
+                  const rankingPrevio = [...grupo.actas].sort((a, b) => {
+                    const notaDiff = parseFloat(b.notaFinal) - parseFloat(a.notaFinal);
+                    if (notaDiff !== 0) return notaDiff;
+                    const pa = a.desempatePrioridad ?? 999;
+                    const pb = b.desempatePrioridad ?? 999;
+                    return pa - pb;
+                  });
                   return (
                     <Box>
                       <Alert severity="info" sx={{ mb: 2 }}>
@@ -1366,7 +1393,9 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
                           </TableHead>
                           <TableBody>
                             {rankingPrevio.map((acta, idx) => {
-                              const isEmpate = rankingPrevio.some((a, i) => i !== idx && parseFloat(a.notaFinal) === parseFloat(acta.notaFinal) && parseFloat(acta.notaFinal) > 0);
+                              const empatados = rankingPrevio.filter((a, i) => i !== idx && parseFloat(a.notaFinal) === parseFloat(acta.notaFinal) && parseFloat(acta.notaFinal) > 0);
+                              const isEmpate = empatados.length > 0 && acta.desempatePrioridad == null;
+                              const empateResuelto = empatados.length > 0 && acta.desempatePrioridad != null;
                               return (
                                 <TableRow key={acta.idActaEvaluacion}>
                                   <TableCell align="center">
@@ -1377,20 +1406,25 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
                                   </TableCell>
                                   <TableCell align="center">
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                                      <Chip 
-                                        label={parseFloat(acta.notaFinal).toFixed(2)} 
-                                        size="small" 
-                                        color={isEmpate ? "warning" : "primary"} 
-                                        variant={isEmpate ? "contained" : "outlined"} 
+                                      <Chip
+                                        label={parseFloat(acta.notaFinal).toFixed(2)}
+                                        size="small"
+                                        color={isEmpate ? "warning" : empateResuelto ? "success" : "primary"}
+                                        variant={isEmpate || empateResuelto ? "contained" : "outlined"}
                                         sx={{ minWidth: 60, fontWeight: 700 }}
                                       />
                                       {isEmpate && (
                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                           <Typography variant="caption" color="warning.main" fontWeight={700}>Empate</Typography>
-                                          <Button size="small" variant="contained" color="warning" sx={{ p: '2px 6px', minWidth: 'auto', fontSize: '10px' }} onClick={() => setDesempatePrevioDialog({ open: true, acta, observacion: '' })} disabled={saving}>
-                                            Ganador
+                                          <Button size="small" variant="contained" color="warning" sx={{ p: '2px 6px', minWidth: 'auto', fontSize: '10px' }} onClick={() => setDesempatePrevioDialog({ open: true, acta, rankingPrevio, observacion: '' })} disabled={saving}>
+                                            Elegir ganador
                                           </Button>
                                         </Box>
+                                      )}
+                                      {empateResuelto && (
+                                        <Typography variant="caption" color="success.main" fontWeight={700}>
+                                          {acta.desempatePrioridad === 1 ? 'Ganador' : 'Desempate resuelto'}
+                                        </Typography>
                                       )}
                                     </Box>
                                   </TableCell>
@@ -1514,7 +1548,7 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
             Se cerrará el acta para esta oferta de manera definitiva. Se asignarán automáticamente los ganadores y empates.
           </Alert>
           <Typography variant="body2">
-            Oferta: <strong>{cerrarDialog.oferta?.nombre}</strong>
+            Oferta: <strong>{cerrarDialog.oferta?.categoriaEvento?.evento?.nombre ? `${cerrarDialog.oferta.categoriaEvento.evento.nombre} · ${cerrarDialog.oferta.categoriaEvento?.categoria?.nombre || ''}` : '—'}</strong>
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -1554,15 +1588,15 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={desempatePrevioDialog.open} onClose={() => setDesempatePrevioDialog({ open: false, acta: null, observacion: '' })} maxWidth="sm" fullWidth>
-        <DialogTitle>Resolución Previa de Empate</DialogTitle>
+      <Dialog open={desempatePrevioDialog.open} onClose={() => setDesempatePrevioDialog({ open: false, acta: null, rankingPrevio: [], observacion: '' })} maxWidth="sm" fullWidth>
+        <DialogTitle>Resolución de Empate</DialogTitle>
         <DialogContent dividers>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Elegir a este proyecto le dará una ventaja invisible de <strong>+0.01</strong> en su nota final, empujando a los demás proyectos hacia abajo en el ranking y garantizando que el resto ocupe el 2do o 3er lugar de manera justa.
+            Este proyecto quedará marcado como ganador del desempate. <strong>La nota del docente no se modifica.</strong> La decisión queda registrada para auditoría.
           </Alert>
           <Typography gutterBottom>Has seleccionado a <strong>{desempatePrevioDialog.acta?.proyecto?.titulo}</strong> como ganador del desempate.</Typography>
           <Typography variant="body2" color="text.secondary" paragraph>
-            Ingresa una observación o justificación obligatoria para validar esta decisión:
+            Ingresa una justificación obligatoria para validar esta decisión:
           </Typography>
           <TextField
             fullWidth multiline rows={3}
@@ -1572,7 +1606,7 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDesempatePrevioDialog({ open: false, acta: null, observacion: '' })} color="secondary">Cancelar</Button>
+          <Button onClick={() => setDesempatePrevioDialog({ open: false, acta: null, rankingPrevio: [], observacion: '' })} color="secondary">Cancelar</Button>
           <Button variant="contained" color="success" disabled={saving || !desempatePrevioDialog.observacion.trim()} onClick={handleRomperEmpatePrevio}>
             {saving ? <CircularProgress size={22} color="inherit" /> : 'Confirmar Desempate'}
           </Button>
