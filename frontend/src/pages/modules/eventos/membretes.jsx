@@ -14,7 +14,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   TextField,
   Switch,
   FormControlLabel,
@@ -29,9 +28,10 @@ import {
   Avatar,
   Select,
   MenuItem,
-  Stack,
   FormControl,
-  InputLabel
+  InputLabel,
+  Checkbox,
+  ListItemText
 } from '@mui/material';
 import {
   EditOutlined,
@@ -46,11 +46,12 @@ import {
   RightOutlined,
   StopOutlined,
   RedoOutlined,
-  ExclamationCircleOutlined,
   UserOutlined,
   ClearOutlined,
   SearchOutlined,
-  FilterOutlined
+  FilterOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -72,37 +73,36 @@ const GET_MEMBRETES = gql`
       logoInstitucion
       firma
       selloAutoridad
-      firmantes {
-        idFirmante
-        nombre
-        cargo
-        firmaImagen
+      membreteFirmantes {
+        idMembreteFirmante
         orden
         estado
+        personal {
+          idPersonal
+          nombre
+          apellido
+          firmaImg
+          cargo {
+            nombre
+          }
+        }
       }
     }
   }
 `;
 
-const CREAR_FIRMANTE = gql`
-  mutation($idMembrete: ID!, $nombre: String!, $cargo: String!, $orden: Int, $firmaImagen: Upload) {
-    crearFirmante(idMembrete: $idMembrete, nombre: $nombre, cargo: $cargo, orden: $orden, firmaImagen: $firmaImagen) {
-      ok error
+const OBTENER_PERSONAL_FIRMANTES = gql`
+  query {
+    todoElPersonal {
+      idPersonal
+      nombre
+      apellido
+      firmaImg
+      estado
+      cargo {
+        nombre
+      }
     }
-  }
-`;
-
-const EDITAR_FIRMANTE = gql`
-  mutation($idFirmante: ID!, $nombre: String, $cargo: String, $orden: Int, $estado: Boolean, $firmaImagen: Upload) {
-    editarFirmante(idFirmante: $idFirmante, nombre: $nombre, cargo: $cargo, orden: $orden, estado: $estado, firmaImagen: $firmaImagen) {
-      ok error
-    }
-  }
-`;
-
-const ELIMINAR_FIRMANTE = gql`
-  mutation($idFirmante: ID!) {
-    eliminarFirmante(idFirmante: $idFirmante) { ok error }
   }
 `;
 
@@ -118,6 +118,7 @@ const CREATE_MEMBRETE = gql`
     $logoInstitucion: Upload
     $firma: Upload
     $selloAutoridad: Upload
+    $idsPersonalFirmantes: [ID]
   ) {
     crearMembrete(
       titulo: $titulo
@@ -130,6 +131,7 @@ const CREATE_MEMBRETE = gql`
       logoInstitucion: $logoInstitucion
       firma: $firma
       selloAutoridad: $selloAutoridad
+      idsPersonalFirmantes: $idsPersonalFirmantes
     ) {
       ok
       error
@@ -151,6 +153,7 @@ const EDIT_MEMBRETE = gql`
     $logoInstitucion: Upload
     $firma: Upload
     $selloAutoridad: Upload
+    $idsPersonalFirmantes: [ID]
   ) {
     editarMembrete(
       idMembrete: $idMembrete
@@ -165,6 +168,7 @@ const EDIT_MEMBRETE = gql`
       logoInstitucion: $logoInstitucion
       firma: $firma
       selloAutoridad: $selloAutoridad
+      idsPersonalFirmantes: $idsPersonalFirmantes
     ) {
       ok
       error
@@ -292,16 +296,12 @@ function ImageField({ label, fieldKey, currentPath, preview, onFileSelect, input
   );
 }
 
-const INIT_FIRMANTE_FORM = { nombre: '', cargo: '', orden: 1 };
-
 export default function MembretesFirmasPage() {
   const { data, loading, error, refetch } = useQuery(GET_MEMBRETES, { fetchPolicy: 'network-only' });
+  const { data: dataPersonal } = useQuery(OBTENER_PERSONAL_FIRMANTES);
   const [crearMembrete] = useMutation(CREATE_MEMBRETE);
   const [editarMembrete] = useMutation(EDIT_MEMBRETE);
   const [eliminarMembrete] = useMutation(DELETE_MEMBRETE);
-  const [crearFirmante] = useMutation(CREAR_FIRMANTE);
-  const [editarFirmante] = useMutation(EDITAR_FIRMANTE);
-  const [eliminarFirmante] = useMutation(ELIMINAR_FIRMANTE);
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -324,14 +324,19 @@ export default function MembretesFirmasPage() {
   // Confirmación de cambio de estado
   const [confirmDialog, setConfirmDialog] = useState({ open: false, item: null });
 
-  // Firmantes
-  const [firmanteDialog, setFirmanteDialog] = useState({ open: false, item: null });
-  const [firmanteForm, setFirmanteForm] = useState(INIT_FIRMANTE_FORM);
-  const [firmanteImgFile, setFirmanteImgFile] = useState(null);
-  const [firmanteImgPreview, setFirmanteImgPreview] = useState(null);
-  const [firmanteSaving, setFirmanteSaving] = useState(false);
-  const [confirmFirmanteDialog, setConfirmFirmanteDialog] = useState({ open: false, id: null });
-  const refFirmanteImg = useRef(null);
+  // Firmantes (Personal) del membrete que se está creando/editando, en orden de selección
+  const [selectedFirmantesIds, setSelectedFirmantesIds] = useState([]);
+  const personalActivo = (dataPersonal?.todoElPersonal || []).filter((p) => p.estado);
+
+  const moveFirmante = (idx, dir) => {
+    setSelectedFirmantesIds((prev) => {
+      const arr = [...prev];
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= arr.length) return arr;
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+  };
 
   // refs para resetear inputs de archivo
   const refLogoUnidad = useRef(null);
@@ -368,6 +373,14 @@ export default function MembretesFirmasPage() {
     );
     setImgFiles(INIT_IMGS);
     setImgPreviews(INIT_IMGS);
+    setSelectedFirmantesIds(
+      item
+        ? [...(item.membreteFirmantes || [])]
+            .filter((f) => f.estado)
+            .sort((a, b) => a.orden - b.orden)
+            .map((f) => f.personal.idPersonal)
+        : []
+    );
     setOpenDialog(true);
   };
 
@@ -402,8 +415,8 @@ export default function MembretesFirmasPage() {
       };
 
       const vars = editingItem
-        ? { idMembrete: editingItem.idMembrete, ...textVars, estado: form.estado, ...imgVars }
-        : { ...textVars, ...imgVars };
+        ? { idMembrete: editingItem.idMembrete, ...textVars, estado: form.estado, ...imgVars, idsPersonalFirmantes: selectedFirmantesIds }
+        : { ...textVars, ...imgVars, idsPersonalFirmantes: selectedFirmantesIds };
 
       const res = editingItem ? await editarMembrete({ variables: vars }) : await crearMembrete({ variables: vars });
 
@@ -439,46 +452,6 @@ export default function MembretesFirmasPage() {
     } catch {
       showNotification('Error de conexión', 'error');
     }
-  };
-
-  const openFirmanteDialog = (membrete, firmante = null) => {
-    setFirmanteForm(firmante
-      ? { nombre: firmante.nombre, cargo: firmante.cargo, orden: firmante.orden }
-      : { ...INIT_FIRMANTE_FORM, orden: ((membrete?.firmantes?.length || 0) + 1) });
-    setFirmanteImgFile(null);
-    setFirmanteImgPreview(null);
-    setFirmanteDialog({ open: true, item: firmante, membreteId: membrete?.idMembrete });
-  };
-
-  const handleFirmanteSubmit = async () => {
-    setFirmanteSaving(true);
-    try {
-      const vars = { ...firmanteForm };
-      if (firmanteImgFile) vars.firmaImagen = firmanteImgFile;
-      let res;
-      if (firmanteDialog.item) {
-        res = (await editarFirmante({ variables: { idFirmante: firmanteDialog.item.idFirmante, ...vars } })).data?.editarFirmante;
-      } else {
-        res = (await crearFirmante({ variables: { idMembrete: firmanteDialog.membreteId, ...vars } })).data?.crearFirmante;
-      }
-      if (res?.ok) {
-        showNotification(firmanteDialog.item ? 'Firmante actualizado' : 'Firmante agregado', 'success');
-        refetch();
-        setFirmanteDialog({ open: false, item: null });
-      } else {
-        showNotification(res?.error || 'Error', 'error');
-      }
-    } catch { showNotification('Error de conexión', 'error'); }
-    setFirmanteSaving(false);
-  };
-
-  const handleFirmanteDelete = async () => {
-    try {
-      const res = (await eliminarFirmante({ variables: { idFirmante: confirmFirmanteDialog.id } })).data?.eliminarFirmante;
-      if (res?.ok) { showNotification('Firmante desactivado', 'warning'); refetch(); }
-      else showNotification(res?.error || 'Error', 'error');
-    } catch { showNotification('Error de conexión', 'error'); }
-    setConfirmFirmanteDialog({ open: false, id: null });
   };
 
   // Sincronizar viewItem con datos refrescados
@@ -984,6 +957,122 @@ export default function MembretesFirmasPage() {
                 </Grid>
               </Grid>
             </Box>
+
+            {/* Sección 4: Firmantes */}
+            <Box
+              sx={{
+                p: 2.5,
+                borderRadius: 3,
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 1.5,
+                    bgcolor: 'action.hover',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <UserOutlined style={{ fontSize: 16 }} />
+                </Box>
+                <Typography variant="subtitle1" fontWeight={700}>
+                  Firmantes del Certificado
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  (selecciona el personal que firmará; el orden de aparición es el orden de selección)
+                </Typography>
+              </Box>
+
+              <TextField
+                select
+                fullWidth
+                label="Personal firmante"
+                size="small"
+                SelectProps={{
+                  multiple: true,
+                  value: selectedFirmantesIds,
+                  onChange: (e) => {
+                    const value = e.target.value;
+                    setSelectedFirmantesIds(typeof value === 'string' ? value.split(',') : value);
+                  },
+                  renderValue: (selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((id) => {
+                        const p = personalActivo.find((x) => x.idPersonal === id);
+                        return <Chip key={id} label={p ? `${p.nombre} ${p.apellido}` : id} size="small" />;
+                      })}
+                    </Box>
+                  )
+                }}
+                InputProps={{ sx: { borderRadius: 2 } }}
+              >
+                {personalActivo.map((p) => (
+                  <MenuItem key={p.idPersonal} value={p.idPersonal}>
+                    <Checkbox checked={selectedFirmantesIds.indexOf(p.idPersonal) > -1} />
+                    <ListItemText primary={`${p.nombre} ${p.apellido}`} secondary={p.cargo?.nombre} />
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              {selectedFirmantesIds.length > 0 && (
+                <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {selectedFirmantesIds.map((id, idx) => {
+                    const p = personalActivo.find((x) => x.idPersonal === id);
+                    if (!p) return null;
+                    return (
+                      <Box
+                        key={id}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          p: 1,
+                          borderRadius: 2,
+                          border: '1px solid',
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <Chip label={idx + 1} size="small" />
+                        <Thumb path={p.firmaImg} label="Firma" />
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" fontWeight={600}>
+                            {p.nombre} {p.apellido}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {p.cargo?.nombre || '—'}
+                          </Typography>
+                        </Box>
+                        <IconButton size="small" disabled={idx === 0} onClick={() => moveFirmante(idx, -1)}>
+                          <ArrowUpOutlined />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          disabled={idx === selectedFirmantesIds.length - 1}
+                          onClick={() => moveFirmante(idx, 1)}
+                        >
+                          <ArrowDownOutlined />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setSelectedFirmantesIds((prev) => prev.filter((x) => x !== id))}
+                        >
+                          <DeleteOutlined />
+                        </IconButton>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+            </Box>
           </Box>
         </DialogContent>
 
@@ -1254,17 +1343,11 @@ export default function MembretesFirmasPage() {
                   <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1 }}>
                     Firmantes del Certificado
                   </Typography>
-                  <Button
-                    size="small" variant="contained" startIcon={<PlusOutlined />}
-                    onClick={() => openFirmanteDialog(currentViewItem)}
-                  >
-                    Agregar Firmante
-                  </Button>
                 </Box>
 
-                {(currentViewItem.firmantes || []).filter(f => f.estado).length === 0 ? (
+                {(currentViewItem.membreteFirmantes || []).filter(f => f.estado).length === 0 ? (
                   <Typography variant="body2" color="text.secondary" sx={{ py: 1, fontStyle: 'italic' }}>
-                    Sin firmantes registrados. Agrega las autoridades que firmarán los certificados de este membrete.
+                    Sin firmantes seleccionados. Edita el membrete para elegir el personal que firmará los certificados.
                   </Typography>
                 ) : (
                   <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
@@ -1275,37 +1358,24 @@ export default function MembretesFirmasPage() {
                           <TableCell>Nombre</TableCell>
                           <TableCell>Cargo</TableCell>
                           <TableCell width={80} align="center">Firma</TableCell>
-                          <TableCell align="right" width={80}>Acciones</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {[...(currentViewItem.firmantes || [])].filter(f => f.estado).sort((a, b) => a.orden - b.orden).map(f => (
-                          <TableRow key={f.idFirmante} hover>
+                        {[...(currentViewItem.membreteFirmantes || [])].filter(f => f.estado).sort((a, b) => a.orden - b.orden).map(f => (
+                          <TableRow key={f.idMembreteFirmante} hover>
                             <TableCell align="center">
                               <Chip label={f.orden} size="small" variant="outlined" />
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2" fontWeight={500}>{f.nombre}</Typography>
+                              <Typography variant="body2" fontWeight={500}>{f.personal.nombre} {f.personal.apellido}</Typography>
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2" color="text.secondary">{f.cargo}</Typography>
+                              <Typography variant="body2" color="text.secondary">{f.personal.cargo?.nombre}</Typography>
                             </TableCell>
                             <TableCell align="center">
-                              {f.firmaImagen
-                                ? <Box component="img" src={imgUrl(f.firmaImagen)} alt="Firma" sx={{ height: 28, maxWidth: 60, objectFit: 'contain' }} />
+                              {f.personal.firmaImg
+                                ? <Box component="img" src={imgUrl(f.personal.firmaImg)} alt="Firma" sx={{ height: 28, maxWidth: 60, objectFit: 'contain' }} />
                                 : <Typography variant="caption" color="text.disabled">—</Typography>}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Tooltip title="Editar">
-                                <IconButton size="small" color="primary" onClick={() => openFirmanteDialog(currentViewItem, f)}>
-                                  <EditOutlined />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Desactivar">
-                                <IconButton size="small" color="error" onClick={() => setConfirmFirmanteDialog({ open: true, id: f.idFirmante })}>
-                                  <DeleteOutlined />
-                                </IconButton>
-                              </Tooltip>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1407,112 +1477,6 @@ export default function MembretesFirmasPage() {
         </Box>
       </Dialog>
 
-      {/* ── Dialog: Crear/Editar Firmante ── */}
-      <Dialog
-        open={firmanteDialog.open}
-        onClose={() => setFirmanteDialog({ open: false, item: null })}
-        maxWidth="xs" fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <UserOutlined />
-          {firmanteDialog.item ? 'Editar Firmante' : 'Nuevo Firmante'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Nombre completo *"
-              fullWidth
-              value={firmanteForm.nombre}
-              onChange={e => setFirmanteForm(p => ({ ...p, nombre: e.target.value }))}
-              placeholder="Ej: Dr. Juan Pérez López"
-            />
-            <TextField
-              label="Cargo / Título *"
-              fullWidth
-              value={firmanteForm.cargo}
-              onChange={e => setFirmanteForm(p => ({ ...p, cargo: e.target.value }))}
-              placeholder="Ej: Rector UAGRM"
-            />
-            <TextField
-              label="Orden de aparición"
-              type="number"
-              fullWidth
-              value={firmanteForm.orden}
-              onChange={e => setFirmanteForm(p => ({ ...p, orden: parseInt(e.target.value) || 1 }))}
-              inputProps={{ min: 1, max: 10 }}
-            />
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                Firma individual (opcional — si no se sube se usará la firma general del membrete)
-              </Typography>
-              <Box
-                component="label"
-                htmlFor="firmante-firma-upload"
-                sx={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  gap: 1, p: 2, height: 110, borderRadius: 2, border: '2px dashed',
-                  borderColor: firmanteImgPreview || firmanteDialog.item?.firmaImagen ? 'primary.main' : 'divider',
-                  cursor: 'pointer', bgcolor: 'background.default',
-                  '&:hover': { borderColor: 'primary.main' }
-                }}
-              >
-                <input id="firmante-firma-upload" type="file" hidden accept="image/*" ref={refFirmanteImg}
-                  onChange={e => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    setFirmanteImgFile(file);
-                    setFirmanteImgPreview(URL.createObjectURL(file));
-                  }} />
-                {(firmanteImgPreview || firmanteDialog.item?.firmaImagen) ? (
-                  <Box component="img"
-                    src={firmanteImgPreview || imgUrl(firmanteDialog.item?.firmaImagen)}
-                    alt="Firma" sx={{ maxHeight: 70, maxWidth: '100%', objectFit: 'contain' }} />
-                ) : (
-                  <>
-                    <UploadOutlined style={{ fontSize: 24, color: '#9e9e9e' }} />
-                    <Typography variant="caption" color="text.secondary">Subir imagen de firma</Typography>
-                  </>
-                )}
-              </Box>
-            </Box>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFirmanteDialog({ open: false, item: null })} color="secondary">Cancelar</Button>
-          <Button
-            variant="contained"
-            disabled={!firmanteForm.nombre.trim() || !firmanteForm.cargo.trim() || firmanteSaving}
-            onClick={handleFirmanteSubmit}
-          >
-            {firmanteSaving ? <CircularProgress size={22} color="inherit" /> : 'Guardar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── Confirmación eliminar firmante ── */}
-      <Dialog
-        open={confirmFirmanteDialog.open}
-        onClose={() => setConfirmFirmanteDialog({ open: false, id: null })}
-        maxWidth="xs" fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <Box sx={{ p: 3, textAlign: 'center' }}>
-          <ExclamationCircleOutlined style={{ fontSize: 40, color: '#faad14', marginBottom: 12 }} />
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>¿Desactivar firmante?</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            El firmante dejará de aparecer en los certificados de este membrete.
-          </Typography>
-          <Stack direction="row" gap={1.5}>
-            <Button fullWidth variant="outlined" color="secondary" onClick={() => setConfirmFirmanteDialog({ open: false, id: null })}>
-              Cancelar
-            </Button>
-            <Button fullWidth variant="contained" color="error" onClick={handleFirmanteDelete}>
-              Desactivar
-            </Button>
-          </Stack>
-        </Box>
-      </Dialog>
 
       <Snackbar
         open={notification.open}

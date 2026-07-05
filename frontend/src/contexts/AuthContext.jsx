@@ -48,7 +48,10 @@ const ME_QUERY = gql`
         nombre
         apellido
         ci
-        cargo
+        cargo {
+          idCargo
+          nombre
+        }
         celular
         direccion
         expedicion

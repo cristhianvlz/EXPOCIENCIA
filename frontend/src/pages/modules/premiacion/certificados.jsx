@@ -43,7 +43,7 @@ const GET_DATA = gql`
                 titulo subtitulo direccion
                 logoUnidad logoInstitucion firma selloAutoridad
                 piePagina1 piePagina2 piePagina3
-                firmantes { idFirmante nombre cargo firmaImagen orden estado }
+                membreteFirmantes { idMembreteFirmante orden estado personal { idPersonal nombre apellido firmaImg cargo { nombre } } }
               }
             }
             area { nombre }
@@ -76,7 +76,7 @@ const GET_DATA = gql`
               titulo subtitulo direccion
               logoUnidad logoInstitucion firma selloAutoridad
               piePagina1 piePagina2 piePagina3
-              firmantes { idFirmante nombre cargo firmaImagen orden estado }
+              membreteFirmantes { idMembreteFirmante orden estado personal { idPersonal nombre apellido firmaImg cargo { nombre } } }
             }
           }
           area { nombre }
@@ -212,7 +212,7 @@ function buildCertPage(cert) {
   const firmaGeneral    = imgUrl(membrete?.firma);
   const sello           = imgUrl(membrete?.selloAutoridad);
 
-  const firmantesActivos = (membrete?.firmantes || [])
+  const firmantesActivos = (membrete?.membreteFirmantes || [])
     .filter(f => f.estado)
     .sort((a, b) => a.orden - b.orden);
 
@@ -239,13 +239,13 @@ function buildCertPage(cert) {
     if (firmantesActivos.length === 0 && !firmaGeneral) return '';
     const items = firmantesActivos.length > 0
       ? firmantesActivos.map(f => {
-          const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+          const fImg = f.personal?.firmaImg ? imgUrl(f.personal.firmaImg) : firmaGeneral;
           return `
             <div class="cert-firmante-item">
               ${fImg ? `<img src="${fImg}" class="cert-firma-img" alt="Firma" />` : '<div class="cert-firma-espacio"></div>'}
               <div class="cert-firmante-linea"></div>
-              <div class="cert-firmante-nombre">${f.nombre}</div>
-              <div class="cert-firmante-cargo">${f.cargo}</div>
+              <div class="cert-firmante-nombre">${f.personal?.nombre} ${f.personal?.apellido}</div>
+              <div class="cert-firmante-cargo">${f.personal?.cargo?.nombre || ''}</div>
             </div>`;
         }).join('')
       : `<div class="cert-firmante-item">
@@ -561,15 +561,15 @@ function buildComprobantePago(asig, ganador) {
     <div class="comp-membrete-line"></div>` : '';
 
   // Firmantes del membrete (si existen) o firma general
-  const firmantesActivos = (membrete?.firmantes || []).filter(f => f.estado).sort((a, b) => a.orden - b.orden);
+  const firmantesActivos = (membrete?.membreteFirmantes || []).filter(f => f.estado).sort((a, b) => a.orden - b.orden);
   const firmaItemsHtml = firmantesActivos.length > 0
     ? firmantesActivos.map(f => {
-        const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+        const fImg = f.personal?.firmaImg ? imgUrl(f.personal.firmaImg) : firmaGeneral;
         return `<div class="comp-firma-item">
           ${fImg ? `<img src="${fImg}" class="comp-firma-img" alt="Firma" />` : '<div style="height:38px"></div>'}
           <div class="comp-firma-linea"></div>
-          <div class="comp-firma-nombre">${f.nombre}</div>
-          <div class="comp-firma-cargo">${f.cargo}</div>
+          <div class="comp-firma-nombre">${f.personal?.nombre} ${f.personal?.apellido}</div>
+          <div class="comp-firma-cargo">${f.personal?.cargo?.nombre || ''}</div>
         </div>`;
       }).join('')
     : firmaGeneral
@@ -664,15 +664,15 @@ function imprimirComprobantePagado(asig, ganador, fechaPagoStr, showNotif) {
     </div>
     <div class="mbr-line"></div>` : '';
 
-  const firmantesActivos = (membrete?.firmantes || []).filter(f => f.estado).sort((a, b) => a.orden - b.orden);
+  const firmantesActivos = (membrete?.membreteFirmantes || []).filter(f => f.estado).sort((a, b) => a.orden - b.orden);
   const firmaItemsHtml = firmantesActivos.length > 0
     ? firmantesActivos.map(f => {
-        const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+        const fImg = f.personal?.firmaImg ? imgUrl(f.personal.firmaImg) : firmaGeneral;
         return `<div class="firma-item">
           ${fImg ? `<img src="${fImg}" class="firma-img" alt="Firma" />` : '<div style="height:38px"></div>'}
           <div class="firma-linea"></div>
-          <div class="firma-nombre">${f.nombre}</div>
-          <div class="firma-cargo">${f.cargo}</div>
+          <div class="firma-nombre">${f.personal?.nombre} ${f.personal?.apellido}</div>
+          <div class="firma-cargo">${f.personal?.cargo?.nombre || ''}</div>
         </div>`;
       }).join('')
     : firmaGeneral
@@ -1311,8 +1311,8 @@ function CertificadosTab({ certificados, ganadores, plantillas, refetch, showNot
               <Alert severity="info" icon={false} sx={{ py: 0.5 }}>
                 <Typography variant="caption">
                   <strong>Membrete:</strong> {previewMembrete.titulo}
-                  {previewMembrete.firmantes?.filter(f => f.estado).length > 0 && (
-                    <> · <strong>Firmantes:</strong> {previewMembrete.firmantes.filter(f => f.estado).map(f => f.nombre).join(', ')}</>
+                  {previewMembrete.membreteFirmantes?.filter(f => f.estado).length > 0 && (
+                    <> · <strong>Firmantes:</strong> {previewMembrete.membreteFirmantes.filter(f => f.estado).map(f => `${f.personal?.nombre} ${f.personal?.apellido}`).join(', ')}</>
                   )}
                 </Typography>
               </Alert>

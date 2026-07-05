@@ -5,18 +5,20 @@ from io import BytesIO
 
 import graphene
 from graphene_django import DjangoObjectType
+from graphene_file_upload.scalars import Upload
 import graphql_jwt
 from django.contrib.auth import authenticate
 
 # pyrefly: ignore [missing-import]
 from apps.usuarios.models import (
+    Cargo,
     Participante,
-    ParticipanteExt,
     Permiso,
     Personal,
     Rol,
     RolesPermiso,
     Tribunal,
+    TribunalExt,
     Tutor,
     Usuario,
 )
@@ -95,6 +97,12 @@ class TribunalType(DjangoObjectType):
         fields = '__all__'
 
 
+class TribunalExtType(DjangoObjectType):
+    class Meta:
+        model = TribunalExt
+        fields = '__all__'
+
+
 class TutorType(DjangoObjectType):
     class Meta:
         model = Tutor
@@ -107,9 +115,9 @@ class ParticipanteType(DjangoObjectType):
         fields = '__all__'
 
 
-class ParticipanteExtType(DjangoObjectType):
+class CargoType(DjangoObjectType):
     class Meta:
-        model = ParticipanteExt
+        model = Cargo
         fields = '__all__'
 
 
@@ -124,6 +132,9 @@ class PersonalType(DjangoObjectType):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Query(graphene.ObjectType):
+    todos_los_cargos = graphene.List(CargoType)
+    cargo = graphene.Field(CargoType, id=graphene.ID(required=True))
+
     todos_los_roles = graphene.List(RolType)
     todos_los_permisos = graphene.List(PermisoType)
     me_permisos = graphene.List(graphene.String)
@@ -141,11 +152,17 @@ class Query(graphene.ObjectType):
     todos_los_participantes = graphene.List(ParticipanteType)
     participante = graphene.Field(ParticipanteType, id=graphene.ID(required=True))
 
-    todos_los_participantes_ext = graphene.List(ParticipanteExtType)
-    participante_ext = graphene.Field(ParticipanteExtType, id=graphene.ID(required=True))
-
     todo_el_personal = graphene.List(PersonalType)
     personal = graphene.Field(PersonalType, id=graphene.ID(required=True))
+
+    def resolve_todos_los_cargos(root, info):
+        return Cargo.objects.all()
+
+    def resolve_cargo(root, info, id):
+        try:
+            return Cargo.objects.get(pk=id)
+        except Cargo.DoesNotExist:
+            return None
 
     def resolve_todos_los_roles(root, info):
         return Rol.objects.all()
@@ -208,15 +225,6 @@ class Query(graphene.ObjectType):
         try:
             return Participante.objects.get(pk=id)
         except Participante.DoesNotExist:
-            return None
-
-    def resolve_todos_los_participantes_ext(root, info):
-        return ParticipanteExt.objects.select_related('participante').all()
-
-    def resolve_participante_ext(root, info, id):
-        try:
-            return ParticipanteExt.objects.get(pk=id)
-        except ParticipanteExt.DoesNotExist:
             return None
 
     def resolve_todo_el_personal(root, info):
@@ -385,6 +393,7 @@ class CrearTribunal(graphene.Mutation):
         ci = graphene.String(required=True)
         expedicion = graphene.String(required=True)
         direccion = graphene.String(required=True)
+        institucion = graphene.String()
         areas_ids = graphene.List(graphene.ID)
 
     tribunal = graphene.Field(TribunalType)
@@ -392,7 +401,7 @@ class CrearTribunal(graphene.Mutation):
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_usuario, especialidad, nombre, apellido, celular, ci, expedicion, direccion, areas_ids=None):
+    def mutate(root, info, id_usuario, especialidad, nombre, apellido, celular, ci, expedicion, direccion, areas_ids=None, institucion=None):
         try:
             usuario = Usuario.objects.get(pk=id_usuario)
         except Usuario.DoesNotExist:
@@ -421,7 +430,13 @@ class CrearTribunal(graphene.Mutation):
         )
         if areas_ids:
             tribunal.areas.set(areas_ids)
-            
+
+        if institucion:
+            TribunalExt.objects.create(
+                tribunal=tribunal,
+                institucion=institucion
+            )
+
         return CrearTribunal(tribunal=tribunal, ok=True, error=None) # type: ignore
 
 
@@ -436,6 +451,7 @@ class EditarTribunal(graphene.Mutation):
         ci = graphene.String()
         expedicion = graphene.String()
         direccion = graphene.String()
+        institucion = graphene.String()
         estado = graphene.Boolean()
         areas_ids = graphene.List(graphene.ID)
 
@@ -473,7 +489,19 @@ class EditarTribunal(graphene.Mutation):
         areas_ids = kwargs.get('areas_ids')
         if areas_ids is not None:
             tribunal.areas.set(areas_ids)
-            
+
+        institucion = kwargs.get('institucion')
+        if institucion is not None:
+            try:
+                tribunal_ext = tribunal.tribunal_ext
+                tribunal_ext.institucion = institucion
+                tribunal_ext.save()
+            except TribunalExt.DoesNotExist:
+                TribunalExt.objects.create(
+                    tribunal=tribunal,
+                    institucion=institucion
+                )
+
         return EditarTribunal(tribunal=tribunal, ok=True, error=None) # type: ignore
 
 
@@ -633,15 +661,13 @@ class CrearParticipante(graphene.Mutation):
         celular = graphene.String(required=True)
         ci = graphene.String(required=True)
         expedicion = graphene.String(required=True)
-        direccion = graphene.String()
-        institucion = graphene.String()
 
     participante = graphene.Field(ParticipanteType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_usuario, codigo_especifico, nombre, apellido, celular, ci, expedicion, id_proyecto=None, id_tutor=None, direccion=None, institucion=None):
+    def mutate(root, info, id_usuario, codigo_especifico, nombre, apellido, celular, ci, expedicion, id_proyecto=None, id_tutor=None):
         try:
             usuario = Usuario.objects.get(pk=id_usuario)
         except Usuario.DoesNotExist:
@@ -672,13 +698,6 @@ class CrearParticipante(graphene.Mutation):
         )
         if id_proyecto:
             participante.proyectos_inscritos.add(id_proyecto)
-        
-        if direccion or institucion:
-            ParticipanteExt.objects.create(
-                participante=participante,
-                direccion=direccion or '',
-                institucion=institucion or ''
-            )
 
         return CrearParticipante(participante=participante, ok=True, error=None) # type: ignore
 
@@ -696,8 +715,6 @@ class EditarParticipante(graphene.Mutation):
         ci = graphene.String()
         expedicion = graphene.String()
         estado = graphene.Boolean()
-        direccion = graphene.String()
-        institucion = graphene.String()
 
     participante = graphene.Field(ParticipanteType)
     ok = graphene.Boolean()
@@ -744,24 +761,6 @@ class EditarParticipante(graphene.Mutation):
 
         participante.save()
 
-        direccion = kwargs.get('direccion')
-        institucion = kwargs.get('institucion')
-
-        if direccion is not None or institucion is not None:
-            try:
-                participante_ext = participante.participante_ext
-                if direccion is not None:
-                    participante_ext.direccion = direccion
-                if institucion is not None:
-                    participante_ext.institucion = institucion
-                participante_ext.save()
-            except ParticipanteExt.DoesNotExist:
-                ParticipanteExt.objects.create(
-                    participante=participante,
-                    direccion=direccion or '',
-                    institucion=institucion or ''
-                )
-
         return EditarParticipante(participante=participante, ok=True, error=None) # type: ignore
 
 
@@ -783,87 +782,73 @@ class EliminarParticipante(graphene.Mutation):
             return EliminarParticipante(ok=False, error="El participante no existe.") # type: ignore
 
 
-class CrearParticipanteExt(graphene.Mutation):
+class CrearCargo(graphene.Mutation):
     class Arguments:
-        id_participante = graphene.ID(required=True)
-        direccion = graphene.String(required=True)
-        institucion = graphene.String(required=True)
+        nombre = graphene.String(required=True)
+        descripcion = graphene.String()
 
-    participante_ext = graphene.Field(ParticipanteExtType)
+    cargo = graphene.Field(CargoType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_participante, direccion, institucion):
-        try:
-            participante = Participante.objects.get(pk=id_participante)
-        except Participante.DoesNotExist:
-            return CrearParticipanteExt(participante_ext=None, ok=False, error="El participante no existe.") # type: ignore
+    def mutate(root, info, nombre, descripcion=""):
+        if Cargo.objects.filter(nombre=nombre).exists():
+            return CrearCargo(cargo=None, ok=False, error="El cargo ya existe.")  # type: ignore
 
-        if ParticipanteExt.objects.filter(participante_id=id_participante).exists():
-            return CrearParticipanteExt(participante_ext=None, ok=False, error="Este participante ya tiene un perfil extendido.") # type: ignore
-
-        participante_ext = ParticipanteExt.objects.create(
-            participante=participante,
-            direccion=direccion,
-            institucion=institucion
-        )
-        return CrearParticipanteExt(participante_ext=participante_ext, ok=True, error=None) # type: ignore
+        cargo = Cargo.objects.create(nombre=nombre, descripcion=descripcion)
+        return CrearCargo(cargo=cargo, ok=True, error=None)  # type: ignore
 
 
-class EditarParticipanteExt(graphene.Mutation):
+class EditarCargo(graphene.Mutation):
     class Arguments:
-        id_participante_ext = graphene.ID(required=True)
-        id_participante = graphene.ID()
-        direccion = graphene.String()
-        institucion = graphene.String()
+        id_cargo = graphene.ID(required=True)
+        nombre = graphene.String()
+        descripcion = graphene.String()
         estado = graphene.Boolean()
 
-    participante_ext = graphene.Field(ParticipanteExtType)
+    cargo = graphene.Field(CargoType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_participante_ext, **kwargs):
+    def mutate(root, info, id_cargo, nombre=None, descripcion=None, estado=None):
         try:
-            participante_ext = ParticipanteExt.objects.get(pk=id_participante_ext)
-        except ParticipanteExt.DoesNotExist:
-            return EditarParticipanteExt(participante_ext=None, ok=False, error="El perfil extendido no existe.") # type: ignore
+            cargo = Cargo.objects.get(pk=id_cargo)
+        except Cargo.DoesNotExist:
+            return EditarCargo(cargo=None, ok=False, error="El cargo no existe.")  # type: ignore
 
-        id_participante = kwargs.get('id_participante')
-        if id_participante is not None:
-            if ParticipanteExt.objects.filter(participante_id=id_participante).exclude(pk=id_participante_ext).exists():
-                return EditarParticipanteExt(participante_ext=None, ok=False, error="Ese participante ya tiene otro perfil extendido.") # type: ignore
-            try:
-                participante = Participante.objects.get(pk=id_participante)
-                participante_ext.participante = participante
-            except Participante.DoesNotExist:
-                return EditarParticipanteExt(participante_ext=None, ok=False, error="El participante no existe.") # type: ignore
+        if nombre is not None and nombre != cargo.nombre:
+            if Cargo.objects.filter(nombre=nombre).exists():
+                return EditarCargo(cargo=None, ok=False, error="El nombre ya está registrado en otro cargo.")  # type: ignore
+            cargo.nombre = nombre
 
-        for field in ['direccion', 'institucion', 'estado']:
-            if field in kwargs and kwargs[field] is not None:
-                setattr(participante_ext, field, kwargs[field])
+        if descripcion is not None:
+            cargo.descripcion = descripcion
 
-        participante_ext.save()
-        return EditarParticipanteExt(participante_ext=participante_ext, ok=True, error=None) # type: ignore
+        if estado is not None:
+            cargo.estado = estado
+
+        cargo.save()
+        return EditarCargo(cargo=cargo, ok=True, error=None)  # type: ignore
 
 
-class EliminarParticipanteExt(graphene.Mutation):
+class EliminarCargo(graphene.Mutation):
     class Arguments:
-        id_participante_ext = graphene.ID(required=True)
+        id_cargo = graphene.ID(required=True)
 
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_participante_ext):
+    def mutate(root, info, id_cargo):
         try:
-            participante_ext = ParticipanteExt.objects.get(pk=id_participante_ext)
-            participante_ext.estado = False
-            participante_ext.save()
-            return EliminarParticipanteExt(ok=True, error=None) # type: ignore
-        except ParticipanteExt.DoesNotExist:
-            return EliminarParticipanteExt(ok=False, error="El perfil extendido no existe.") # type: ignore
+            cargo = Cargo.objects.get(pk=id_cargo)
+            cargo.estado = False
+            cargo.save()
+            return EliminarCargo(ok=True, error=None)  # type: ignore
+        except Cargo.DoesNotExist:
+            return EliminarCargo(ok=False, error="El cargo no existe.")  # type: ignore
 
 
 class CrearPersonal(graphene.Mutation):
@@ -873,16 +858,17 @@ class CrearPersonal(graphene.Mutation):
         apellido = graphene.String(required=True)
         ci = graphene.String(required=True)
         expedicion = graphene.String(required=True)
-        cargo = graphene.String(required=True)
+        cargo = graphene.ID(required=True)
         direccion = graphene.String(required=True)
         celular = graphene.String(required=True)
+        firma_img = Upload()
 
     personal = graphene.Field(PersonalType)
     ok = graphene.Boolean()
     error = graphene.String()
 
     @staticmethod
-    def mutate(root, info, id_usuario, nombre, apellido, ci, expedicion, cargo, direccion, celular):
+    def mutate(root, info, id_usuario, nombre, apellido, ci, expedicion, cargo, direccion, celular, firma_img=None):
         try:
             usuario = Usuario.objects.get(pk=id_usuario)
         except Usuario.DoesNotExist:
@@ -894,16 +880,24 @@ class CrearPersonal(graphene.Mutation):
         if Personal.objects.filter(ci=ci).exists():
             return CrearPersonal(personal=None, ok=False, error="El CI ya está registrado en otro personal.")  # type: ignore
 
+        try:
+            cargo_obj = Cargo.objects.get(pk=cargo)
+        except Cargo.DoesNotExist:
+            return CrearPersonal(personal=None, ok=False, error="El cargo no existe.")  # type: ignore
+
         personal = Personal.objects.create(
             usuario=usuario,
             nombre=nombre,
             apellido=apellido,
             ci=ci,
             expedicion=expedicion,
-            cargo=cargo,
+            cargo=cargo_obj,
             direccion=direccion,
             celular=celular,
         )
+        if firma_img:
+            personal.firma_img = firma_img
+            personal.save()
         return CrearPersonal(personal=personal, ok=True, error=None)  # type: ignore
 
 
@@ -914,10 +908,11 @@ class EditarPersonal(graphene.Mutation):
         apellido = graphene.String()
         ci = graphene.String()
         expedicion = graphene.String()
-        cargo = graphene.String()
+        cargo = graphene.ID()
         direccion = graphene.String()
         celular = graphene.String()
         estado = graphene.Boolean()
+        firma_img = Upload()
 
     personal = graphene.Field(PersonalType)
     ok = graphene.Boolean()
@@ -936,7 +931,16 @@ class EditarPersonal(graphene.Mutation):
                 return EditarPersonal(personal=None, ok=False, error="El CI ya está registrado en otro personal.")  # type: ignore
             personal.ci = ci
 
-        for field in ['nombre', 'apellido', 'expedicion', 'cargo', 'direccion', 'celular', 'estado']:
+        if kwargs.get('cargo') is not None:
+            try:
+                personal.cargo = Cargo.objects.get(pk=kwargs['cargo'])
+            except Cargo.DoesNotExist:
+                return EditarPersonal(personal=None, ok=False, error="El cargo no existe.")  # type: ignore
+
+        if kwargs.get('firma_img') is not None:
+            personal.firma_img = kwargs['firma_img']
+
+        for field in ['nombre', 'apellido', 'expedicion', 'direccion', 'celular', 'estado']:
             if field in kwargs and kwargs[field] is not None:
                 setattr(personal, field, kwargs[field])
 
@@ -1446,13 +1450,13 @@ class Mutation(graphene.ObjectType):
     editar_participante = EditarParticipante.Field()
     eliminar_participante = EliminarParticipante.Field()
 
-    crear_participante_ext = CrearParticipanteExt.Field()
-    editar_participante_ext = EditarParticipanteExt.Field()
-    eliminar_participante_ext = EliminarParticipanteExt.Field()
-
     crear_personal = CrearPersonal.Field()
     editar_personal = EditarPersonal.Field()
     eliminar_personal = EliminarPersonal.Field()
+
+    crear_cargo = CrearCargo.Field()
+    editar_cargo = EditarCargo.Field()
+    eliminar_cargo = EliminarCargo.Field()
 
     desbloquear_usuario = DesbloquearUsuario.Field()
     login_con_totp = LoginConTotp.Field()

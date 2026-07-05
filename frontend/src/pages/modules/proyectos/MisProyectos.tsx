@@ -39,7 +39,7 @@ const GET_MIS_PROYECTOS = gql`
                   titulo subtitulo direccion
                   logoUnidad logoInstitucion firma selloAutoridad
                   piePagina1 piePagina2 piePagina3
-                  firmantes { idFirmante nombre cargo firmaImagen orden estado }
+                  membreteFirmantes { idMembreteFirmante orden estado personal { idPersonal nombre apellido firmaImg cargo { nombre } } }
                 }
               }
               premioDescriptores { descriptor { descripcion } }
@@ -72,7 +72,7 @@ const GET_MIS_PROYECTOS = gql`
                       titulo subtitulo direccion
                       logoUnidad logoInstitucion firma selloAutoridad
                       piePagina1 piePagina2 piePagina3
-                      firmantes { idFirmante nombre cargo firmaImagen orden estado }
+                      membreteFirmantes { idMembreteFirmante orden estado personal { idPersonal nombre apellido firmaImg cargo { nombre } } }
                     }
                   }
                   premioDescriptores { descriptor { descripcion } }
@@ -176,7 +176,7 @@ function buildCertPage(cert: any): string {
   const logoInstitucion = imgUrl(membrete?.logoInstitucion);
   const firmaGeneral    = imgUrl(membrete?.firma);
   const sello           = imgUrl(membrete?.selloAutoridad);
-  const firmantesActivos = (membrete?.firmantes || []).filter((f: any) => f.estado).sort((a: any, b: any) => a.orden - b.orden);
+  const firmantesActivos = (membrete?.membreteFirmantes || []).filter((f: any) => f.estado).sort((a: any, b: any) => a.orden - b.orden);
   const headerHtml = membrete ? `
     <div class="cert-membrete-header">
       <div class="cert-logo-box">${logoUnidad ? `<img src="${logoUnidad}" class="cert-logo" alt="Logo Unidad" />` : ''}</div>
@@ -191,7 +191,7 @@ function buildCertPage(cert: any): string {
   const firmantesHtml = (() => {
     if (firmantesActivos.length === 0 && !firmaGeneral) return '';
     const items = firmantesActivos.length > 0
-      ? firmantesActivos.map((f: any) => { const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral; return `<div class="cert-firmante-item">${fImg ? `<img src="${fImg}" class="cert-firma-img" alt="Firma" />` : '<div class="cert-firma-espacio"></div>'}<div class="cert-firmante-linea"></div><div class="cert-firmante-nombre">${f.nombre}</div><div class="cert-firmante-cargo">${f.cargo}</div></div>`; }).join('')
+      ? firmantesActivos.map((f: any) => { const fImg = f.personal?.firmaImg ? imgUrl(f.personal.firmaImg) : firmaGeneral; return `<div class="cert-firmante-item">${fImg ? `<img src="${fImg}" class="cert-firma-img" alt="Firma" />` : '<div class="cert-firma-espacio"></div>'}<div class="cert-firmante-linea"></div><div class="cert-firmante-nombre">${f.personal?.nombre} ${f.personal?.apellido}</div><div class="cert-firmante-cargo">${f.personal?.cargo?.nombre || ''}</div></div>`; }).join('')
       : `<div class="cert-firmante-item"><img src="${firmaGeneral}" class="cert-firma-img" alt="Firma" /><div class="cert-firmante-linea"></div></div>`;
     return `<div class="cert-firmantes">${items}</div>`;
   })();
@@ -287,15 +287,15 @@ function buildComprobantePago(asig: any, ganador: any): string {
     </div>
     <div class="comp-membrete-line"></div>` : '';
 
-  const firmantesActivos = (membrete?.firmantes || []).filter((f: any) => f.estado).sort((a: any, b: any) => a.orden - b.orden);
+  const firmantesActivos = (membrete?.membreteFirmantes || []).filter((f: any) => f.estado).sort((a: any, b: any) => a.orden - b.orden);
   const firmaItemsHtml = firmantesActivos.length > 0
     ? firmantesActivos.map((f: any) => {
-        const fImg = f.firmaImagen ? imgUrl(f.firmaImagen) : firmaGeneral;
+        const fImg = f.personal?.firmaImg ? imgUrl(f.personal.firmaImg) : firmaGeneral;
         return `<div class="comp-firma-item">
           ${fImg ? `<img src="${fImg}" class="comp-firma-img" alt="Firma" />` : '<div style="height:38px"></div>'}
           <div class="comp-firma-linea"></div>
-          <div class="comp-firma-nombre">${f.nombre}</div>
-          <div class="comp-firma-cargo">${f.cargo}</div>
+          <div class="comp-firma-nombre">${f.personal?.nombre} ${f.personal?.apellido}</div>
+          <div class="comp-firma-cargo">${f.personal?.cargo?.nombre || ''}</div>
         </div>`;
       }).join('')
     : firmaGeneral

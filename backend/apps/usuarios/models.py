@@ -14,13 +14,17 @@ EXPEDICION_CHOICES = [
     ('PD', 'Pando'),
 ]
 
-CARGO_CHOICES = [
-    ('SECRETARIA', 'Secretaria'),
-    ('DECANO', 'Decano'),
-    ('VICEDECANO', 'Vicedecano'),
-    ('RECTOR', 'Rector'),
-    ('VICERECTOR', 'Vicerector'),
-]
+class Cargo(models.Model):
+    id_cargo = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.CharField(max_length=255, blank=True)
+    estado = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'cargo'
+
+    def __str__(self):
+        return self.nombre
 
 
 class Rol(models.Model):
@@ -161,24 +165,6 @@ class Participante(models.Model):
         return f"{self.nombre} {self.apellido} (CI: {self.ci})"
 
 
-class ParticipanteExt(models.Model):
-    id_participante_ext = models.AutoField(primary_key=True)
-    participante = models.OneToOneField(
-        Participante,
-        on_delete=models.CASCADE,
-        related_name='participante_ext',
-    )
-    direccion = models.CharField(max_length=255)
-    institucion = models.CharField(max_length=200)
-    estado = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = 'participante_ext'
-
-    def __str__(self):
-        return f"{self.participante} — {self.institucion}"
-
-
 class Tutor(models.Model):
     id_tutor = models.AutoField(primary_key=True)
     usuario = models.OneToOneField(
@@ -239,6 +225,23 @@ class Tribunal(models.Model):
         return f"{self.nombre} {self.apellido} — {self.especialidad}"
 
 
+class TribunalExt(models.Model):
+    id_tribunal_ext = models.AutoField(primary_key=True)
+    tribunal = models.OneToOneField(
+        Tribunal,
+        on_delete=models.CASCADE,
+        related_name='tribunal_ext',
+    )
+    institucion = models.CharField(max_length=200)
+    estado = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'tribunal_ext'
+
+    def __str__(self):
+        return f"{self.tribunal} — {self.institucion}"
+
+
 class Personal(models.Model):
     id_personal = models.AutoField(primary_key=True)
     usuario = models.OneToOneField(
@@ -250,9 +253,14 @@ class Personal(models.Model):
     apellido = models.CharField(max_length=100)
     ci = models.CharField(max_length=20, unique=True)
     expedicion = models.CharField(max_length=2, choices=EXPEDICION_CHOICES)
-    cargo = models.CharField(max_length=10, choices=CARGO_CHOICES)
+    cargo = models.ForeignKey(
+        Cargo,
+        on_delete=models.PROTECT,
+        related_name='personal',
+    )
     direccion = models.CharField(max_length=255)
     celular = models.CharField(max_length=20)
+    firma_img = models.ImageField(upload_to='personal/', null=True, blank=True)
     estado = models.BooleanField(default=True)
 
     class Meta:

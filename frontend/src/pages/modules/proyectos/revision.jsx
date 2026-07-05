@@ -14,7 +14,7 @@ import {
   CalendarOutlined, DownloadOutlined, SearchOutlined, LockOutlined,
   ExclamationCircleOutlined, CheckCircleOutlined, ClearOutlined,
   CloseCircleOutlined, ClockCircleOutlined, TagOutlined, ThunderboltOutlined,
-  PartitionOutlined, ApartmentOutlined
+  PartitionOutlined, ApartmentOutlined, PrinterOutlined
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
@@ -241,6 +241,110 @@ function DocViewer({ archivo }) {
   );
 }
 
+// ── Reporte imprimible de proyectos por oferta ───────────────────────────────
+const escapeHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[c]));
+
+const REPORTE_CSS = `
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color:#222; }
+  @page { size: A4 portrait; margin: 16mm; }
+  .reporte-header { text-align:center; margin-bottom: 18px; border-bottom: 2px solid #1a237e; padding-bottom: 10px; }
+  .reporte-titulo { font-size: 18px; font-weight:bold; color:#1a237e; text-transform:uppercase; letter-spacing:0.5px; }
+  .reporte-sub { font-size: 13px; font-weight:600; margin-top: 4px; }
+  .reporte-sub2 { font-size: 11px; color:#555; margin-top: 2px; }
+  .reporte-fecha { font-size: 9px; color:#999; margin-top: 6px; }
+  .reporte-table { width:100%; border-collapse: collapse; font-size: 11px; }
+  .reporte-table th { background:#1a237e; color:#fff; text-transform:uppercase; letter-spacing:0.4px; font-size:9.5px; padding:8px 6px; text-align:left; }
+  .reporte-table th.center, .reporte-table td.center { text-align:center; }
+  .reporte-table td { padding:7px 6px; border-bottom:1px solid #e0e0e0; }
+  .reporte-table tbody tr:nth-child(even) { background:#f7f8fc; }
+  .reporte-table tfoot td { border-top:2px solid #1a237e; font-weight:bold; padding-top:10px; }
+  .total-label { text-align:right; padding-right: 12px; }
+  .reporte-badges { display:flex; justify-content:center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .reporte-badge { background:#eef0fa; color:#1a237e; font-size:9.5px; font-weight:600; padding:3px 10px; border-radius:12px; text-transform:uppercase; letter-spacing:0.3px; }
+  .reporte-resumen { display:flex; justify-content:center; gap: 48px; margin-top: 28px; }
+  .resumen-item { text-align:center; }
+  .resumen-num { display:block; font-size: 26px; font-weight:bold; color:#1a237e; }
+  .resumen-lbl { display:block; font-size:10px; color:#666; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
+  @media print { html,body{margin:0;} }
+`;
+
+function buildReporteProyectosHtml({ oferta, carrera, facultad, categoria, modalidad, area, filas }) {
+  const totalProyectos     = filas.length;
+  const totalParticipantes = filas.reduce((acc, f) => acc + f.numParticipantes, 0);
+  const totalTutores       = filas.reduce((acc, f) => acc + f.numTutores, 0);
+  const fecha = new Date().toLocaleString('es-BO', { dateStyle: 'long', timeStyle: 'short' });
+
+  const filasHtml = filas.map((f, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${escapeHtml(f.titulo)}</td>
+      <td class="center">${f.numParticipantes}</td>
+      <td class="center">${f.numTutores}</td>
+    </tr>`).join('');
+
+  const badges = [
+    categoria ? `<span class="reporte-badge">Categoría: ${escapeHtml(categoria)}</span>` : '',
+    modalidad ? `<span class="reporte-badge">Modalidad: ${escapeHtml(modalidad)}</span>` : '',
+    area      ? `<span class="reporte-badge">Área: ${escapeHtml(area)}</span>`           : '',
+  ].filter(Boolean).join('');
+
+  return `
+    <div class="reporte-header">
+      <div class="reporte-titulo">Reporte de Proyectos Registrados</div>
+      <div class="reporte-sub">${escapeHtml(oferta)}</div>
+      ${(carrera || facultad) ? `<div class="reporte-sub2">${escapeHtml(carrera)}${carrera && facultad ? ' · ' : ''}${escapeHtml(facultad)}</div>` : ''}
+      ${badges ? `<div class="reporte-badges">${badges}</div>` : ''}
+      <div class="reporte-fecha">Generado el ${fecha}</div>
+    </div>
+    <table class="reporte-table">
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th>Proyecto</th>
+          <th class="center">Participantes</th>
+          <th class="center">Tutores</th>
+        </tr>
+      </thead>
+      <tbody>${filasHtml}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" class="total-label">Totales</td>
+          <td class="center">${totalParticipantes}</td>
+          <td class="center">${totalTutores}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="reporte-resumen">
+      <div class="resumen-item"><span class="resumen-num">${totalProyectos}</span><span class="resumen-lbl">Proyecto(s)</span></div>
+      <div class="resumen-item"><span class="resumen-num">${totalParticipantes}</span><span class="resumen-lbl">Participante(s)</span></div>
+      <div class="resumen-item"><span class="resumen-num">${totalTutores}</span><span class="resumen-lbl">Tutor(es)</span></div>
+    </div>`;
+}
+
+function imprimirReporteProyectos(grupoInfo, showNotif) {
+  if (!grupoInfo.filas.length) return;
+  const body = buildReporteProyectosHtml(grupoInfo);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Reporte de Proyectos — ${escapeHtml(grupoInfo.oferta)}</title><style>${REPORTE_CSS}</style></head><body>${body}</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+
+  if (!win) {
+    showNotif('El navegador bloqueó la ventana emergente. Permite pop-ups para esta página.', 'warning');
+    URL.revokeObjectURL(url);
+    return;
+  }
+  win.addEventListener('load', () => {
+    win.focus();
+    win.print();
+    URL.revokeObjectURL(url);
+  }, { once: true });
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function RevisionPage() {
   const [view, setView]                     = useState('table');
@@ -289,6 +393,24 @@ export default function RevisionPage() {
 
   const getParticipantes = (id) => participantes.filter(p => p.proyectosInscritos?.some(proy => proy.idProyecto === id));
   const getTutores       = (id) => tutores.filter(t => t.proyectosTutelados?.some(proy => proy.idProyecto === id));
+
+  const handleImprimirGrupo = (grupo) => {
+    const filas = grupo.proyectos.map(p => ({
+      idProyecto: p.idProyecto,
+      titulo: p.titulo,
+      numParticipantes: getParticipantes(p.idProyecto).length,
+      numTutores: getTutores(p.idProyecto).length,
+    }));
+    imprimirReporteProyectos({
+      oferta: grupo.oferta,
+      carrera: grupo.carrera,
+      facultad: grupo.facultad,
+      categoria: grupo.categoria,
+      modalidad: grupo.modalidad,
+      area: grupo.area,
+      filas
+    }, showNotif);
+  };
 
   const handleOpenProject = (proyecto) => {
     setSelected(proyecto);
@@ -343,12 +465,18 @@ export default function RevisionPage() {
     // Agrupar por oferta + carrera
     const grupos = proyectosFiltrados.reduce((acc, p) => {
       const key = `${p.ofertaEaCarrera?.id || 'sin'}`;
-      if (!acc[key]) acc[key] = {
-        oferta: (() => { const o = p.ofertaEaCarrera?.oferta; return o ? `${o.categoriaEvento?.evento?.nombre || ''} v${o.categoriaEvento?.evento?.version || ''} · ${o.categoriaEvento?.categoria?.nombre || ''}` : 'Sin Oferta'; })(),
-        carrera: p.ofertaEaCarrera?.eaCarrera?.carrera?.nombre || '',
-        facultad: p.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre || '',
-        proyectos: []
-      };
+      if (!acc[key]) {
+        const o = p.ofertaEaCarrera?.oferta;
+        acc[key] = {
+          oferta: o ? `${o.categoriaEvento?.evento?.nombre || ''} v${o.categoriaEvento?.evento?.version || ''} · ${o.categoriaEvento?.categoria?.nombre || ''}` : 'Sin Oferta',
+          carrera: p.ofertaEaCarrera?.eaCarrera?.carrera?.nombre || '',
+          facultad: p.ofertaEaCarrera?.eaCarrera?.entidadAcademica?.nombre || '',
+          categoria: o?.categoriaEvento?.categoria?.nombre || '',
+          modalidad: o?.modalidadArea?.modalidad?.nombre || '',
+          area: o?.modalidadArea?.area?.nombre || '',
+          proyectos: []
+        };
+      }
       acc[key].proyectos.push(p);
       return acc;
     }, {});
@@ -390,6 +518,16 @@ export default function RevisionPage() {
                     sx={{ fontWeight: 600, mr: 0.5 }}
                   />
                 )}
+                <Tooltip title="Imprimir reporte de proyectos de esta oferta">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => handleImprimirGrupo(grupo)}
+                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px', mr: 0.5 }}
+                  >
+                    <PrinterOutlined style={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
                 <Chip
                   label={isOpen ? `▲ ${grupo.proyectos.length} proyecto(s)` : `▼ ${grupo.proyectos.length} proyecto(s)`}
                   size="small" color="primary"

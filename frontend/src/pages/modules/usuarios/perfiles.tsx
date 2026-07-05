@@ -81,11 +81,6 @@ const OBTENER_PARTICIPANTES = gql`
       tutor {
         idTutor
       }
-      participanteExt {
-        idParticipanteExt
-        direccion
-        institucion
-      }
     }
   }
 `;
@@ -132,6 +127,10 @@ const OBTENER_TRIBUNALES = gql`
         idArea
         nombre
       }
+      tribunalExt {
+        idTribunalExt
+        institucion
+      }
     }
   }
 `;
@@ -167,8 +166,6 @@ const CREAR_PARTICIPANTE = gql`
     $celular: String!
     $ci: String!
     $expedicion: String!
-    $direccion: String
-    $institucion: String
     $idProyecto: ID
     $idTutor: ID
   ) {
@@ -180,8 +177,6 @@ const CREAR_PARTICIPANTE = gql`
       celular: $celular
       ci: $ci
       expedicion: $expedicion
-      direccion: $direccion
-      institucion: $institucion
       idProyecto: $idProyecto
       idTutor: $idTutor
     ) {
@@ -203,8 +198,6 @@ const EDITAR_PARTICIPANTE = gql`
     $celular: String
     $ci: String
     $expedicion: String
-    $direccion: String
-    $institucion: String
     $idProyecto: ID
     $idTutor: ID
     $estado: Boolean
@@ -217,8 +210,6 @@ const EDITAR_PARTICIPANTE = gql`
       celular: $celular
       ci: $ci
       expedicion: $expedicion
-      direccion: $direccion
-      institucion: $institucion
       idProyecto: $idProyecto
       idTutor: $idTutor
       estado: $estado
@@ -320,6 +311,7 @@ const CREAR_TRIBUNAL = gql`
     $ci: String!
     $expedicion: String!
     $direccion: String!
+    $institucion: String
     $areasIds: [ID]
   ) {
     crearTribunal(
@@ -331,6 +323,7 @@ const CREAR_TRIBUNAL = gql`
       ci: $ci
       expedicion: $expedicion
       direccion: $direccion
+      institucion: $institucion
       areasIds: $areasIds
     ) {
       tribunal {
@@ -352,6 +345,7 @@ const EDITAR_TRIBUNAL = gql`
     $ci: String
     $expedicion: String
     $direccion: String
+    $institucion: String
     $estado: Boolean
     $areasIds: [ID]
   ) {
@@ -364,6 +358,7 @@ const EDITAR_TRIBUNAL = gql`
       ci: $ci
       expedicion: $expedicion
       direccion: $direccion
+      institucion: $institucion
       estado: $estado
       areasIds: $areasIds
     ) {
@@ -390,9 +385,13 @@ const OBTENER_PERSONAL = gql`
       apellido
       ci
       expedicion
-      cargo
+      cargo {
+        idCargo
+        nombre
+      }
       direccion
       celular
+      firmaImg
       estado
       usuario {
         idUsuario
@@ -410,9 +409,10 @@ const CREAR_PERSONAL = gql`
     $apellido: String!
     $ci: String!
     $expedicion: String!
-    $cargo: String!
+    $cargo: ID!
     $direccion: String!
     $celular: String!
+    $firmaImg: Upload
   ) {
     crearPersonal(
       idUsuario: $idUsuario
@@ -423,6 +423,7 @@ const CREAR_PERSONAL = gql`
       cargo: $cargo
       direccion: $direccion
       celular: $celular
+      firmaImg: $firmaImg
     ) {
       personal {
         idPersonal
@@ -440,10 +441,11 @@ const EDITAR_PERSONAL = gql`
     $apellido: String
     $ci: String
     $expedicion: String
-    $cargo: String
+    $cargo: ID
     $direccion: String
     $celular: String
     $estado: Boolean
+    $firmaImg: Upload
   ) {
     editarPersonal(
       idPersonal: $idPersonal
@@ -455,6 +457,7 @@ const EDITAR_PERSONAL = gql`
       direccion: $direccion
       celular: $celular
       estado: $estado
+      firmaImg: $firmaImg
     ) {
       ok
       error
@@ -465,6 +468,44 @@ const EDITAR_PERSONAL = gql`
 const ELIMINAR_PERSONAL = gql`
   mutation EliminarPersonal($idPersonal: ID!) {
     eliminarPersonal(idPersonal: $idPersonal) {
+      ok
+      error
+    }
+  }
+`;
+
+const OBTENER_CARGOS = gql`
+  query ObtenerCargos {
+    todosLosCargos {
+      idCargo
+      nombre
+      descripcion
+      estado
+    }
+  }
+`;
+
+const CREAR_CARGO = gql`
+  mutation CrearCargo($nombre: String!, $descripcion: String) {
+    crearCargo(nombre: $nombre, descripcion: $descripcion) {
+      ok
+      error
+    }
+  }
+`;
+
+const EDITAR_CARGO = gql`
+  mutation EditarCargo($idCargo: ID!, $nombre: String, $descripcion: String, $estado: Boolean) {
+    editarCargo(idCargo: $idCargo, nombre: $nombre, descripcion: $descripcion, estado: $estado) {
+      ok
+      error
+    }
+  }
+`;
+
+const ELIMINAR_CARGO = gql`
+  mutation EliminarCargo($idCargo: ID!) {
+    eliminarCargo(idCargo: $idCargo) {
       ok
       error
     }
@@ -521,14 +562,6 @@ const EXPEDICION_CHOICES = [
   { value: 'TJ', label: 'Tarija' },
   { value: 'BN', label: 'Beni' },
   { value: 'PD', label: 'Pando' }
-];
-
-const CARGO_CHOICES = [
-  { value: 'SECRETARIA', label: 'Secretaria' },
-  { value: 'DECANO', label: 'Decano' },
-  { value: 'VICEDECANO', label: 'Vicedecano' },
-  { value: 'RECTOR', label: 'Rector' },
-  { value: 'VICERECTOR', label: 'Vicerector' }
 ];
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -728,6 +761,7 @@ const PerfilesPage: React.FC = () => {
   const [activeTribunal, setActiveTribunal] = useState<any>(null);
   const [activePersonal, setActivePersonal] = useState<any>(null);
   const [selectedAreasTribunal, setSelectedAreasTribunal] = useState<string[]>([]);
+  const [isTribunalExterno, setIsTribunalExterno] = useState(false);
 
   // Modal state for Personal
   const [openPersonal, setOpenPersonal] = useState(false);
@@ -735,8 +769,14 @@ const PerfilesPage: React.FC = () => {
   // Role selector for Personal
   const [selectedRolPersonal, setSelectedRolPersonal] = useState<string>('');
 
-  // External Participant toggle
-  const [isExterno, setIsExterno] = useState(false);
+  // Firma digital para Personal (crear/editar)
+  const [firmaPersonalFile, setFirmaPersonalFile] = useState<File | null>(null);
+  const [firmaPersonalPreview, setFirmaPersonalPreview] = useState<string | null>(null);
+
+  // Modal/estado para Cargo
+  const [openCargo, setOpenCargo] = useState(false);
+  const [activeCargo, setActiveCargo] = useState<any>(null);
+  const [errorCargo, setErrorCargo] = useState('');
 
   // Inline form errors + field highlight
   const [errorParticipante, setErrorParticipante] = useState('');
@@ -773,6 +813,7 @@ const PerfilesPage: React.FC = () => {
   const { data: dataPersonal, refetch: refetchPersonal } = useQuery(OBTENER_PERSONAL);
   const { data: dataRoles } = useQuery(OBTENER_ROLES);
   const { data: dataAreas } = useQuery(OBTENER_AREAS);
+  const { data: dataCargos, refetch: refetchCargos } = useQuery(OBTENER_CARGOS);
 
   // Mutations
   const [crearUsuario] = useMutation(CREAR_USUARIO);
@@ -793,6 +834,10 @@ const PerfilesPage: React.FC = () => {
   const [crearPersonal] = useMutation(CREAR_PERSONAL);
   const [editarPersonal] = useMutation(EDITAR_PERSONAL);
   const [eliminarPersonal] = useMutation(ELIMINAR_PERSONAL);
+
+  const [crearCargo] = useMutation(CREAR_CARGO);
+  const [editarCargo] = useMutation(EDITAR_CARGO);
+  const [eliminarCargo] = useMutation(ELIMINAR_CARGO);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -981,13 +1026,7 @@ const PerfilesPage: React.FC = () => {
 
   // --- HANDLERS PARTICIPANTE ---
   const handleOpenParticipante = (row: any = null) => {
-    if (row) {
-      setActiveParticipante(row);
-      setIsExterno(!!row.participanteExt);
-    } else {
-      setActiveParticipante(null);
-      setIsExterno(false);
-    }
+    setActiveParticipante(row);
     setErrorParticipante('');
     setErrorFieldParticipante('');
     setPendingUserParticipante(null);
@@ -1011,8 +1050,6 @@ const PerfilesPage: React.FC = () => {
             ci: formData.get('ci') as string,
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
-            direccion: isExterno ? (formData.get('direccion') as string) : null,
-            institucion: isExterno ? (formData.get('institucion') as string) : null,
             idProyecto: formData.get('id_proyecto') || null,
             idTutor: formData.get('id_tutor') || null
           }
@@ -1054,8 +1091,6 @@ const PerfilesPage: React.FC = () => {
             ci: formData.get('ci') as string,
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
-            direccion: isExterno ? (formData.get('direccion') as string) : null,
-            institucion: isExterno ? (formData.get('institucion') as string) : null,
             idProyecto: formData.get('id_proyecto') || null,
             idTutor: formData.get('id_tutor') || null
           }
@@ -1168,9 +1203,11 @@ const PerfilesPage: React.FC = () => {
     if (row) {
       setActiveTribunal(row);
       setSelectedAreasTribunal(row.areas ? row.areas.map((a: any) => a.idArea) : []);
+      setIsTribunalExterno(!!row.tribunalExt);
     } else {
       setActiveTribunal(null);
       setSelectedAreasTribunal([]);
+      setIsTribunalExterno(false);
     }
     setErrorTribunal('');
     setErrorFieldTribunal('');
@@ -1195,6 +1232,7 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
             direccion: (formData.get('direccion') as string) || '',
+            institucion: isTribunalExterno ? (formData.get('institucion') as string) : null,
             areasIds: selectedAreasTribunal
           }
         });
@@ -1232,6 +1270,7 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             celular: formData.get('celular') as string,
             direccion: (formData.get('direccion') as string) || '',
+            institucion: isTribunalExterno ? (formData.get('institucion') as string) : null,
             areasIds: selectedAreasTribunal
           }
         });
@@ -1258,7 +1297,16 @@ const PerfilesPage: React.FC = () => {
     setErrorFieldPersonal('');
     setPendingUserPersonal(null);
     setSelectedRolPersonal('');
+    setFirmaPersonalFile(null);
+    setFirmaPersonalPreview(null);
     setOpenPersonal(true);
+  };
+
+  const handleFirmaPersonalSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFirmaPersonalFile(file);
+    setFirmaPersonalPreview(URL.createObjectURL(file));
   };
 
   const handleSubmitPersonal = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1277,7 +1325,8 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             cargo: formData.get('cargo') as string,
             direccion: formData.get('direccion') as string,
-            celular: formData.get('celular') as string
+            celular: formData.get('celular') as string,
+            firmaImg: firmaPersonalFile || undefined
           }
         });
         if (!res.data.editarPersonal.ok) {
@@ -1313,7 +1362,8 @@ const PerfilesPage: React.FC = () => {
             expedicion: formData.get('expedicion') as string,
             cargo: formData.get('cargo') as string,
             direccion: formData.get('direccion') as string,
-            celular: formData.get('celular') as string
+            celular: formData.get('celular') as string,
+            firmaImg: firmaPersonalFile || undefined
           }
         });
 
@@ -1340,6 +1390,46 @@ const PerfilesPage: React.FC = () => {
     <Chip label={label} color={color} size="small" variant="outlined" sx={{ borderWidth: 1, opacity: 0.85, fontWeight: 500 }} />
   );
 
+  // --- HANDLERS CARGO ---
+  const handleOpenCargo = (row: any = null) => {
+    setActiveCargo(row);
+    setErrorCargo('');
+    setOpenCargo(true);
+  };
+
+  const handleSubmitCargo = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorCargo('');
+    const formData = new FormData(e.currentTarget);
+    const nombre = formData.get('nombre') as string;
+    const descripcion = (formData.get('descripcion') as string) || '';
+
+    try {
+      if (activeCargo) {
+        const res = await editarCargo({ variables: { idCargo: activeCargo.idCargo, nombre, descripcion } });
+        if (!res.data.editarCargo.ok) {
+          setErrorCargo(res.data.editarCargo.error || 'Error al actualizar el cargo.');
+        } else {
+          showNotification('Cargo actualizado exitosamente.', 'success');
+          setOpenCargo(false);
+          refetchCargos();
+        }
+      } else {
+        const res = await crearCargo({ variables: { nombre, descripcion } });
+        if (!res.data.crearCargo.ok) {
+          setErrorCargo(res.data.crearCargo.error || 'Error al registrar el cargo.');
+        } else {
+          showNotification('Cargo registrado exitosamente.', 'success');
+          setOpenCargo(false);
+          refetchCargos();
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorCargo(err.message || 'Error de red o servidor.');
+    }
+  };
+
   return (
     <MainCard title="Directorio y Perfiles">
       <Box sx={{ width: '100%' }}>
@@ -1349,6 +1439,7 @@ const PerfilesPage: React.FC = () => {
             <Tab label="Tutores" {...a11yProps(1)} />
             <Tab label="Tribunales" {...a11yProps(2)} />
             <Tab label="Personal" {...a11yProps(3)} />
+            <Tab label="Cargo" {...a11yProps(4)} />
           </Tabs>
         </Box>
 
@@ -1370,7 +1461,6 @@ const PerfilesPage: React.FC = () => {
                   <TableCell>C.I.</TableCell>
                   <TableCell>Cód. Matrícula</TableCell>
                   <TableCell>Celular</TableCell>
-                  <TableCell>Tipo</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell align="right">Acciones</TableCell>
                 </TableRow>
@@ -1395,9 +1485,6 @@ const PerfilesPage: React.FC = () => {
                         </TableCell>
                         <TableCell>{row.codigoEspecifico || '-'}</TableCell>
                         <TableCell>{row.celular}</TableCell>
-                        <TableCell>
-                          {renderChip(row.participanteExt ? 'Externo' : 'Interno', row.participanteExt ? 'warning' : 'info')}
-                        </TableCell>
                         <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                         <TableCell align="right">
                           <IconButton color="primary" onClick={() => handleOpenParticipante(row)}>
@@ -1443,7 +1530,7 @@ const PerfilesPage: React.FC = () => {
                     ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={7} align="center">
                       No hay participantes registrados.
                     </TableCell>
                   </TableRow>
@@ -1570,6 +1657,7 @@ const PerfilesPage: React.FC = () => {
                   <TableCell>Especialidad</TableCell>
                   <TableCell>C.I.</TableCell>
                   <TableCell>Celular</TableCell>
+                  <TableCell>Tipo</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell align="right">Acciones</TableCell>
                 </TableRow>
@@ -1594,6 +1682,7 @@ const PerfilesPage: React.FC = () => {
                           {row.ci} {row.expedicion}
                         </TableCell>
                         <TableCell>{row.celular}</TableCell>
+                        <TableCell>{renderChip(row.tribunalExt ? 'Externo' : 'Interno', row.tribunalExt ? 'warning' : 'info')}</TableCell>
                         <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                         <TableCell align="right">
                           <IconButton color="primary" onClick={() => handleOpenTribunal(row)}>
@@ -1625,7 +1714,7 @@ const PerfilesPage: React.FC = () => {
                     ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       No hay tribunales registrados.
                     </TableCell>
                   </TableRow>
@@ -1661,6 +1750,7 @@ const PerfilesPage: React.FC = () => {
                   <TableCell>Nombre Completo</TableCell>
                   <TableCell>C.I.</TableCell>
                   <TableCell>Cargo</TableCell>
+                  <TableCell>Firma</TableCell>
                   <TableCell>Celular</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell align="right">Acciones</TableCell>
@@ -1684,7 +1774,21 @@ const PerfilesPage: React.FC = () => {
                         <TableCell>
                           {row.ci} {row.expedicion}
                         </TableCell>
-                        <TableCell>{row.cargo}</TableCell>
+                        <TableCell>{row.cargo?.nombre}</TableCell>
+                        <TableCell>
+                          {row.firmaImg ? (
+                            <Box
+                              component="img"
+                              src={`http://localhost:8000/media/${row.firmaImg}`}
+                              alt="Firma"
+                              sx={{ height: 28, maxWidth: 60, objectFit: 'contain' }}
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
                         <TableCell>{row.celular}</TableCell>
                         <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
                         <TableCell align="right">
@@ -1717,7 +1821,7 @@ const PerfilesPage: React.FC = () => {
                     ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       No hay personal registrado.
                     </TableCell>
                   </TableRow>
@@ -1726,6 +1830,85 @@ const PerfilesPage: React.FC = () => {
             </Table>
             <CustomPagination
               count={applyFilters(dataPersonal?.todoElPersonal || []).length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(e: any, newPage: number) => setPage(newPage)}
+              onRowsPerPageChange={(e: any) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+            />
+          </TableContainer>
+        </CustomTabPanel>
+
+        {/* ======================= CARGO ======================= */}
+        <CustomTabPanel value={tabValue} index={4}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h5">Gestión de Cargos</Typography>
+            <Button variant="contained" color="primary" onClick={() => handleOpenCargo()}>
+              + Nuevo Cargo
+            </Button>
+          </Box>
+          <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Nombre</TableCell>
+                  <TableCell>Descripción</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell align="right">Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dataCargos?.todosLosCargos?.length ? (
+                  dataCargos.todosLosCargos
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row: any) => (
+                      <TableRow key={row.idCargo}>
+                        <TableCell>{row.idCargo}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>
+                            {row.nombre}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{row.descripcion || '—'}</TableCell>
+                        <TableCell>{renderChip(row.estado ? 'Activo' : 'Inactivo', row.estado ? 'success' : 'error')}</TableCell>
+                        <TableCell align="right">
+                          <IconButton color="primary" onClick={() => handleOpenCargo(row)}>
+                            <EditOutlined />
+                          </IconButton>
+                          {row.estado ? (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleToggleEstado(row, 'Cargo', 'idCargo', eliminarCargo, editarCargo, refetchCargos)}
+                              title="Eliminar"
+                            >
+                              <DeleteOutlined />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              color="success"
+                              onClick={() => handleToggleEstado(row, 'Cargo', 'idCargo', eliminarCargo, editarCargo, refetchCargos)}
+                              title="Restaurar"
+                            >
+                              <ReloadOutlined />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No hay cargos registrados.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+            <CustomPagination
+              count={dataCargos?.todosLosCargos?.length || 0}
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={(e: any, newPage: number) => setPage(newPage)}
@@ -1905,49 +2088,6 @@ const PerfilesPage: React.FC = () => {
                     ))}
                   </TextField>
                 </Grid>*/}
-              </Grid>
-            </Paper>
-
-            <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: 2, p: 3 }}>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}>
-                  Datos Adicionales
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Información complementaria e institucional
-                </Typography>
-              </Box>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={isExterno ? 4 : 12}>
-                  <FormControlLabel
-                    control={<Switch checked={isExterno} onChange={(e) => setIsExterno(e.target.checked)} color="warning" />}
-                    label="¿Es Participante Externo?"
-                  />
-                </Grid>
-                {isExterno && (
-                  <>
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        name="institucion"
-                        defaultValue={activeParticipante?.participanteExt?.institucion}
-                        fullWidth
-                        label="Institución de Origen"
-                        required
-                        size="small"
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        name="direccion"
-                        defaultValue={activeParticipante?.participanteExt?.direccion}
-                        fullWidth
-                        label="Dirección"
-                        required
-                        size="small"
-                      />
-                    </Grid>
-                  </>
-                )}
               </Grid>
             </Paper>
           </DialogContent>
@@ -2420,6 +2560,39 @@ const PerfilesPage: React.FC = () => {
               </Grid>
             </Grid>
 
+            <SectionLabel>Origen institucional</SectionLabel>
+            <Grid container spacing={2} sx={{ mb: 1 }} alignItems="center">
+              <Grid item xs={12} sm={isTribunalExterno ? 5 : 12}>
+                <FormControlLabel
+                  control={
+                    <Switch checked={isTribunalExterno} onChange={(e) => setIsTribunalExterno(e.target.checked)} color="warning" />
+                  }
+                  label="¿Es Tribunal Externo?"
+                />
+              </Grid>
+              {isTribunalExterno && (
+                <Grid item xs={12} sm={7}>
+                  <TextField
+                    name="institucion"
+                    defaultValue={activeTribunal?.tribunalExt?.institucion}
+                    fullWidth
+                    label="Institución de Origen"
+                    required
+                    size="small"
+                    InputProps={{
+                      sx: {
+                        borderRadius: '6px',
+                        bgcolor: 'action.hover',
+                        transition: 'all 0.15s ease',
+                        '&:hover': { bgcolor: 'action.selected' },
+                        '&.Mui-focused': { bgcolor: 'background.paper' }
+                      }
+                    }}
+                  />
+                </Grid>
+              )}
+            </Grid>
+
             <SectionLabel>Asignación de Áreas</SectionLabel>
             <Grid container spacing={2} sx={{ mb: 1 }}>
               <Grid item xs={12}>
@@ -2516,7 +2689,7 @@ const PerfilesPage: React.FC = () => {
                   </Typography>
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       name="username"
                       fullWidth
@@ -2527,7 +2700,7 @@ const PerfilesPage: React.FC = () => {
                       helperText={errorFieldPersonal === 'username' ? errorPersonal : undefined}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       name="email"
                       fullWidth
@@ -2539,7 +2712,7 @@ const PerfilesPage: React.FC = () => {
                       helperText={errorFieldPersonal === 'email' ? errorPersonal : undefined}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       name="password"
                       fullWidth
@@ -2568,13 +2741,13 @@ const PerfilesPage: React.FC = () => {
                 </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField name="nombre" defaultValue={activePersonal?.nombre} fullWidth label="Nombres" required size="small" />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField name="apellido" defaultValue={activePersonal?.apellido} fullWidth label="Apellidos" required size="small" />
                 </Grid>
-                <Grid item xs={12} sm={4}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
                     name="ci"
                     defaultValue={activePersonal?.ci}
@@ -2586,7 +2759,7 @@ const PerfilesPage: React.FC = () => {
                     helperText={errorFieldPersonal === 'ci' ? errorPersonal : undefined}
                   />
                 </Grid>
-                <Grid item xs={12} sm={4}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
                     name="expedicion"
                     defaultValue={activePersonal?.expedicion || 'LP'}
@@ -2602,7 +2775,7 @@ const PerfilesPage: React.FC = () => {
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={4}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField name="celular" defaultValue={activePersonal?.celular} fullWidth label="Celular" required size="small" />
                 </Grid>
               </Grid>
@@ -2618,28 +2791,27 @@ const PerfilesPage: React.FC = () => {
                 </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: activePersonal ? 12 : 6 }}>
                   <TextField
                     name="cargo"
-                    defaultValue={activePersonal?.cargo || 'SECRETARIA'}
+                    defaultValue={activePersonal?.cargo?.idCargo || ''}
                     fullWidth
                     select
                     label="Cargo"
                     required
                     size="small"
                   >
-                    {CARGO_CHOICES.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
+                    {dataCargos?.todosLosCargos
+                      ?.filter((c: any) => c.estado || c.idCargo === activePersonal?.cargo?.idCargo)
+                      .map((c: any) => (
+                        <MenuItem key={c.idCargo} value={c.idCargo}>
+                          {c.nombre}
+                        </MenuItem>
+                      ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField name="direccion" defaultValue={activePersonal?.direccion} fullWidth label="Dirección" required size="small" />
-                </Grid>
                 {!activePersonal && (
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       select
@@ -2660,6 +2832,46 @@ const PerfilesPage: React.FC = () => {
                     </TextField>
                   </Grid>
                 )}
+                <Grid size={{ xs: 12 }}>
+                  <TextField name="direccion" defaultValue={activePersonal?.direccion} fullWidth label="Dirección" required size="small" />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    Firma digital
+                  </Typography>
+                  <Box
+                    component="label"
+                    htmlFor="firma-personal-upload"
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      p: 1.5,
+                      borderRadius: 2,
+                      border: '1px dashed',
+                      borderColor: 'divider',
+                      cursor: 'pointer',
+                      '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }
+                    }}
+                  >
+                    <input id="firma-personal-upload" type="file" hidden accept="image/*" onChange={handleFirmaPersonalSelect} />
+                    {firmaPersonalPreview || activePersonal?.firmaImg ? (
+                      <Box
+                        component="img"
+                        src={firmaPersonalPreview || `http://localhost:8000/media/${activePersonal?.firmaImg}`}
+                        alt="Firma"
+                        sx={{ height: 40, maxWidth: 100, objectFit: 'contain' }}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.disabled">
+                        Sin firma cargada
+                      </Typography>
+                    )}
+                    <Typography variant="caption" color="primary.main" fontWeight={600}>
+                      {firmaPersonalPreview ? 'Cambiar imagen' : 'Subir imagen de firma'}
+                    </Typography>
+                  </Box>
+                </Grid>
               </Grid>
             </Paper>
           </DialogContent>
@@ -2669,6 +2881,51 @@ const PerfilesPage: React.FC = () => {
             </Button>
             <Button type="submit" variant="contained" sx={{ px: 4 }}>
               {activePersonal ? 'Actualizar Personal' : 'Guardar Personal'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* ======================= MODAL CARGO ======================= */}
+      <Dialog open={openCargo} onClose={() => setOpenCargo(false)} maxWidth="sm" fullWidth>
+        <form onSubmit={handleSubmitCargo}>
+          <DialogTitle sx={{ pb: 2, fontSize: '1.25rem', fontWeight: 600 }}>
+            {activeCargo ? 'Editar Cargo' : 'Registrar Cargo'}
+          </DialogTitle>
+          <DialogContent dividers sx={{ bgcolor: 'background.default', p: { xs: 2, md: 3 } }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  name="nombre"
+                  defaultValue={activeCargo?.nombre}
+                  fullWidth
+                  label="Nombre"
+                  required
+                  size="small"
+                  autoFocus
+                  error={Boolean(errorCargo)}
+                  helperText={errorCargo || undefined}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  name="descripcion"
+                  defaultValue={activeCargo?.descripcion}
+                  fullWidth
+                  label="Descripción"
+                  size="small"
+                  multiline
+                  minRows={2}
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, px: 3, bgcolor: 'background.paper' }}>
+            <Button onClick={() => setOpenCargo(false)} color="secondary" variant="outlined">
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" sx={{ px: 4 }}>
+              {activeCargo ? 'Actualizar Cargo' : 'Guardar Cargo'}
             </Button>
           </DialogActions>
         </form>

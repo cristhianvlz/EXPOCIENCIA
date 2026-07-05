@@ -54,7 +54,10 @@ const ME_QUERY = gql`
         ci
         expedicion
         celular
-        cargo
+        cargo {
+          idCargo
+          nombre
+        }
         direccion
       }
     }
@@ -64,11 +67,6 @@ const ME_QUERY = gql`
 const EXPEDICION_LABELS = {
   LP: 'La Paz', CB: 'Cochabamba', SC: 'Santa Cruz', OR: 'Oruro',
   PT: 'Potosí', CH: 'Chuquisaca', TJ: 'Tarija', BN: 'Beni', PD: 'Pando'
-};
-
-const CARGO_LABELS = {
-  SECRETARIA: 'Secretaria', DECANO: 'Decano', VICEDECANO: 'Vicedecano',
-  RECTOR: 'Rector', VICERECTOR: 'Vicerector'
 };
 
 function InfoRow({ icon, label, value }) {
@@ -209,7 +207,7 @@ export default function VerPerfil() {
               {perfil.tipo === 'Personal' && (
                 <Grid item xs={12} sm={6}>
                   <InfoRow icon={<TeamOutlined />} label="Cargo"
-                    value={CARGO_LABELS[perfil.data.cargo] || perfil.data.cargo} />
+                    value={perfil.data.cargo?.nombre} />
                 </Grid>
               )}
               {perfil.tipo === 'Participante' && perfil.data.codigoEspecifico && (

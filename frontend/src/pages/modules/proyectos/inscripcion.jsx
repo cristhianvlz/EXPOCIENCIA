@@ -3,7 +3,7 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Stepper, Step, StepLabel, Typography, CircularProgress,
   Alert, FormControl, InputLabel, Select, MenuItem, TextField, Chip,
-  Divider, IconButton, Paper, Snackbar, FormControlLabel, Switch,
+  Divider, IconButton, Paper, Snackbar,
   ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent,
   DialogActions, List, ListItem, ListItemText, ListItemIcon, Autocomplete, Avatar, Radio
 } from '@mui/material';
@@ -74,14 +74,12 @@ const CREAR_PROYECTO = gql`
 const CREAR_PARTICIPANTE = gql`
   mutation(
     $idUsuario: ID!, $codigoEspecifico: String!, $nombre: String!, $apellido: String!,
-    $celular: String!, $ci: String!, $expedicion: String!, $idProyecto: ID,
-    $direccion: String, $institucion: String
+    $celular: String!, $ci: String!, $expedicion: String!, $idProyecto: ID
   ) {
     crearParticipante(
       idUsuario: $idUsuario, codigoEspecifico: $codigoEspecifico,
       nombre: $nombre, apellido: $apellido, celular: $celular,
-      ci: $ci, expedicion: $expedicion, idProyecto: $idProyecto,
-      direccion: $direccion, institucion: $institucion
+      ci: $ci, expedicion: $expedicion, idProyecto: $idProyecto
     ) { ok error }
   }
 `;
@@ -123,7 +121,7 @@ const EMPTY_PARTICIPANTE = {
   modo: 'existente',
   idParticipante: '',
   nombre: '', apellido: '', ci: '', expedicion: 'LP', celular: '',
-  codigoEspecifico: '', email: '', esExterno: false, direccion: '', institucion: ''
+  codigoEspecifico: '', email: ''
 };
 
 const EMPTY_TUTOR = {
@@ -341,8 +339,6 @@ export default function InscripcionPage() {
               codigoEspecifico: p.codigoEspecifico,
               nombre: p.nombre, apellido: p.apellido, celular: p.celular,
               ci: p.ci, expedicion: p.expedicion, idProyecto,
-              direccion:   p.esExterno ? p.direccion   : undefined,
-              institucion: p.esExterno ? p.institucion : undefined,
             }
           });
           if (!partRes.data?.crearParticipante?.ok) {
@@ -821,21 +817,6 @@ export default function InscripcionPage() {
                 helperText="CI = usuario y contraseña inicial de acceso al sistema."
                 onChange={e => updateParticipante(i, 'email', e.target.value)} />
             </Box>
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <FormControlLabel
-                control={<Switch checked={p.esExterno}
-                  onChange={e => updateParticipante(i, 'esExterno', e.target.checked)} />}
-                label="Participante externo (otra institución)"
-              />
-            </Box>
-            {p.esExterno && (
-              <>
-                <TextField label="Institución" value={p.institucion} size="small"
-                  onChange={e => updateParticipante(i, 'institucion', e.target.value)} />
-                <TextField label="Dirección" value={p.direccion} size="small"
-                  onChange={e => updateParticipante(i, 'direccion', e.target.value)} />
-              </>
-            )}
           </Box>
         )}
       </Paper>

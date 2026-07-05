@@ -65,10 +65,6 @@ const EXPEDICION = {
   LP: 'La Paz', CB: 'Cochabamba', SC: 'Santa Cruz', OR: 'Oruro',
   PT: 'Potosí', CH: 'Chuquisaca', TJ: 'Tarija', BN: 'Beni', PD: 'Pando'
 };
-const CARGO = {
-  SECRETARIA: 'Secretaria', DECANO: 'Decano', VICEDECANO: 'Vicedecano',
-  RECTOR: 'Rector', VICERECTOR: 'Vicerector'
-};
 
 function getPerfilData(me) {
   if (me?.participante) return { tipo: 'Participante', d: me.participante };
@@ -138,7 +134,7 @@ function TabInfo({ me }) {
           )}
           {perfil.tipo === 'Personal' && perfil.d.cargo && (
             <Grid item xs={12} sm={6}>
-              <InfoField label="Cargo" value={CARGO[perfil.d.cargo] || perfil.d.cargo} />
+              <InfoField label="Cargo" value={perfil.d.cargo?.nombre} />
             </Grid>
           )}
           {perfil.tipo === 'Participante' && perfil.d.codigoEspecifico && (

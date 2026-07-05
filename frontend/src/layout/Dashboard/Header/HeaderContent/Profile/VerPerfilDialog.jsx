@@ -13,10 +13,6 @@ const EXPEDICION = {
   LP: 'La Paz', CB: 'Cochabamba', SC: 'Santa Cruz', OR: 'Oruro',
   PT: 'Potosí', CH: 'Chuquisaca', TJ: 'Tarija', BN: 'Beni', PD: 'Pando'
 };
-const CARGO = {
-  SECRETARIA: 'Secretaria', DECANO: 'Decano', VICEDECANO: 'Vicedecano',
-  RECTOR: 'Rector', VICERECTOR: 'Vicerector'
-};
 
 function InfoPair({ label, value }) {
   if (value === null || value === undefined || value === '') return null;
@@ -198,7 +194,7 @@ export default function VerPerfilDialog({ open, onClose, me, onEditarPerfil }) {
               )}
               {perfil.tipo === 'Personal' && perfil.d.cargo && (
                 <Grid item xs={12} sm={6}>
-                  <InfoPair label="Cargo" value={CARGO[perfil.d.cargo] || perfil.d.cargo} />
+                  <InfoPair label="Cargo" value={perfil.d.cargo?.nombre} />
                 </Grid>
               )}
               {perfil.tipo === 'Participante' && perfil.d.codigoEspecifico && (

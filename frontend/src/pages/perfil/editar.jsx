@@ -26,7 +26,7 @@ const ME_QUERY = gql`
       participante { nombre apellido ci expedicion celular codigoEspecifico }
       tutor { nombre apellido ci expedicion celular codEmpleado direccion }
       tribunal { nombre apellido ci expedicion celular especialidad direccion }
-      personal { nombre apellido ci expedicion celular cargo direccion }
+      personal { nombre apellido ci expedicion celular cargo { idCargo nombre } direccion }
     }
   }
 `;
@@ -74,11 +74,6 @@ const EXPEDICION_LABELS = {
   LP: 'La Paz', CB: 'Cochabamba', SC: 'Santa Cruz', OR: 'Oruro',
   PT: 'Potosí', CH: 'Chuquisaca', TJ: 'Tarija', BN: 'Beni', PD: 'Pando'
 };
-const CARGO_LABELS = {
-  SECRETARIA: 'Secretaria', DECANO: 'Decano', VICEDECANO: 'Vicedecano',
-  RECTOR: 'Rector', VICERECTOR: 'Vicerector'
-};
-
 function getNombreCompleto(me) {
   if (!me) return 'Usuario';
   const p = me.participante || me.tutor || me.tribunal || me.personal;
@@ -531,7 +526,7 @@ export default function EditarPerfil() {
                 )}
                 {perfil.tipo === 'Personal' && (
                   <Grid item xs={12} sm={6}>
-                    <InfoField label="Cargo" value={CARGO_LABELS[perfil.data.cargo] || perfil.data.cargo} />
+                    <InfoField label="Cargo" value={perfil.data.cargo?.nombre} />
                   </Grid>
                 )}
               </>

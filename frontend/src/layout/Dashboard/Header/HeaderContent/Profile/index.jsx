@@ -42,7 +42,7 @@ const ME_QUERY = gql`
       participante { nombre apellido ci expedicion celular codigoEspecifico }
       tutor { nombre apellido ci expedicion celular codEmpleado direccion }
       tribunal { nombre apellido ci expedicion celular especialidad direccion }
-      personal { nombre apellido ci expedicion celular cargo direccion }
+      personal { nombre apellido ci expedicion celular cargo { idCargo nombre } direccion }
     }
   }
 `;

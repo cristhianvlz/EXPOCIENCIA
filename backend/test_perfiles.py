@@ -5,7 +5,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from apps.usuarios.models import Usuario, Participante, Tutor, Tribunal, Personal
+from apps.usuarios.models import Usuario, Participante, Tutor, Tribunal, Personal, Cargo
 from django.db import transaction
 
 def run_tests():
@@ -54,13 +54,14 @@ def run_tests():
             )
             print(f"> Tribunal creado: {tribunal}")
 
+            cargo_secretaria, _ = Cargo.objects.get_or_create(nombre='Secretaria')
             personal = Personal.objects.create(
                 usuario=u_personal,
                 nombre='Ana',
                 apellido='López',
                 ci='3216549',
                 expedicion='TJ',
-                cargo='SECRETARIA',
+                cargo=cargo_secretaria,
                 direccion='Av. Central 789',
                 celular='77799900'
             )
