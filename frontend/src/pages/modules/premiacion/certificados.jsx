@@ -14,7 +14,7 @@ import {
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
-const BACKEND_MEDIA = 'http://localhost:8000/media/';
+const BACKEND_MEDIA = `http://${window.location.hostname}:8000/media/`;
 
 // ── GQL ──────────────────────────────────────────────────────────────────────
 const GET_DATA = gql`

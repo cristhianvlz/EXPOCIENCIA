@@ -55,7 +55,7 @@ import {
 } from '@ant-design/icons';
 import MainCard from 'components/MainCard';
 
-const BACKEND_MEDIA = 'http://localhost:8000/media/';
+const BACKEND_MEDIA = `http://${window.location.hostname}:8000/media/`;
 const imgUrl = (path) => (path ? `${BACKEND_MEDIA}${path}` : null);
 
 const GET_MEMBRETES = gql`

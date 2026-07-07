@@ -22,7 +22,7 @@ echo [2/3] Iniciando Backend (Django)...
 cd /d "%~dp0backend"
 start "Backend Django" cmd /k "call venv\Scripts\activate && python manage.py runserver 0.0.0.0:8000"
 timeout /t 3 /nobreak >nul
-echo     Backend iniciado en http://192.168.100.50:8000
+echo     Backend iniciado en http://192.168.100.8:8000
 echo.
 
 REM ── Iniciar Frontend React ───────────────────────────────────────────
@@ -37,7 +37,7 @@ echo ================================================
 echo   TODO LISTO
 echo ================================================
 echo.
-echo   Backend:  http://192.168.100.50:8000
+echo   Backend:  http://192.168.100.8:8000
 echo   Frontend: http://localhost:5173
 echo   App movil: conectar al Wi-Fi de esta PC
 echo.

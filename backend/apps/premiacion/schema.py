@@ -864,6 +864,7 @@ class CerrarActaResultados(graphene.Mutation):
                         candidato.activo = True
                         candidato.save()
                     empates_resultado.append(candidato)
+                break  # Stop processing subsequent prizes on tie
 
         return CerrarActaResultados(ok=True, error=None, ganadores=ganadores_resultado, empates=empates_resultado) # type: ignore
 

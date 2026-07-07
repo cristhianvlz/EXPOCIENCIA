@@ -272,11 +272,17 @@ class _CalificarScreenState extends State<CalificarScreen> {
           final key = existingId != null
               ? 'editarPuntuacionCriterio'
               : 'crearPuntuacionCriterio';
+
           if (result.data?[key]?['ok'] != true) {
             setState(() => _errorMsg =
                 result.data?[key]?['error'] ??
                     'Error al guardar criterio "${criterio.nombre}".');
             return;
+          } else if (existingId == null) {
+            final newId = result.data?[key]?['puntuacion']?['id']?.toString();
+            if (newId != null) {
+              _existingPuntuacionIds[criterio.idCriterio] = newId;
+            }
           }
         }
       }

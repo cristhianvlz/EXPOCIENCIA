@@ -13,7 +13,7 @@ def run():
     rol_admin, _ = Rol.objects.get_or_create(nombre='Administrador')
     rol_tribunal, _ = Rol.objects.get_or_create(nombre='Tribunal')
     
-    # 2. Crear superusuario admin
+    # 2. Crear superusuario admin y admin juan12
     if not Usuario.objects.filter(username='admin').exists():
         u_admin = Usuario.objects.create_superuser(
             username='admin',
@@ -24,6 +24,17 @@ def run():
         print("Superusuario 'admin' creado exitosamente con contraseña '12345'.")
     else:
         print("El superusuario 'admin' ya existe.")
+
+    if not Usuario.objects.filter(username='juan12').exists():
+        u_juan = Usuario.objects.create_superuser(
+            username='juan12',
+            email='juan12@example.com',
+            password='12345',
+            rol=rol_admin
+        )
+        print("Superusuario 'juan12' (rango admin) creado exitosamente con contraseña '12345'.")
+    else:
+        print("El superusuario 'juan12' ya existe.")
         
     # 3. Crear usuario tribunal '12345'
     if not Usuario.objects.filter(username='12345').exists():
@@ -34,17 +45,22 @@ def run():
             rol=rol_tribunal
         )
         
-        # Crear instancia de Tribunal vinculada
-        trib = Tribunal.objects.create(
-            usuario=u_trib,
-            nombre='Juan',
-            apellido='Pérez (Tribunal)',
-            celular='77788899',
+        # Crear o actualizar instancia de Tribunal vinculada de forma segura
+        trib, _ = Tribunal.objects.get_or_create(
             ci='12345',
-            expedicion='LP',
-            direccion='Calacoto, Calle 15',
-            especialidad='Ingeniería de Sistemas'
+            defaults={
+                'usuario': u_trib,
+                'nombre': 'Juan',
+                'apellido': 'Pérez (Tribunal)',
+                'celular': '77788899',
+                'expedicion': 'LP',
+                'direccion': 'Calacoto, Calle 15',
+                'especialidad': 'Ingeniería de Sistemas'
+            }
         )
+        # Asegurar que el usuario esté correctamente vinculado al tribunal
+        trib.usuario = u_trib
+        trib.save()
         
         # Opcional: Asociar todos los permisos del módulo de evaluaciones a este rol o usuario
         permisos_eval = Permiso.objects.filter(modulo='evaluaciones')
@@ -58,3 +74,4 @@ def run():
 
 if __name__ == '__main__':
     run()
+

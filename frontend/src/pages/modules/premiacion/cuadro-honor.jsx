@@ -55,13 +55,14 @@ const GET_DATA = gql`
         idProyecto titulo
         ofertaEaCarrera { oferta { idOferta categoriaEvento { evento { idEvento nombre version } categoria { nombre } } modalidadArea { area { idArea nombre } modalidad { nombre } } } }
       }
-      actaEvaluacion { idActaEvaluacion notaFinal }
+      actaEvaluacion { idActaEvaluacion notaFinal observacion }
       ganador { idGanadorPremio estado }
     }
     todosLosGanadoresPremios {
       idGanadorPremio estado
       candidatoPremio {
         idCandidatoPremio nota observacion
+        actaEvaluacion { idActaEvaluacion observacion }
         proyecto {
           idProyecto titulo resumen estado archivo fechaInscripcion fechaConfirmacion
           participantes { idParticipante nombre apellido ci }
@@ -1262,6 +1263,11 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
           await editarCandidato({ variables: { idCandidatoPremio: otro.idCandidatoPremio, estado: 'descartado' } });
         }
       }
+
+      // Re-run cerrarActa to automatically process and assign the next place prizes
+      const idOferta = candidato.proyecto.ofertaEaCarrera.oferta.idOferta;
+      await cerrarActa({ variables: { idOferta } });
+
       showNotif('Ganador adjudicado exitosamente');
       refetch();
       setDesempateDialog({ open: false, candidato: null, otros: [], observacion: '' });
@@ -1517,7 +1523,7 @@ function GanadoresTab({ actas, ganadores, empates, refetch, showNotif }) {
                                     </Stack>
                                   </TableCell>
                                   <TableCell>
-                                    <Typography variant="caption" color="text.secondary">{cp?.observacion || '—'}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{cp?.observacion || cp?.actaEvaluacion?.observacion || '—'}</Typography>
                                   </TableCell>
                                 </TableRow>
                               );

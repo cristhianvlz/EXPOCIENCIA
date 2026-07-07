@@ -941,7 +941,7 @@ export default function MisProyectos() {
                         <Typography variant="caption" color="text.secondary">Documento adjunto</Typography>
                       </Box>
                       <Button variant="outlined" size="small" startIcon={<DownloadOutlined />}
-                        href={`http://localhost:8000/media/${proyecto.archivo}`}
+                        href={`http://${window.location.hostname}:8000/media/${proyecto.archivo}`}
                         target="_blank" rel="noopener noreferrer">
                         Descargar
                       </Button>

@@ -16,7 +16,7 @@ import {
 import MainCard from 'components/MainCard';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const MEDIA_BASE = 'http://localhost:8000/media/';
+const MEDIA_BASE = `http://${window.location.hostname}:8000/media/`;
 const imgUrl = (path) => (path ? `${MEDIA_BASE}${path}` : null);
 
 // ── GQL ──────────────────────────────────────────────────────────────────────

@@ -139,7 +139,7 @@ function DocViewer({ archivo }) {
   const [error, setError]         = useState('');
   const loadedRef                 = useRef('');
 
-  const fileUrl  = archivo ? `http://localhost:8000/media/${archivo}` : null;
+  const fileUrl  = archivo ? `http://${window.location.hostname}:8000/media/${archivo}` : null;
   const fileName = archivo ? archivo.split('/').pop() : '';
   const isDocx   = fileName.match(/\.(docx|doc)$/i);
   const isPdf    = fileName.match(/\.pdf$/i);

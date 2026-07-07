@@ -14,7 +14,7 @@ import ScrollTop from 'components/ScrollTop';
 // ==============================|| APP - THEME, ROUTER, LOCAL ||============================== //
 
 const uploadLink = createUploadLink({
-  uri: 'http://localhost:8000/graphql/',
+  uri: `http://${window.location.hostname}:8000/graphql/`,
 });
 
 const authLink = setContext((_, { headers }) => {

@@ -20,8 +20,8 @@ start http://localhost:3000
 
 echo.
 echo  ================================================
-echo   Backend  ->  http://192.168.100.61:8000
-echo   Frontend ->  http://192.168.100.61:3000
+echo   Backend  ->  http://192.168.100.8:8000
+echo   Frontend ->  http://192.168.100.8:3000
 echo  ------------------------------------------------
 echo   App Tribunal: conecta el celular al mismo WiFi
 echo   Credencial demo: usuario=12345 / pass=12345
