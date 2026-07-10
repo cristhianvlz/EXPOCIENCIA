@@ -3,7 +3,7 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Switch, FormControlLabel,
-  Snackbar, Alert, CircularProgress, Tabs, Tab, Chip, Select, MenuItem, FormControl, InputLabel, Typography, Grid, Divider, Avatar
+  Snackbar, Alert, CircularProgress, Tabs, Tab, Chip, Select, MenuItem, FormControl, InputLabel, Typography, Grid, Divider, Avatar, Checkbox, ListItemText
 } from '@mui/material';
 import { 
   EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined,
@@ -197,7 +197,7 @@ export default function CronogramaPage() {
       fechaInicio: toInputDate(c.fechaInicio),
       fechaFin:    toInputDate(c.fechaFin),
       estado: c.estado,
-    } : INIT_CRONOGRAMA);
+    } : { ...INIT_CRONOGRAMA, idActividad: [] });
     setOpenCronograma(true);
   };
 
@@ -208,21 +208,61 @@ export default function CronogramaPage() {
     }
     setSaving(true);
     try {
-      const vars = editingCronograma
-        ? { idCronograma: editingCronograma.idCronograma, ...formCronograma }
-        : formCronograma;
-      const res = editingCronograma
-        ? await editarCronograma({ variables: vars })
-        : await crearCronograma({ variables: vars });
-      const result = editingCronograma ? res.data?.editarCronograma : res.data?.crearCronograma;
-      if (result?.ok) {
-        showNotification(editingCronograma ? 'Cronograma actualizado' : 'Cronograma creado', 'success');
-        refetch();
-        setOpenCronograma(false);
+      if (editingCronograma) {
+        const res = await editarCronograma({
+          variables: {
+            idCronograma: editingCronograma.idCronograma,
+            idEvento: formCronograma.idEvento,
+            idActividad: formCronograma.idActividad,
+            fechaInicio: formCronograma.fechaInicio,
+            fechaFin: formCronograma.fechaFin,
+            estado: formCronograma.estado
+          }
+        });
+        const result = res.data?.editarCronograma;
+        if (result?.ok) {
+          showNotification('Cronograma actualizado', 'success');
+          refetch();
+          setOpenCronograma(false);
+        } else {
+          showNotification(result?.error || 'Error al guardar', 'error');
+        }
       } else {
-        showNotification(result?.error || 'Error al guardar', 'error');
+        const ids = formCronograma.idActividad;
+        let successCount = 0;
+        let lastError = null;
+
+        for (const idAct of ids) {
+          const res = await crearCronograma({
+            variables: {
+              idEvento: formCronograma.idEvento,
+              idActividad: idAct,
+              fechaInicio: formCronograma.fechaInicio,
+              fechaFin: formCronograma.fechaFin
+            }
+          });
+          if (res.data?.crearCronograma?.ok) {
+            successCount++;
+          } else {
+            lastError = res.data?.crearCronograma?.error || 'Error desconocido';
+          }
+        }
+
+        if (successCount === ids.length) {
+          showNotification(`${successCount} entrada(s) de cronograma creada(s)`, 'success');
+          refetch();
+          setOpenCronograma(false);
+        } else if (successCount > 0) {
+          showNotification(`Se crearon ${successCount} entradas, pero hubo error en algunas: ${lastError}`, 'warning');
+          refetch();
+          setOpenCronograma(false);
+        } else {
+          showNotification(`Error al crear entradas: ${lastError}`, 'error');
+        }
       }
-    } catch { showNotification('Error de conexión', 'error'); }
+    } catch (e) {
+      showNotification('Error de conexión: ' + e.message, 'error');
+    }
     setSaving(false);
   };
 
@@ -340,7 +380,8 @@ export default function CronogramaPage() {
     });
   };
 
-  const cronogramaValid = formCronograma.idEvento && formCronograma.idActividad
+  const cronogramaValid = formCronograma.idEvento 
+    && (editingCronograma ? formCronograma.idActividad : (Array.isArray(formCronograma.idActividad) && formCronograma.idActividad.length > 0))
     && formCronograma.fechaInicio && formCronograma.fechaFin;
   const actividadValid = formActividad.nombreActividad && formActividad.idGrupo;
 
@@ -657,7 +698,7 @@ export default function CronogramaPage() {
             <FormControl fullWidth required>
               <InputLabel>Evento</InputLabel>
               <Select value={formCronograma.idEvento} label="Evento"
-                onChange={e => setFormCronograma(p => ({ ...p, idEvento: e.target.value, idActividad: '' }))}>
+                onChange={e => setFormCronograma(p => ({ ...p, idEvento: e.target.value, idActividad: editingCronograma ? '' : [] }))}>
                 {eventos.filter(ev => ev.estado).map(ev => (
                   <MenuItem key={ev.idEvento} value={ev.idEvento}>
                     {ev.nombre} v{ev.version} ({ev.gestion})
@@ -682,31 +723,80 @@ export default function CronogramaPage() {
               });
 
               return (
-                <FormControl fullWidth required>
-                  <InputLabel>Actividad</InputLabel>
-                  <Select
-                    value={formCronograma.idActividad}
-                    label="Actividad"
-                    disabled={!formCronograma.idEvento}
-                    onChange={e => setFormCronograma(p => ({ ...p, idActividad: e.target.value }))}
-                  >
-                    {!formCronograma.idEvento && (
-                      <MenuItem disabled value="">
-                        <em>Primero selecciona un evento</em>
-                      </MenuItem>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {formCronograma.idEvento && !editingCronograma && disponibles.length > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -0.5 }}>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          const allIds = disponibles.map(a => a.idActividad);
+                          const isAllSelected = formCronograma.idActividad.length === allIds.length;
+                          setFormCronograma(p => ({
+                            ...p,
+                            idActividad: isAllSelected ? [] : allIds
+                          }));
+                        }}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, py: 0 }}
+                      >
+                        {formCronograma.idActividad.length === disponibles.length
+                          ? 'Deseleccionar todas'
+                          : 'Seleccionar todas las disponibles'}
+                      </Button>
+                    </Box>
+                  )}
+                  <FormControl fullWidth required>
+                    <InputLabel>Actividad</InputLabel>
+                    {editingCronograma ? (
+                      <Select
+                        value={formCronograma.idActividad}
+                        label="Actividad"
+                        onChange={e => setFormCronograma(p => ({ ...p, idActividad: e.target.value }))}
+                      >
+                        {disponibles.map(a => (
+                          <MenuItem key={a.idActividad} value={a.idActividad}>
+                            {a.nombreActividad} ({a.grupo?.descripcion})
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Select
+                        multiple
+                        value={formCronograma.idActividad}
+                        label="Actividad"
+                        disabled={!formCronograma.idEvento}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormCronograma(p => ({ ...p, idActividad: typeof val === 'string' ? val.split(',') : val }));
+                        }}
+                        renderValue={selected => (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {selected.map(value => {
+                              const act = disponibles.find(a => a.idActividad === value);
+                              return <Chip key={value} label={act?.nombreActividad || value} size="small" />;
+                            })}
+                          </Box>
+                        )}
+                      >
+                        {!formCronograma.idEvento && (
+                          <MenuItem disabled value="">
+                            <em>Primero selecciona un evento</em>
+                          </MenuItem>
+                        )}
+                        {formCronograma.idEvento && disponibles.length === 0 && (
+                          <MenuItem disabled value="">
+                            <em>Todas las actividades ya están asignadas a este evento</em>
+                          </MenuItem>
+                        )}
+                        {disponibles.map(a => (
+                          <MenuItem key={a.idActividad} value={a.idActividad}>
+                            <Checkbox checked={formCronograma.idActividad.includes(a.idActividad)} />
+                            <ListItemText primary={`${a.nombreActividad} (${a.grupo?.descripcion})`} />
+                          </MenuItem>
+                        ))}
+                      </Select>
                     )}
-                    {formCronograma.idEvento && disponibles.length === 0 && (
-                      <MenuItem disabled value="">
-                        <em>Todas las actividades ya están asignadas a este evento</em>
-                      </MenuItem>
-                    )}
-                    {disponibles.map(a => (
-                      <MenuItem key={a.idActividad} value={a.idActividad}>
-                        {a.nombreActividad} ({a.grupo?.descripcion})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                  </FormControl>
+                </Box>
               );
             })()}
             <TextField
@@ -818,7 +908,7 @@ export default function CronogramaPage() {
           {viewItem?.estado !== undefined && (
             <Chip 
               label={viewItem.estado ? 'ACTIVO' : 'INACTIVO'} 
-              color={viewItem.estado ? 'success' : 'error'} variant="outlined"
+              color={viewItem.estado ? 'success' : 'error'}
               variant="outlined"
             />
           )}

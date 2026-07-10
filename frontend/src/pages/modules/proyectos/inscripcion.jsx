@@ -651,16 +651,11 @@ export default function InscripcionPage() {
   const renderStep1 = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Typography variant="body2" color="text.secondary">
-        Ingresa el título, descripción y el documento de tu proyecto.
+        Ingresa el título y el documento de tu proyecto.
       </Typography>
       <TextField
         label="Título del Proyecto" value={titulo} fullWidth required autoFocus
         onChange={e => setTitulo(e.target.value)}
-      />
-      <TextField
-        label="Resumen / Descripción" value={resumen} fullWidth multiline rows={4}
-        onChange={e => setResumen(e.target.value)}
-        placeholder="Describe brevemente el proyecto, sus objetivos y metodología..."
       />
       <Box>
         <Typography variant="body2" sx={{ mb: 1 }}>

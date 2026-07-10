@@ -920,7 +920,7 @@ export default function GestionEventosPage() {
           {viewItem?.estado !== undefined && (
             <Chip 
               label={viewItem.estado ? 'ACTIVO' : 'INACTIVO'} 
-              color={viewItem.estado ? 'success' : 'error'} variant="outlined"
+              color={viewItem.estado ? 'success' : 'error'}
               variant="outlined"
             />
           )}

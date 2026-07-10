@@ -1139,7 +1139,7 @@ export default function MembretesFirmasPage() {
           {currentViewItem?.estado !== undefined && (
             <Chip
               label={currentViewItem.estado ? 'ACTIVO' : 'INACTIVO'}
-              color={currentViewItem.estado ? 'success' : 'error'} variant="outlined"
+              color={currentViewItem.estado ? 'success' : 'error'}
               variant="outlined"
               size="small"
             />

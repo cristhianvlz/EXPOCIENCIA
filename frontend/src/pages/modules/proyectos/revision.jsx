@@ -43,11 +43,13 @@ const GET_ALL = gql`
       }
     }
     todosLosParticipantes {
-      idParticipante nombre apellido ci
+      idParticipante nombre apellido ci expedicion codigoEspecifico celular
+      usuario { email }
       proyectosInscritos { idProyecto }
     }
     todosLosTutores {
-      idTutor nombre apellido ci codEmpleado
+      idTutor nombre apellido ci expedicion codEmpleado celular direccion
+      usuario { email }
       proyectosTutelados { idProyecto }
     }
   }
@@ -70,6 +72,257 @@ const ESTADO_CONFIG = {
   aprobado:  { label: 'Aprobado',    color: 'success' },
   rechazado: { label: 'Rechazado',   color: 'error' },
 };
+
+const FORM_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #111; font-size: 12px; }
+  @page form-page { size: A4 portrait; margin: 15mm; }
+  .form-page { page: form-page; width: 180mm; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; }
+  .form-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 2px solid #1a237e; padding-bottom: 8px; margin-bottom: 15px; }
+  .form-logo { max-width: 60px; max-height: 60px; object-fit: contain; }
+  .form-header-text { flex: 1; text-align: center; }
+  .form-header-title { font-size: 14px; font-weight: bold; color: #1a237e; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-header-sub { font-size: 10px; color: #444; margin-top: 2px; font-weight: bold; }
+  .form-section-title { font-size: 12px; font-weight: bold; color: #1a237e; border-bottom: 1px solid #1a237e; padding-bottom: 4px; margin-bottom: 8px; text-transform: uppercase; margin-top: 15px; }
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px; }
+  .form-grid-full { grid-column: span 2; }
+  .form-field { display: flex; flex-direction: column; border: 1px solid #ddd; padding: 6px; border-radius: 4px; }
+  .form-label { font-size: 9px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+  .form-value { font-size: 11px; color: #222; font-weight: 500; }
+  .form-table { width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 10px; }
+  .form-table th { background-color: #f5f5f5; border: 1px solid #ddd; padding: 6px; font-size: 10px; font-weight: bold; text-align: left; text-transform: uppercase; color: #333; }
+  .form-table td { border: 1px solid #ddd; padding: 6px; font-size: 11px; }
+  .form-signatures { display: flex; justify-content: space-around; margin-top: 40px; margin-bottom: 20px; }
+  .form-sig-line { width: 130px; height: 1px; background: #333; margin-bottom: 4px; }
+  .form-sig-item { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .form-sig-name { font-size: 10px; font-weight: bold; }
+  .form-sig-role { font-size: 8px; color: #666; text-transform: uppercase; }
+  @media print { html, body { margin: 0; } .form-page { page-break-after: always; } }
+`;
+
+function buildFormularioInscripcion(proyecto) {
+  const oec = proyecto.ofertaEaCarrera;
+  const ev = oec?.oferta?.categoriaEvento?.evento;
+  const cat = oec?.oferta?.categoriaEvento?.categoria;
+  const ea = oec?.eaCarrera?.entidadAcademica;
+  const carr = oec?.eaCarrera?.carrera;
+  const mod = oec?.oferta?.modalidadArea?.modalidad;
+  const area = oec?.oferta?.modalidadArea?.area;
+  const logo = '/uagrm-logo.png';
+  const fecha = new Date(proyecto.fechaInscripcion).toLocaleDateString('es-BO', {
+    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  const partsRows = (proyecto.participantes || []).map((p) => `
+    <tr>
+      <td>${p.codigoEspecifico || '—'}</td>
+      <td><strong>${p.nombre} ${p.apellido}</strong></td>
+      <td>${carr?.nombre || '—'} ${carr?.plan ? `· Plan ${carr.plan}` : ''}</td>
+      <td>${p.usuario?.email || '—'}</td>
+      <td>${p.ci} ${p.expedicion || ''}</td>
+      <td>${p.celular || '—'}</td>
+    </tr>
+  `).join('');
+
+  const tutsRows = (proyecto.tutores || []).map((t) => `
+    <tr>
+      <td>${t.codEmpleado || '—'}</td>
+      <td><strong>${t.nombre} ${t.apellido}</strong></td>
+      <td>${t.direccion || '—'}</td>
+      <td>${t.usuario?.email || '—'}</td>
+      <td>${t.ci} ${t.expedicion || ''}</td>
+      <td>${t.celular || '—'}</td>
+    </tr>
+  `).join('');
+
+
+
+  return `
+    <div class="form-page">
+      <div class="form-header">
+        <img src="${logo}" class="form-logo" alt="UAGRM" onError="this.style.display='none'" />
+        <div class="form-header-text">
+          <div class="form-header-title">Formulario Oficial de Inscripción</div>
+          <div class="form-header-sub">U.A.G.R.M. — EXPOCIENCIA ${ev?.nombre ? ev.nombre.toUpperCase() : ''}</div>
+          <div style="font-size: 8px; color: #666; margin-top:1px;">ID Proyecto: ${proyecto.idProyecto} · Fecha: ${fecha}</div>
+        </div>
+        <div style="width:60px"></div>
+      </div>
+
+      <div class="form-section-title">Datos del Proyecto de Investigación</div>
+      <div class="form-grid">
+        <div class="form-field form-grid-full">
+          <span class="form-label">Título del Proyecto</span>
+          <span class="form-value" style="font-size: 13px; font-weight: bold; color: #1a237e;">${proyecto.titulo}</span>
+        </div>
+        <div class="form-field">
+          <span class="form-label">Categoría</span>
+          <span class="form-value">${cat?.nombre || 'Feria Científica'}</span>
+        </div>
+        <div class="form-field">
+          <span class="form-label">Facultad</span>
+          <span class="form-value">${ea?.nombre || '—'}</span>
+        </div>
+        <div class="form-field">
+          <span class="form-label">Área de Conocimiento</span>
+          <span class="form-value">${area?.nombre || '—'}</span>
+        </div>
+        <div class="form-field">
+          <span class="form-label">Modalidad del Proyecto</span>
+          <span class="form-value">${mod?.nombre || '—'}</span>
+        </div>
+      </div>
+
+      <div class="form-section-title">Datos de los Participantes del Proyecto</div>
+      <table class="form-table">
+        <thead>
+          <tr>
+            <th>Registro</th>
+            <th>Nombre Completo</th>
+            <th>Carrera / Plan</th>
+            <th>Correo Electrónico</th>
+            <th>C.I.</th>
+            <th>Celular</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${partsRows || '<tr><td colspan="6" style="text-align:center">Sin participantes registrados</td></tr>'}
+        </tbody>
+      </table>
+
+      <div class="form-section-title">Datos del Docente Guía o Tutor</div>
+      <table class="form-table">
+        <thead>
+          <tr>
+            <th>Cód. Docente</th>
+            <th>Nombre Completo</th>
+            <th>Dirección de Domicilio</th>
+            <th>Correo Electrónico</th>
+            <th>C.I.</th>
+            <th>Celular</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tutsRows || '<tr><td colspan="6" style="text-align:center">Sin tutores registrados</td></tr>'}
+        </tbody>
+      </table>
+
+      <div style="margin-top: 15px; border: 1px solid #ddd; padding: 8px; border-radius: 4px; background: #fafafa;">
+        <span class="form-label" style="display:block; margin-bottom: 2px;">Observaciones Administrativas</span>
+        <span class="form-value" style="color: #666; font-style: italic;">
+          ${proyecto.observacion || 'Ninguna observación.'}
+        </span>
+      </div>
+
+
+    </div>
+  `;
+}
+
+const DECI_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Georgia, serif; background: #fff; color: #111; font-size: 14px; line-height: 1.8; }
+  @page dec-page { size: A4 portrait; margin: 25mm 20mm; }
+  .dec-page { page: dec-page; width: 170mm; min-height: 247mm; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; }
+  .dec-title { font-size: 22px; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 30px; letter-spacing: 1px; color: #111; }
+  .dec-text { text-align: justify; margin-bottom: 20px; text-indent: 30px; }
+  .dec-list { margin-left: 20px; margin-bottom: 20px; text-align: justify; }
+  .dec-list-item { margin-bottom: 10px; list-style-type: decimal; }
+  .dec-signature-box { display: flex; flex-direction: column; align-items: center; margin-top: auto; padding-top: 50px; text-align: center; }
+  .dec-sig-line { width: 220px; height: 1px; background: #111; margin-bottom: 8px; }
+  .dec-sig-name { font-size: 14px; font-weight: bold; }
+  .dec-sig-ci { font-size: 13px; color: #444; }
+  @media print { html, body { margin: 0; } .dec-page { page-break-after: always; } }
+`;
+
+function buildDeclaracionJurada(proyecto) {
+  const oec = proyecto.ofertaEaCarrera;
+  const ev = oec?.oferta?.categoriaEvento?.evento;
+  const parts = proyecto.participantes || [];
+  const tuts = proyecto.tutores || [];
+  
+  const declarantes = [
+    ...parts.map((p) => ({
+      nombreCompleto: `${p.nombre} ${p.apellido}`,
+      ci: p.ci,
+      expedicion: p.expedicion || '',
+      tipo: 'INTEGRANTE EXPOSITOR',
+      domicilio: 'Santa Cruz de la Sierra'
+    })),
+    ...tuts.map((t) => ({
+      nombreCompleto: `${t.nombre} ${t.apellido}`,
+      ci: t.ci,
+      expedicion: t.expedicion || '',
+      tipo: 'DOCENTE TUTOR GUÍA',
+      domicilio: t.direccion || 'Santa Cruz de la Sierra'
+    }))
+  ];
+
+  const now = new Date();
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const dia = now.getDate();
+  const mes = meses[now.getMonth()];
+  const gestion = now.getFullYear();
+
+  return declarantes.map((dec) => `
+    <div class="dec-page">
+      <div class="dec-title">Declaración Jurada de Veracidad</div>
+      
+      <p class="dec-text">
+        Yo, <strong>${dec.nombreCompleto}</strong>, con Cédula de Identidad N.º <strong>${dec.ci} ${dec.expedicion}</strong>, mayor de edad, en mi calidad de <strong>${dec.tipo}</strong> del proyecto científico denominado <strong>"${proyecto.titulo}"</strong> postulado en la feria científica <strong>"Expociencia UAGRM ${ev?.nombre || ''}"</strong>, con domicilio en la ciudad de <strong>${dec.domicilio}</strong>, por medio del presente documento y en pleno uso de mis facultades, <strong>DECLARO BAJO JURAMENTO</strong> lo siguiente:
+      </p>
+
+      <ol class="dec-list">
+        <li class="dec-list-item">
+          Que toda la información y documentación proporcionada para la inscripción del proyecto de investigación científica es completamente verdadera, fidedigna y correcta.
+        </li>
+        <li class="dec-list-item">
+          Que los datos y resultados consignados en el desarrollo del proyecto corresponden a la realidad científica o técnica del trabajo y pueden ser verificados y auditados de manera inmediata por el comité organizador de la universidad o las autoridades competentes cuando lo consideren pertinente.
+        </li>
+        <li class="dec-list-item">
+          Que asumo plena y total responsabilidad legal y administrativa por la veracidad del contenido del proyecto y de la presente declaración, aceptando libremente las consecuencias jurídicas y reglamentarias de la U.A.G.R.M. en caso de comprobarse cualquier falsedad, plagio o irregularidad en los datos presentados.
+        </li>
+      </ol>
+
+      <p class="dec-text">
+        La presente declaración jurada de veracidad se suscribe de manera libre, voluntaria y consciente para los fines legales que correspondan.
+      </p>
+
+      <p class="dec-text" style="margin-top: 15px;">
+        Lugar y fecha: Santa Cruz de la Sierra, ${dia} de ${mes} de ${gestion}.
+      </p>
+
+      <div class="dec-signature-box" style="align-items: flex-start; text-align: left; margin-top: 40px; padding-top: 10px;">
+        <p style="margin-bottom: 50px;"><strong>Firma del declarante:</strong></p>
+        <div class="dec-sig-line" style="width: 300px; height: 1px; background: #111; margin-bottom: 12px;"></div>
+        <div><strong>Nombre completo:</strong> ${dec.nombreCompleto}</div>
+        <div style="text-transform: uppercase;"><strong>Cargo / Rol:</strong> ${dec.tipo}</div>
+        <div><strong>C.I. N.º:</strong> ${dec.ci} ${dec.expedicion}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function imprimirFormularioInscripcion(proyecto) {
+  const body = buildFormularioInscripcion(proyecto);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Formulario de Inscripcion</title><style>${FORM_CSS}</style></head><body>${body}</body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) { alert('Permite ventanas emergentes (pop-ups) para esta página.'); URL.revokeObjectURL(url); return; }
+  win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); }, { once: true });
+}
+
+function imprimirDeclaracionesJuradas(proyecto) {
+  const body = buildDeclaracionJurada(proyecto);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Declaración Jurada</title><style>${DECI_CSS}</style></head><body>${body}</body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) { alert('Permite ventanas emergentes (pop-ups) para esta página.'); URL.revokeObjectURL(url); return; }
+  win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); }, { once: true });
+}
+
 
 // ── Helper: panel de tab ──────────────────────────────────────────────────────
 function TabPanel({ value, index, children }) {
@@ -757,6 +1010,42 @@ export default function RevisionPage() {
               {/* ── Tab 0: Info ── */}
               <TabPanel value={tab} index={0}>
                 <Stack gap={2}>
+                  {selected.estado === 'aprobado' && (
+                    <SectionCard title="Documentos de inscripción" icon={<FileProtectOutlined />}>
+                      <Box sx={{ py: 1.5, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          size="small"
+                          startIcon={<PrinterOutlined />}
+                          onClick={() => {
+                            const parts = getParticipantes(selected.idProyecto);
+                            const tuts = getTutores(selected.idProyecto);
+                            const proyectoConRelaciones = { ...selected, participantes: parts, tutores: tuts };
+                            imprimirFormularioInscripcion(proyectoConRelaciones);
+                          }}
+                          sx={{ fontWeight: 600 }}
+                        >
+                          Formulario de Inscripción
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="success"
+                          size="small"
+                          startIcon={<PrinterOutlined />}
+                          onClick={() => {
+                            const parts = getParticipantes(selected.idProyecto);
+                            const tuts = getTutores(selected.idProyecto);
+                            const proyectoConRelaciones = { ...selected, participantes: parts, tutores: tuts };
+                            imprimirDeclaracionesJuradas(proyectoConRelaciones);
+                          }}
+                          sx={{ fontWeight: 600 }}
+                        >
+                          Declaraciones Juradas
+                        </Button>
+                      </Box>
+                    </SectionCard>
+                  )}
                   <SectionCard title="Datos generales" icon={<InfoCircleOutlined />}>
                     <DataRow icon={<CalendarOutlined />}
                       label="Inscripción" value={fmtDate(selected.fechaInscripcion)} />
@@ -764,7 +1053,6 @@ export default function RevisionPage() {
                       label="Confirmación"
                       value={fmtDate(selected.fechaConfirmacion) || 'Pendiente de aprobación'} />
                   </SectionCard>
-
                   {selected.resumen && (
                     <SectionCard title="Resumen del proyecto" icon={<InfoCircleOutlined />}>
                       <Typography variant="body2" sx={{ py: 1.5, lineHeight: 1.8, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>
